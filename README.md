@@ -14,6 +14,15 @@ Danach ist die Anwendung unter <http://localhost:8082/> erreichbar.
 
 ## Anwendersicht
 
+Die öffentliche Navigation besitzt zwei Bereiche:
+
+- **Crosschaptern** unter `/` beziehungsweise `/?view=crosschaptern` enthält die vollständige Chapter-Suche.
+- **Vertretung anbieten** unter `/?view=vertretung` bietet eine noch nicht persistente Auswahloberfläche für konkrete Termine, „Alle Daten“, lokale Chapterfilter und eine Chapterauswahl. Sie speichert noch kein Vertretungsangebot und ruft weder BNI- noch Mitgliederdaten ab.
+
+Die Vertretungsauswahl lädt ihre Organisationen ausschließlich aus SQLite. Konkrete Termine werden im Browser als ISO-Datum gehalten, deutsch dargestellt und auf den wiederkehrenden Meeting-Wochentag abgebildet. „Alle Daten“ deaktiviert diesen Filter vorübergehend, erhält aber die ausgewählten Termin-Chips. Land, Organisationstyp, Freitext und optional Ort/PLZ mit einem Radius von 1 bis 500 km lassen sich kombinieren. Nur die explizite Ortssuche verwendet den bestehenden Nominatim-Geocoder; Entfernungen zu den vorhandenen Chapterkoordinaten werden danach lokal mit der Haversine-Formel berechnet. Checkbox-, Datums- und sonstige Filteraktionen erzeugen keine weiteren Server- oder BNI-Requests.
+
+„Alle sichtbaren auswählen“ betrifft ausschließlich das aktuelle kombinierte Filterergebnis. Ausgefilterte Auswahlen bleiben im Browserzustand erhalten, bis „Auswahl aufheben“ verwendet oder die Seite neu geladen wird.
+
 Unter <http://localhost:8082/> stehen folgende Suchkriterien bereit:
 
 - gemeinsames Feld für PLZ oder Ort
@@ -24,7 +33,7 @@ Unter <http://localhost:8082/> stehen folgende Suchkriterien bereit:
 
 `früh` bedeutet Meetingbeginn vor 09:00 Uhr, `spät` beginnt ab 09:00 Uhr. Standard ist Entfernung aufsteigend. „Alle“ hebt nur das serverseitige Ergebnislimit auf und umfasst weiterhin ausschließlich passende SQLite-Datensätze.
 
-Die Suche berücksichtigt ausschließlich bestehende `CHAPTER`-Datensätze mit lokal vorhandenen Namen, Koordinaten, Wochentag und Uhrzeit. Sie löst niemals einen BNI-Request oder eine automatische Detailnachladung aus.
+Die Suchantwort berücksichtigt ausschließlich bestehende `CHAPTER`-Datensätze mit lokal vorhandenen Namen, Koordinaten, Wochentag und Uhrzeit. Sie wird immer unmittelbar aus SQLite erzeugt und wartet nicht auf BNI. Ist die nutzungsabhängige Aktualisierung aktiviert, stößt der Browser erst nach der lokalen Antwort für tatsächlich angezeigte, veraltete Treffer einen getrennten kontrollierten Refresh an.
 
 Trefferkarten lassen sich ohne weiteren Request aufklappen und zeigen alle mit der Suchantwort gelieferten lokalen Chapterdetails. Die einblendbare Leaflet-Karte verwendet OpenStreetMap-Kacheln und markiert den geocodierten Suchstandort sowie genau die aktuell zurückgegebenen Treffer. Chapter werden weder für die Karte geocodiert noch bei BNI nachgeladen.
 
@@ -80,9 +89,11 @@ Beim nächsten API-Zugriff wird eine leere Datenbank mit aktuellem Schema angele
 ```text
 GET  /api/search-basis.php
 POST /api/search.php
+GET  /api/representation/organizations.php
+POST /api/representation/geocode.php
 ```
 
-Die Such-API kommuniziert nur mit Nominatim und SQLite, nie mit BNI.
+Die Such-API selbst kommuniziert nur mit Nominatim und SQLite. Ein optionaler X-Refresh erfolgt danach über den getrennten lokalen Refresh-Endpunkt.
 
 ### Authentifizierung
 
@@ -133,6 +144,36 @@ Bei HTTP 429 endet der gesamte laufende Batch sofort. Ein vorhandener `Retry-Aft
 
 Der Detail-Batch ist vom Button „Grunddaten von BNI aktualisieren“ getrennt: Nur dieser separate Grunddatenimport ruft die BNI-Kartenquelle auf; ein Detail-Batch führt keinen `getMapData`-Sammelrequest aus.
 
+### Automatisierte Detailaktualisierung
+
+Der standardmäßig geschlossene Adminbereich „Automatisierter Import“ verwaltet zwei voneinander unabhängige, dauerhaft in SQLite gespeicherte Mechanismen. Beide sind initial deaktiviert:
+
+- **X – Aktualisierung bei Nutzung:** Standardalter 7 Tage. Nach einer lokalen Suchantwort werden nur die tatsächlich ausgegebenen veralteten Treffer in eine deduplizierte Browser-Queue gestellt. Auch das Öffnen einer veralteten Detailkarte kann einen Refresh anstoßen. Lokale Daten bleiben sofort sichtbar; die Suche blockiert nicht.
+- **Y – automatische Aktualisierung:** Standardalter 30 Tage. Der lokale Docker-Worker prüft standardmäßig alle 60 Minuten und verarbeitet pro Lauf höchstens 10 fällige `CHAPTER`-Datensätze. Zuerst werden noch nie geladene Chapterdetails erstmalig geladen, danach erneut versuchbare Fehler und anschließend bereits geladene, aber veraltete Details. Innerhalb dieser Gruppen bleibt die Reihenfolge stabil.
+
+Die Schwellwerte X und Y sind im Bereich 1 bis 365 Tage konfigurierbar. Änderungen werden erst mit „Einstellungen speichern“ aktiv. Der Worker läuft nur zusammen mit der lokalen Docker-Anwendung; ist Y ausgeschaltet, führt er keine BNI-Anfrage aus.
+
+Zusätzlich gilt ein gemeinsames, in SQLite gespeichertes Tageslimit, standardmäßig 50. Es zählt jeden tatsächlich gestarteten externen Detailrequest der Trigger `usage_search`, `usage_detail` und `automatic` – unabhängig davon, ob er erfolgreich ist oder mit Fehler, HTTP 429 oder HTTP 403 endet. Lokale Prüfungen, frische oder gesperrte Chapter, Deduplizierungen und manuelle Adminimporte zählen nicht. Der Kalendertag wird in `Europe/Berlin` bestimmt. Ist das Limit erreicht, bleiben Suche und Detailansicht vollständig lokal nutzbar; X und Y starten bis zum nächsten lokalen Tag keine weiteren BNI-Requests. Der Adminbereich zeigt Verbrauch, Limit, Rest und Prozentwert.
+
+Alle Trigger (`manual`, `usage_search`, `usage_detail`, `automatic`) verwenden denselben Refresh-Service und `BniRequestPolicy::DETAIL_DELAY_MS`. BNI-Aufrufe erfolgen sequenziell mit mindestens 1,5 Sekunden Abstand und ohne automatische Retries. Ablaufende SQLite-Sperren verhindern parallele Aktualisierungen derselben `org_id`; die atomare SQLite-Budgetreservierung verhindert eine Überschreitung des Tageslimits durch konkurrierende Prozesse. HTTP 429 oder 403 beendet die jeweilige Queue beziehungsweise den Worker-Lauf; der Datensatz bleibt erneut aktualisierbar. 5xx- und Netzwerkfehler betreffen nur das einzelne Chapter.
+
+`chapter_refresh_log` speichert ausschließlich technische Metadaten zu Trigger, Zeitpunkt, Ergebnis und HTTP-Fehlerkategorie. Daraus sowie aus den lokalen Chapterdaten entstehen die Adminstatistiken; dafür erfolgen keine BNI-Abfragen. `chapter_refresh_locks` enthält kurzlebige Sperren, `automation_runtime` den Worker-Heartbeat und den nächsten vorgesehenen Prüflauf.
+
+Die Y-Statistik trennt überschneidungsfrei zwischen noch nie geladenen Chaptern, erneut versuchbaren Fehlern und bereits geladenen, nach Y veralteten Chaptern. Deren Summe wird als „Für Automatik fällig“ angezeigt. Eine erfolgreiche Erstbefüllung setzt `detail_status = loaded` und `details_loaded_at`; enthält die Antwort die notwendigen Treffendaten, wächst dadurch automatisch die ausschließlich lokale Suchbasis.
+
+Geschützte Automatisierungs-APIs:
+
+```text
+GET|POST /api/automation/settings.php
+GET      /api/automation/stats.php
+```
+
+Die öffentliche lokale Refresh-API akzeptiert ausschließlich eine vorhandene `org_id` und den Trigger `usage_search` oder `usage_detail`; Aktivierung, Typ, Alter und Sperre werden serverseitig erneut geprüft:
+
+```text
+POST /api/refresh/usage.php
+```
+
 ### Lokale Daten
 
 ```text
@@ -151,7 +192,7 @@ docker compose exec -T web php -m | grep -i pdo_sqlite
 docker compose exec -T web php -r 'new PDO("sqlite:/var/www/data/bni-dach.sqlite");'
 ```
 
-HTTP-Prüfungen erfolgen lokal auf Port 8082. Dazu gehören Authentifizierung, Adminschutz, Suchbasis, Geocoding, Tages-/Zeitfilter, Haversine-Sortierung, Health, Sammelabruf, SSRF-Abweisung, 50er-Limit und der bestehende Königsforst-Endpunkt. Die Suche darf dabei keinen BNI-Request auslösen. Der SQLite-Testbestand wird nicht automatisch gelöscht.
+HTTP-Prüfungen erfolgen lokal auf Port 8082. Dazu gehören Authentifizierung, Adminschutz, Suchbasis, Geocoding, Tages-/Zeitfilter, Haversine-Sortierung, Health, Sammelabruf, SSRF-Abweisung, 50er-Limit und der bestehende Königsforst-Endpunkt. Zusätzlich deckt `tests/automation-refresh.php` Einstellungen, Stale-Prüfung, Locking, Historie, Trigger, Worker-Limits sowie simulierte 429-, 403-, 5xx- und Netzwerkfehler ohne absichtlich erzeugtes Live-Rate-Limit ab. Der SQLite-Testbestand wird nicht automatisch gelöscht.
 
 ## Bestehende PoC-Endpunkte
 

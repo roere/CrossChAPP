@@ -21,6 +21,11 @@
         loadDetails: document.querySelector('#load-details'), reloadDetails: document.querySelector('#reload-details'), selectionCount: document.querySelector('#selection-count'), progress: document.querySelector('#progress'),
         batchStats: document.querySelector('#batch-stats'), batchSize: document.querySelector('#batch-size'), batchSizeOptions: document.querySelector('#batch-size-options'),
         startBatch: document.querySelector('#start-batch'), stopBatch: document.querySelector('#stop-batch'), batchProgress: document.querySelector('#batch-progress'), batchMessage: document.querySelector('#batch-message'),
+        automationPanel: document.querySelector('#automation-panel'), automationForm: document.querySelector('#automation-form'),
+        usageEnabled: document.querySelector('#usage-refresh-enabled'), usageDays: document.querySelector('#usage-refresh-days'),
+        automaticEnabled: document.querySelector('#automatic-refresh-enabled'), automaticDays: document.querySelector('#automatic-refresh-days'),
+        automaticDailyLimit: document.querySelector('#automatic-refresh-daily-limit'),
+        automationMessage: document.querySelector('#automation-message'), automationStats: document.querySelector('#automation-stats'), workerStatus: document.querySelector('#worker-status'),
     };
 
     elements.form.addEventListener('submit', loadMap);
@@ -37,7 +42,10 @@
         elements.stopBatch.disabled = true;
         elements.batchMessage.textContent = 'Der Import stoppt nach dem aktuellen Chapter.';
     });
+    elements.automationForm.addEventListener('submit', saveAutomationSettings);
+    elements.automationPanel.addEventListener('toggle', () => { if (elements.automationPanel.open) loadAutomationStats(); });
     loadLocal();
+    loadAutomationSettings();
 
     async function loadLocal() {
         try {
@@ -126,6 +134,9 @@
                             Object.assign(item, result.details);
                             state.details.set(item.orgId, item); state.statuses.set(item.orgId, 'loaded');
                         }
+                    } else if (result?.status === 'skipped') {
+                        skipped += 1;
+                        if (item) state.statuses.set(item.orgId, item.detailStatus || 'not_loaded');
                     } else if (result?.status === 'rate_limited' || result?.status === 'forbidden') {
                         batchStopReason = result.status;
                         retryAfter = Number.isInteger(result.retryAfter) ? result.retryAfter : null;
@@ -161,7 +172,87 @@
             state.batchRunning = false;
             setBatchControls(false);
             await loadLocal();
+            if (elements.automationPanel.open) await loadAutomationStats();
         }
+    }
+
+    async function loadAutomationSettings() {
+        try {
+            const response = await fetch('/api/automation/settings.php'); const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Einstellungen konnten nicht geladen werden.');
+            const settings = payload.settings;
+            elements.usageEnabled.checked = settings.usageRefreshEnabled;
+            elements.usageDays.value = settings.usageRefreshDays;
+            elements.automaticEnabled.checked = settings.automaticRefreshEnabled;
+            elements.automaticDays.value = settings.automaticRefreshDays;
+            elements.automaticDailyLimit.value = settings.automaticRefreshDailyLimit;
+        } catch (error) {
+            setAutomationMessage(error.message, 'error');
+        }
+    }
+
+    async function saveAutomationSettings(event) {
+        event.preventDefault();
+        const button = document.querySelector('#save-automation'); button.disabled = true;
+        try {
+            const response = await fetch('/api/automation/settings.php', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    usage_refresh_enabled: elements.usageEnabled.checked,
+                    usage_refresh_days: Number(elements.usageDays.value),
+                    automatic_refresh_enabled: elements.automaticEnabled.checked,
+                    automatic_refresh_days: Number(elements.automaticDays.value),
+                    automatic_refresh_daily_limit: Number(elements.automaticDailyLimit.value),
+                }),
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Einstellungen konnten nicht gespeichert werden.');
+            setAutomationMessage('Einstellungen gespeichert.', 'success');
+            await loadAutomationStats();
+        } catch (error) {
+            setAutomationMessage(error.message, 'error');
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function loadAutomationStats() {
+        try {
+            const response = await fetch('/api/automation/stats.php'); const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Statistiken konnten nicht geladen werden.');
+            renderAutomationStats(payload.statistics);
+        } catch (error) {
+            setAutomationMessage(error.message, 'error');
+        }
+    }
+
+    function renderAutomationStats(stats) {
+        const fields = [
+            ['Letzte automatische Aktualisierung', formatTimestamp(stats.lastAutomaticRefresh)],
+            ['Letzte nutzungsabhängige Aktualisierung', formatTimestamp(stats.lastUsageRefresh)],
+            ['Automatisch heute', stats.automaticToday], ['Nutzungsabhängig heute', stats.usageToday],
+            ['Automatische/nutzungsabhängige Requests heute', `${stats.dailyUsed} / ${stats.dailyLimit}`],
+            ['Heute noch verfügbar', stats.dailyRemaining], ['Anteil des Tageslimits', `${stats.dailyPercent} %`],
+            ['Aktualisierungen letzte 7 Tage', stats.updatesSevenDays], ['Erfolgreich letzte 7 Tage', stats.successSevenDays],
+            ['Fehler letzte 7 Tage', stats.errorsSevenDays], ['Rate-Limit-Stopps letzte 7 Tage', stats.protectionStopsSevenDays],
+            ['Letzter 429/403', formatTimestamp(stats.lastProtectionStop)], ['Aktuell stale nach X', stats.staleUsage],
+            ['Noch nie geladene Chapter', stats.automaticNeverLoaded], ['Veraltete Chapter nach Y', stats.staleAutomatic],
+            ['Fehlerhaft / erneut versuchbar', stats.automaticRetryableErrors], ['Für Automatik fällig', stats.automaticDueTotal],
+            ['Chapter mit Detaildaten', stats.chaptersWithDetails],
+            ['Nächster automatischer Prüflauf', formatTimestamp(stats.nextAutomaticCheckAt)],
+        ];
+        const fragment = document.createDocumentFragment();
+        fields.forEach(([label, value]) => {
+            const box = document.createElement('div'); const span = document.createElement('span'); const strong = document.createElement('strong');
+            span.textContent = label; strong.textContent = display(value); box.append(span, strong); fragment.append(box);
+        });
+        elements.automationStats.replaceChildren(fragment);
+        if (stats.dailyLimitReached) {
+            const warning = document.createElement('p'); warning.className = 'daily-limit-warning'; warning.textContent = 'Tageslimit erreicht';
+            elements.automationStats.prepend(warning);
+        }
+        elements.workerStatus.textContent = stats.workerActive ? 'Hintergrunddienst aktiv' : 'Hintergrunddienst nicht aktiv';
+        elements.workerStatus.className = `status-badge ${stats.workerActive ? 'status-loaded' : 'status-error'}`;
     }
 
     function setBatchControls(running) {
@@ -362,6 +453,8 @@
                 if (response.ok && result?.status === 'loaded') {
                     Object.assign(item, result.details);
                     state.details.set(item.orgId, item); state.statuses.set(item.orgId, 'loaded');
+                } else if (result?.status === 'skipped') {
+                    state.statuses.set(item.orgId, item.detailStatus || 'not_loaded');
                 } else if (result?.status === 'rate_limited' || result?.status === 'forbidden') {
                     stoppedForProtection = true;
                     state.statuses.set(item.orgId, 'not_loaded');
@@ -416,5 +509,6 @@
     function updateSelectionCount() { elements.selectionCount.textContent = `${state.selected.size} ausgewählt`; }
     function setMessage(text, type = '') { elements.message.textContent = text; elements.message.className = `message ${type}`; }
     function setBatchMessage(text, type = '') { elements.batchMessage.textContent = text; elements.batchMessage.className = `message ${type}`; }
+    function setAutomationMessage(text, type = '') { elements.automationMessage.textContent = text; elements.automationMessage.className = `message ${type}`; }
     function wait(milliseconds) { return new Promise(resolve => window.setTimeout(resolve, milliseconds)); }
 })();

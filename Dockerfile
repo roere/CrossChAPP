@@ -9,5 +9,6 @@ WORKDIR /var/www/html
 
 COPY app/ /var/www/html/
 COPY docker/entrypoint.sh /usr/local/bin/bni-dach-entrypoint
+COPY docker/worker-entrypoint.sh /usr/local/bin/crosschapp-worker-entrypoint
 
 EXPOSE 80

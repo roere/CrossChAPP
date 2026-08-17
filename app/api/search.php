@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/src/ChapterSearchService.php';
+require_once dirname(__DIR__) . '/src/AutomationRepository.php';
+require_once dirname(__DIR__) . '/src/BniRequestPolicy.php';
 require_once dirname(__DIR__) . '/src/Database.php';
 require_once dirname(__DIR__) . '/src/Geocoder.php';
 require_once dirname(__DIR__) . '/src/JsonResponse.php';
@@ -41,7 +43,9 @@ if (!array_key_exists($limitInput, $allowedLimits)) {
 
 try {
     $location = (new Geocoder())->geocode($locationInput);
-    $repository = new OrganizationRepository((new Database())->connection());
+    $database = (new Database())->connection();
+    $repository = new OrganizationRepository($database);
+    $automationSettings = (new AutomationRepository($database))->settings();
     $service = new ChapterSearchService($repository);
     $search = $service->search(
         $location['latitude'],
@@ -63,6 +67,11 @@ try {
         'data_basis' => $service->dataBasisCount(),
         'location' => $location,
         'search_location' => $searchLocation,
+        'refresh_policy' => [
+            'usage_enabled' => $automationSettings['usageRefreshEnabled'],
+            'usage_days' => $automationSettings['usageRefreshDays'],
+            'detail_delay_ms' => BniRequestPolicy::DETAIL_DELAY_MS,
+        ],
         'results' => $search['results'],
     ]);
 } catch (InvalidArgumentException $exception) {

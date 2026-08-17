@@ -5,7 +5,10 @@
     document.querySelector('#logout-button')?.addEventListener('click', logout);
     document.querySelector('#chapter-search-form')?.addEventListener('submit', searchChapters);
 
-    const searchState = { payload: null, expanded: new Set(), map: null, markerLayer: null };
+    const searchState = {
+        payload: null, expanded: new Set(), map: null, markerLayer: null,
+        refreshQueue: [], refreshQueued: new Set(), refreshCompleted: new Set(), refreshRunning: false, refreshGeneration: 0,
+    };
     document.querySelector('#result-list')?.addEventListener('click', toggleResultDetails);
     document.querySelector('#map-toggle')?.addEventListener('click', toggleMap);
     document.querySelector('.result-limit-options')?.addEventListener('click', selectResultLimit);
@@ -84,6 +87,7 @@
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Die Suche konnte nicht ausgeführt werden.');
             renderResults(result);
+            queueSearchRefreshes(result);
             document.querySelector('#data-basis').textContent = `Datengrundlage: ${result.data_basis} Chapter mit lokal gespeicherten Treffendaten.`;
             message.textContent = '';
         } catch (error) {
@@ -101,6 +105,10 @@
         const list = document.querySelector('#result-list');
         searchState.payload = payload;
         searchState.expanded.clear();
+        searchState.refreshGeneration += 1;
+        searchState.refreshQueue = [];
+        searchState.refreshQueued.clear();
+        searchState.refreshCompleted.clear();
         section.hidden = false;
         heading.textContent = payload.result_count === 0
             ? 'Für diese Auswahl wurden keine passenden Chapter gefunden.'
@@ -136,7 +144,8 @@
         toggle.setAttribute('aria-label', `Details für ${chapter.chapterName || `Organisation ${chapter.orgId}`} öffnen`); toggle.textContent = '▶ Details';
         actions.prepend(toggle);
         const details = resultDetailPanel(chapter); details.hidden = true;
-        article.append(header, facts, actions, details);
+        const refreshStatus = document.createElement('p'); refreshStatus.className = 'result-refresh-status'; refreshStatus.setAttribute('aria-live', 'polite');
+        article.append(header, facts, actions, refreshStatus, details);
         return article;
     }
 
@@ -193,6 +202,84 @@
         button.setAttribute('aria-label', `Details für Organisation ${id} ${expanded ? 'schließen' : 'öffnen'}`);
         panel.hidden = !expanded;
         expanded ? searchState.expanded.add(id) : searchState.expanded.delete(id);
+        if (expanded) {
+            const chapter = searchState.payload?.results.find(item => item.orgId === id);
+            if (chapter) enqueueUsageRefresh(chapter, 'usage_detail');
+        }
+    }
+
+    function queueSearchRefreshes(payload) {
+        if (!payload.refresh_policy?.usage_enabled) return;
+        payload.results.forEach(chapter => enqueueUsageRefresh(chapter, 'usage_search'));
+    }
+
+    function enqueueUsageRefresh(chapter, triggerType) {
+        const policy = searchState.payload?.refresh_policy;
+        if (!policy?.usage_enabled || !isStale(chapter.detailsLoadedAt, policy.usage_days)) return;
+        if (searchState.refreshQueued.has(chapter.orgId) || searchState.refreshCompleted.has(chapter.orgId)) return;
+        searchState.refreshQueued.add(chapter.orgId);
+        searchState.refreshQueue.push({ orgId: chapter.orgId, triggerType });
+        setChapterRefreshStatus(chapter.orgId, 'Daten werden aktualisiert …');
+        runUsageRefreshQueue(searchState.refreshGeneration);
+    }
+
+    async function runUsageRefreshQueue(generation) {
+        if (searchState.refreshRunning) return;
+        searchState.refreshRunning = true;
+        try {
+            while (searchState.refreshQueue.length && generation === searchState.refreshGeneration) {
+                const queued = searchState.refreshQueue.shift();
+                let stopQueue = false;
+                try {
+                    const response = await fetch('/api/refresh/usage.php', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ org_id: queued.orgId, trigger_type: queued.triggerType }),
+                    });
+                    const payload = await response.json(); const result = payload.result;
+                    if (response.ok && result?.status === 'success') {
+                        const chapter = searchState.payload?.results.find(item => item.orgId === queued.orgId);
+                        if (chapter && result.details) Object.assign(chapter, result.details);
+                        setChapterRefreshStatus(queued.orgId, 'gerade aktualisiert');
+                    } else if (result?.status === 'rate_limited' || result?.status === 'forbidden') {
+                        stopQueue = true;
+                        setChapterRefreshStatus(queued.orgId, 'Aktualisierung derzeit nicht möglich.');
+                    } else if (result?.status === 'skipped' && result?.reason === 'daily_limit') {
+                        stopQueue = true;
+                        setChapterRefreshStatus(queued.orgId, 'Lokale Daten werden angezeigt.');
+                    } else if (result?.status === 'skipped') {
+                        setChapterRefreshStatus(queued.orgId, '');
+                    } else {
+                        setChapterRefreshStatus(queued.orgId, 'Lokale Daten werden weiterhin angezeigt.');
+                    }
+                } catch {
+                    setChapterRefreshStatus(queued.orgId, 'Lokale Daten werden weiterhin angezeigt.');
+                }
+                searchState.refreshQueued.delete(queued.orgId);
+                searchState.refreshCompleted.add(queued.orgId);
+                if (stopQueue) {
+                    searchState.refreshQueue.forEach(pending => setChapterRefreshStatus(pending.orgId, 'Aktualisierung zurückgestellt.'));
+                    searchState.refreshQueue = [];
+                    searchState.refreshQueued.clear();
+                    break;
+                }
+                if (searchState.refreshQueue.length && generation === searchState.refreshGeneration) {
+                    await new Promise(resolve => window.setTimeout(resolve, searchState.payload.refresh_policy.detail_delay_ms));
+                }
+            }
+        } finally {
+            searchState.refreshRunning = false;
+            if (searchState.refreshQueue.length) runUsageRefreshQueue(searchState.refreshGeneration);
+        }
+    }
+
+    function isStale(timestamp, days) {
+        const loadedAt = Date.parse(timestamp || '');
+        return !Number.isFinite(loadedAt) || loadedAt < Date.now() - (Number(days) * 86_400_000);
+    }
+
+    function setChapterRefreshStatus(orgId, text) {
+        const element = document.querySelector(`#result-${orgId} .result-refresh-status`);
+        if (element) element.textContent = text;
     }
 
     function toggleMap() {

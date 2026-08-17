@@ -62,6 +62,24 @@ final class OrganizationRepository
         return array_map([$this, 'toApi'], $rows);
     }
 
+    /** @return list<array<string, mixed>> */
+    public function representationOrganizations(): array
+    {
+        return array_map(static fn (array $organization): array => [
+            'orgId' => $organization['orgId'],
+            'countryCode' => $organization['countryCode'],
+            'orgType' => $organization['orgType'],
+            'longitude' => $organization['longitude'],
+            'latitude' => $organization['latitude'],
+            'chapterName' => $organization['chapterName'],
+            'region' => $organization['region'],
+            'city' => $organization['city'],
+            'postalCode' => $organization['postalCode'],
+            'meetingDay' => $organization['meetingDay'],
+            'meetingTime' => $organization['meetingTime'],
+        ], $this->all());
+    }
+
     /** @return array{count: int, with_details: int} */
     public function statistics(): array
     {
@@ -174,6 +192,81 @@ final class OrganizationRepository
             static fn (array $row): array => ['orgId' => (int) $row['org_id']],
             $statement->fetchAll(),
         );
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function findAutomaticDueChapters(int $days, int $limit): array
+    {
+        if ($days < 1 || $days > 365 || $limit < 1 || $limit > 50) {
+            throw new InvalidArgumentException('Ungültige Stale- oder Batch-Grenze.');
+        }
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT * FROM organizations
+            WHERE org_type = 'CHAPTER'
+              AND cms_security_hash IS NOT NULL AND cms_security_hash != ''
+              AND (
+                  detail_status IN ('not_loaded', 'error')
+                  OR details_loaded_at IS NULL
+                  OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))
+              )
+            ORDER BY
+              CASE
+                WHEN detail_status = 'not_loaded' OR (details_loaded_at IS NULL AND detail_status != 'error') THEN 1
+                WHEN detail_status = 'error' THEN 2
+                ELSE 3
+              END ASC,
+              CASE WHEN detail_status = 'loaded' THEN details_loaded_at END ASC,
+              org_id ASC
+            LIMIT :limit
+            SQL);
+        $statement->bindValue(':age', '-' . $days . ' days', PDO::PARAM_STR);
+        $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+        return array_map([$this, 'toApi'], $statement->fetchAll());
+    }
+
+    public function isAutomaticDueChapter(int $orgId, int $days): bool
+    {
+        if ($days < 1 || $days > 365) return false;
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT COUNT(*) FROM organizations
+            WHERE org_id = :org_id AND org_type = 'CHAPTER'
+              AND (
+                  detail_status IN ('not_loaded', 'error')
+                  OR details_loaded_at IS NULL
+                  OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))
+              )
+            SQL);
+        $statement->execute([':org_id' => $orgId, ':age' => '-' . $days . ' days']);
+        return (int) $statement->fetchColumn() === 1;
+    }
+
+    public function isStaleLoadedChapter(int $orgId, int $days): bool
+    {
+        if ($days < 1 || $days > 365) {
+            return false;
+        }
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT COUNT(*) FROM organizations
+            WHERE org_id = :org_id
+              AND org_type = 'CHAPTER'
+              AND detail_status = 'loaded'
+              AND details_loaded_at IS NOT NULL
+              AND datetime(details_loaded_at) < datetime('now', :age)
+            SQL);
+        $statement->execute([':org_id' => $orgId, ':age' => '-' . $days . ' days']);
+        return (int) $statement->fetchColumn() === 1;
+    }
+
+    public function preserveLoadedOrMarkError(int $orgId): void
+    {
+        $statement = $this->database->prepare(<<<'SQL'
+            UPDATE organizations
+            SET detail_status = CASE WHEN details_loaded_at IS NULL THEN 'error' ELSE detail_status END,
+                updated_at = :updated_at
+            WHERE org_id = :org_id
+            SQL);
+        $statement->execute([':org_id' => $orgId, ':updated_at' => self::now()]);
     }
 
     /** @return array<string, mixed>|null */

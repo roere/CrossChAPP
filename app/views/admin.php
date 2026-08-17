@@ -44,6 +44,45 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div id="batch-progress" class="batch-progress" role="status" aria-live="polite"></div>
             <div id="batch-message" class="message" role="status" aria-live="polite"></div>
             <p class="batch-rate-hint">BNI-Abfragen erfolgen sequenziell mit mindestens 1,5 Sekunden Abstand. Bei einer Rate-Limitierung wird der Batch automatisch beendet.</p>
+            <details id="automation-panel" class="automation-panel">
+                <summary>Automatisierter Import</summary>
+                <div class="automation-content">
+                    <form id="automation-form">
+                        <section class="automation-setting">
+                            <div>
+                                <h3>Aktualisierung bei Nutzung</h3>
+                                <p>Wenn aktiviert, werden lokal vorhandene Chapterdaten aktualisiert, sobald ein Chapter in einer Suche erscheint oder geöffnet wird und die Detaildaten älter als X Tage sind.</p>
+                            </div>
+                            <label class="switch-label"><input id="usage-refresh-enabled" type="checkbox" role="switch"><span>Veraltete Chapter bei Suche oder Detailansicht aktualisieren</span></label>
+                            <label>Älter als <span class="days-input"><input id="usage-refresh-days" type="number" min="1" max="365" value="7" required> Tage</span></label>
+                        </section>
+                        <section class="automation-setting">
+                            <div>
+                                <h3>Automatische Aktualisierung</h3>
+                                <p>Wenn aktiviert, lädt CrossChAPP fehlende Chapterdetails erstmals ein und aktualisiert bereits vorhandene Daten, sobald sie älter als Y Tage sind.</p>
+                            </div>
+                            <label class="switch-label"><input id="automatic-refresh-enabled" type="checkbox" role="switch"><span>Veraltete Chapter automatisch aktualisieren</span></label>
+                            <label>Älter als <span class="days-input"><input id="automatic-refresh-days" type="number" min="1" max="365" value="30" required> Tage</span></label>
+                            <p class="automation-hint">Maximal 10 Chapter pro automatischem Lauf. BNI-Abfragen erfolgen sequenziell mit mindestens 1,5 Sekunden Abstand.</p>
+                        </section>
+                        <section class="automation-setting automation-daily-limit">
+                            <div>
+                                <h3>Gemeinsames Tageslimit</h3>
+                                <p>Dieses Limit gilt gemeinsam für Aktualisierungen durch Suche, Detailöffnung und den automatischen Hintergrundimport. Manuelle Admin-Importe sind davon nicht betroffen.</p>
+                            </div>
+                            <label>Maximale automatische Aktualisierungen pro Tag
+                                <input id="automatic-refresh-daily-limit" type="number" min="1" max="1000" value="50" required>
+                            </label>
+                        </section>
+                        <button id="save-automation" type="submit">Einstellungen speichern</button>
+                        <div id="automation-message" class="message" role="status" aria-live="polite"></div>
+                    </form>
+                    <section class="automation-statistics" aria-labelledby="automation-stats-heading">
+                        <div class="section-heading"><div><p class="section-kicker">SQLite-Historie</p><h3 id="automation-stats-heading">Automatische Aktualisierungen</h3></div><span id="worker-status" class="status-badge">Status wird geladen</span></div>
+                        <div id="automation-stats" class="automation-stats"></div>
+                    </section>
+                </div>
+            </details>
         </section>
         <div id="empty-database" class="panel empty-database" hidden>
             <strong>Die lokale Datenbank enthält noch keine BNI-Organisationen.</strong>

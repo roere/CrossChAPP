@@ -6,21 +6,31 @@ require_once __DIR__ . '/HttpException.php';
 
 final class HttpClient
 {
+    public function __construct(private readonly ?Closure $transport = null)
+    {
+    }
+
     /** @return array<string, mixed> */
     public function getJson(string $url, int $timeout = 25): array
     {
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'header' => "Accept: application/json\r\nUser-Agent: BNI-DACH-Finder/0.1\r\n",
-                'ignore_errors' => true,
-                'timeout' => $timeout,
-            ],
-        ]);
-
-        $body = @file_get_contents($url, false, $context);
-        $headers = $http_response_header ?? [];
-        $status = $this->statusCode($headers);
+        if ($this->transport !== null) {
+            $response = ($this->transport)($url, $timeout);
+            $body = $response['body'] ?? false;
+            $headers = is_array($response['headers'] ?? null) ? $response['headers'] : [];
+            $status = isset($response['status']) ? (int) $response['status'] : $this->statusCode($headers);
+        } else {
+            $context = stream_context_create([
+                'http' => [
+                    'method' => 'GET',
+                    'header' => "Accept: application/json\r\nUser-Agent: BNI-DACH-Finder/0.1\r\n",
+                    'ignore_errors' => true,
+                    'timeout' => $timeout,
+                ],
+            ]);
+            $body = @file_get_contents($url, false, $context);
+            $headers = $http_response_header ?? [];
+            $status = $this->statusCode($headers);
+        }
 
         if ($status < 200 || $status >= 300) {
             if ($status === 0) {
