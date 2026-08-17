@@ -3,6 +3,8 @@
 
     if (!document.querySelector('#source-form')) return;
 
+    const BNI_DETAIL_DELAY_MS = Number(document.querySelector('.admin-hero')?.dataset.detailDelayMs);
+
     const state = {
         organizations: [], selected: new Set(), expanded: new Set(), details: new Map(), statuses: new Map(),
         batchRunning: false, batchStopRequested: false,
@@ -94,6 +96,7 @@
         setBatchControls(true); setBatchMessage('Fehlende Chapter werden lokal ermittelt …');
         elements.batchProgress.textContent = '';
         let processed = 0; let successful = 0; let skipped = 0; let errors = 0; let target = 0;
+        let batchStopReason = null; let retryAfter = null;
 
         try {
             const pendingResponse = await fetch(`/api/bni/pending.php?limit=${encodeURIComponent(elements.batchSize.value)}`);
@@ -123,6 +126,10 @@
                             Object.assign(item, result.details);
                             state.details.set(item.orgId, item); state.statuses.set(item.orgId, 'loaded');
                         }
+                    } else if (result?.status === 'rate_limited' || result?.status === 'forbidden') {
+                        batchStopReason = result.status;
+                        retryAfter = Number.isInteger(result.retryAfter) ? result.retryAfter : null;
+                        if (item) state.statuses.set(item.orgId, 'not_loaded');
                     } else {
                         errors += 1;
                         if (item) state.statuses.set(item.orgId, 'error');
@@ -133,13 +140,20 @@
                 }
 
                 processed += 1;
-                elements.batchProgress.textContent = `${processed} von ${target} Chapterdetails geladen · Erfolgreich: ${successful} · Übersprungen: ${skipped} · Fehler: ${errors}`;
+                const protection = batchStopReason === 'rate_limited' ? ' · Rate-Limit: 1' : batchStopReason === 'forbidden' ? ' · Abgewiesen: 1' : '';
+                elements.batchProgress.textContent = `${processed} von ${target} Chapterdetails geladen · Erfolgreich: ${successful} · Übersprungen: ${skipped} · Fehler: ${errors}${protection}`;
                 renderStats(); renderBatchStats(); render();
+                if (batchStopReason) break;
                 if (state.batchStopRequested) break;
-                if (processed < target) await wait(300);
+                if (processed < target) await wait(BNI_DETAIL_DELAY_MS);
             }
 
-            if (state.batchStopRequested) setBatchMessage(`Import nach ${processed} von ${target} Chaptern gestoppt.`, 'success');
+            if (batchStopReason === 'rate_limited') {
+                const retryHint = retryAfter === null ? '' : ` Erneuter Versuch frühestens in ${retryAfter} Sekunden empfohlen.`;
+                setBatchMessage(`BNI begrenzt derzeit die Anzahl der Anfragen. Der Import wurde gestoppt. ${processed} von ${target} verarbeitet, ${successful} erfolgreich.${retryHint}`, 'error');
+            } else if (batchStopReason === 'forbidden') {
+                setBatchMessage(`BNI hat weitere Anfragen abgewiesen. Der Import wurde gestoppt. ${processed} von ${target} verarbeitet, ${successful} erfolgreich.`, 'error');
+            } else if (state.batchStopRequested) setBatchMessage(`Import nach ${processed} von ${target} Chaptern gestoppt.`, 'success');
             else setBatchMessage(`${processed} Chapter verarbeitet: ${successful} erfolgreich, ${skipped} übersprungen, ${errors} Fehler.`, errors ? 'error' : 'success');
         } catch (error) {
             setBatchMessage(error.message, 'error');
@@ -336,7 +350,7 @@
             && (elements.reloadDetails.checked || state.statuses.get(item.orgId) !== 'loaded'));
         if (!pending.length) { setMessage('Für die Auswahl sind keine neuen Details zu laden.'); return; }
         elements.loadDetails.disabled = true; elements.read.disabled = true;
-        let completed = 0;
+        let completed = 0; let stoppedForProtection = false;
         try {
             for (const item of pending) {
                 state.statuses.set(item.orgId, 'lädt'); render();
@@ -348,12 +362,21 @@
                 if (response.ok && result?.status === 'loaded') {
                     Object.assign(item, result.details);
                     state.details.set(item.orgId, item); state.statuses.set(item.orgId, 'loaded');
+                } else if (result?.status === 'rate_limited' || result?.status === 'forbidden') {
+                    stoppedForProtection = true;
+                    state.statuses.set(item.orgId, 'not_loaded');
+                    const retryHint = result.status === 'rate_limited' && Number.isInteger(result.retryAfter)
+                        ? ` Erneuter Versuch frühestens in ${result.retryAfter} Sekunden empfohlen.` : '';
+                    setMessage(result.status === 'rate_limited'
+                        ? `BNI begrenzt derzeit die Anzahl der Anfragen. Der Abruf wurde gestoppt.${retryHint}`
+                        : 'BNI hat weitere Anfragen abgewiesen. Der Abruf wurde gestoppt.', 'error');
+                    completed += 1; render(); break;
                 } else state.statuses.set(item.orgId, 'error');
                 completed += 1; elements.progress.textContent = `${completed} von ${pending.length} Details geladen`; render();
-                if (completed < pending.length) await wait(300);
+                if (completed < pending.length) await wait(BNI_DETAIL_DELAY_MS);
             }
             renderStats();
-            setMessage(`${completed} Detailabrufe abgeschlossen.`, 'success');
+            if (!stoppedForProtection) setMessage(`${completed} Detailabrufe abgeschlossen.`, 'success');
         } catch (error) {
             setMessage(`Detailabruf abgebrochen: ${error.message}`, 'error');
         } finally {

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/src/Auth.php';
+require_once dirname(__DIR__, 2) . '/src/BniRequestPolicy.php';
 require_once dirname(__DIR__, 2) . '/src/Database.php';
 require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 require_once dirname(__DIR__, 2) . '/src/OrganizationRepository.php';
@@ -22,6 +23,7 @@ try {
     $repository = new OrganizationRepository((new Database())->connection());
     JsonResponse::send([
         'limit' => (int) $limitInput,
+        'detail_delay_ms' => BniRequestPolicy::DETAIL_DELAY_MS,
         'statistics' => $repository->chapterDetailStatistics(),
         'chapters' => $repository->findPendingChapters((int) $limitInput),
     ]);

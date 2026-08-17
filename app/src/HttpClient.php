@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/HttpException.php';
+
 final class HttpClient
 {
     /** @return array<string, mixed> */
@@ -20,12 +22,19 @@ final class HttpClient
         $headers = $http_response_header ?? [];
         $status = $this->statusCode($headers);
 
-        if ($body === false) {
-            throw new RuntimeException('Die öffentliche BNI-Datenquelle ist nicht erreichbar.');
+        if ($status < 200 || $status >= 300) {
+            if ($status === 0) {
+                throw new RuntimeException('Die öffentliche BNI-Datenquelle ist nicht erreichbar.');
+            }
+            throw new HttpException(
+                sprintf('Die BNI-Datenquelle antwortete mit HTTP %d.', $status),
+                $status,
+                self::retryAfterSeconds($headers),
+            );
         }
 
-        if ($status < 200 || $status >= 300) {
-            throw new RuntimeException(sprintf('Die BNI-Datenquelle antwortete mit HTTP %d.', $status));
+        if ($body === false) {
+            throw new RuntimeException('Die öffentliche BNI-Datenquelle ist nicht erreichbar.');
         }
 
         try {
@@ -39,6 +48,25 @@ final class HttpClient
         }
 
         return $data;
+    }
+
+    /** @param list<string> $headers */
+    public static function retryAfterSeconds(array $headers, ?int $now = null): ?int
+    {
+        foreach ($headers as $header) {
+            if (preg_match('/^Retry-After:\s*(.+)$/i', trim($header), $matches) !== 1) {
+                continue;
+            }
+            $value = trim($matches[1]);
+            if (ctype_digit($value)) {
+                return (int) $value;
+            }
+            $timestamp = strtotime($value);
+            if ($timestamp !== false) {
+                return max(0, $timestamp - ($now ?? time()));
+            }
+        }
+        return null;
     }
 
     /** @param list<string> $headers */

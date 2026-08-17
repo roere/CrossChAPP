@@ -1,4 +1,7 @@
-<section class="page-hero admin-hero">
+<?php
+require_once __DIR__ . '/../src/BniRequestPolicy.php';
+?>
+<section class="page-hero admin-hero" data-detail-delay-ms="<?= BniRequestPolicy::DETAIL_DELAY_MS ?>">
     <div class="shell">
         <p class="eyebrow">Administration</p>
         <h1>Chapterdaten verwalten</h1>
@@ -40,6 +43,7 @@
             </div>
             <div id="batch-progress" class="batch-progress" role="status" aria-live="polite"></div>
             <div id="batch-message" class="message" role="status" aria-live="polite"></div>
+            <p class="batch-rate-hint">BNI-Abfragen erfolgen sequenziell mit mindestens 1,5 Sekunden Abstand. Bei einer Rate-Limitierung wird der Batch automatisch beendet.</p>
         </section>
         <div id="empty-database" class="panel empty-database" hidden>
             <strong>Die lokale Datenbank enthält noch keine BNI-Organisationen.</strong>

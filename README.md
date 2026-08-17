@@ -47,7 +47,7 @@ Die Anmeldung wird serverseitig mit sicherem Passwort-Hash und PHP-Session gepr�
 
 Beim Öffnen des Adminbereichs wird zuerst der vorhandene SQLite-Bestand über die lokale API geladen. Dabei findet kein BNI-Abruf statt. Der getrennte Bereich „BNI-Daten aktualisieren“ startet erst nach einem bewussten Klick auf „Grunddaten von BNI aktualisieren“ genau einen Sammelrequest und baut die Ansicht anschließend aus den aktualisierten lokalen Daten neu auf.
 
-Der Sammelimport erzeugt weiterhin genau einen BNI-Request. Detailrequests laufen sequenziell mit 300 ms Abstand und sind auf 50 ausgewählte Organisationen begrenzt. Bereits gespeicherte Details werden standardmäßig nicht erneut geladen.
+Der Sammelimport erzeugt weiterhin genau einen BNI-Request. Detailrequests laufen sequenziell mit mindestens 1,5 Sekunden Abstand und sind auf 50 ausgewählte Organisationen begrenzt. Bereits gespeicherte Details werden standardmäßig nicht erneut geladen.
 
 ## SQLite-Datenbank
 
@@ -117,7 +117,7 @@ Content-Type: application/json
 {"items":[{"orgId":5725}],"reload":false}
 ```
 
-Pro Request sind maximal 50 Einträge zulässig. Mehrere Einträge werden auch serverseitig sequenziell mit 300 ms Pause verarbeitet.
+Pro Request sind maximal 50 Einträge zulässig. Mehrere Einträge werden auch serverseitig sequenziell mit mindestens 1,5 Sekunden Pause verarbeitet.
 
 ### Batch-Import fehlender Chapterdetails
 
@@ -127,7 +127,9 @@ Der Adminbereich kann die nächsten 10, 25 oder 50 noch nicht geladenen bestehen
 GET /api/bni/pending.php?limit=25
 ```
 
-Die geschützte Pending-API löst selbst keinen BNI-Request aus. Der Browser verarbeitet die Kandidaten anschließend einzeln über den bestehenden Detail-Endpunkt und wartet zwischen zwei Requests 300 ms. Erfolgreiche Ergebnisse und Fehlerstatus werden sofort in SQLite gespeichert. Dadurch setzt ein späterer Batch – auch nach einem Browserneustart – bei den weiterhin fehlenden Chaptern fort. Fehlerhafte Datensätze dürfen erneut versucht werden. „Nach aktuellem Chapter stoppen“ beendet den Lauf nach dem gerade aktiven Request, ohne bereits gespeicherte Ergebnisse zurückzunehmen.
+Die geschützte Pending-API löst selbst keinen BNI-Request aus. Der Browser verarbeitet die Kandidaten anschließend einzeln über den bestehenden Detail-Endpunkt und wartet zwischen zwei Requests mindestens 1,5 Sekunden. Der Wert ist zentral in `BniRequestPolicy::DETAIL_DELAY_MS` konfiguriert. Erfolgreiche Ergebnisse und Fehlerstatus werden sofort in SQLite gespeichert. Dadurch setzt ein späterer Batch – auch nach einem Browserneustart – bei den weiterhin fehlenden Chaptern fort. Fehlerhafte Datensätze dürfen erneut versucht werden. „Nach aktuellem Chapter stoppen“ beendet den Lauf nach dem gerade aktiven Request, ohne bereits gespeicherte Ergebnisse zurückzunehmen.
+
+Bei HTTP 429 endet der gesamte laufende Batch sofort. Ein vorhandener `Retry-After`-Header wird sowohl als Sekundenwert als auch als HTTP-Datum ausgewertet und als Empfehlung angezeigt; die Anwendung wartet oder startet nicht automatisch neu. HTTP 403 beendet den Batch ebenfalls sofort. Der betroffene Datensatz bleibt in beiden Fällen `not_loaded`, da die Ursache kein fachlicher Fehler seiner Chapterdaten ist, und kann später erneut importiert werden. Normale 5xx-Antworten, Timeouts und Verbindungsfehler markieren nur den einzelnen Datensatz als `error`; der Batch fährt ohne automatischen Retry mit dem nächsten Kandidaten fort. Bereits geladene Chapter bleiben bei allen Fehlerarten gespeichert.
 
 Der Detail-Batch ist vom Button „Grunddaten von BNI aktualisieren“ getrennt: Nur dieser separate Grunddatenimport ruft die BNI-Kartenquelle auf; ein Detail-Batch führt keinen `getMapData`-Sammelrequest aus.
 

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/src/BniClient.php';
+require_once dirname(__DIR__, 2) . '/src/BniRequestPolicy.php';
 require_once dirname(__DIR__, 2) . '/src/Auth.php';
 require_once dirname(__DIR__, 2) . '/src/Database.php';
 require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
@@ -34,6 +35,7 @@ $repository = new OrganizationRepository((new Database())->connection());
 $reload = ($payload['reload'] ?? false) === true;
 $results = [];
 $processed = [];
+$stopBatch = false;
 
 foreach ($items as $index => $item) {
     if (!is_array($item)) {
@@ -71,18 +73,40 @@ foreach ($items as $index => $item) {
             'skipped' => false,
             'details' => $repository->find($orgId),
         ];
-    } catch (Throwable $exception) {
+    } catch (HttpException $exception) {
+        $stopReason = BniRequestPolicy::stopReason($exception->statusCode);
+        if ($stopReason !== null) {
+            $stopBatch = true;
+            $repository->markDetailNotLoaded($orgId);
+            error_log(sprintf(
+                'CrossChAPP BNI detail request stopped: org_id=%d http_status=%d reason=%s',
+                $orgId,
+                $exception->statusCode,
+                $stopReason,
+            ));
+            $results[] = [
+                'orgId' => $orgId,
+                'status' => $stopReason,
+                'retryAfter' => $exception->retryAfterSeconds,
+            ];
+        } else {
+            $repository->markDetailError($orgId);
+            error_log(sprintf('CrossChAPP BNI detail request failed: org_id=%d http_status=%d reason=temporary_http_error', $orgId, $exception->statusCode));
+            $results[] = ['orgId' => $orgId, 'status' => 'error', 'error' => 'Die BNI-Detailanfrage ist vorübergehend fehlgeschlagen.'];
+        }
+    } catch (Throwable) {
         $repository->markDetailError($orgId);
-        $results[] = [
-            'orgId' => $orgId,
-            'status' => 'error',
-            'error' => $exception->getMessage(),
-        ];
+        error_log(sprintf('CrossChAPP BNI detail request failed: org_id=%d http_status=0 reason=network_or_response_error', $orgId));
+        $results[] = ['orgId' => $orgId, 'status' => 'error', 'error' => 'Die BNI-Detailanfrage ist vorübergehend fehlgeschlagen.'];
+    }
+
+    if ($stopBatch) {
+        break;
     }
 
     if ($index < count($items) - 1) {
-        usleep(300_000);
+        usleep(BniRequestPolicy::DETAIL_DELAY_MS * 1000);
     }
 }
 
-JsonResponse::send(['results' => $results]);
+JsonResponse::send(['results' => $results, 'detail_delay_ms' => BniRequestPolicy::DETAIL_DELAY_MS]);

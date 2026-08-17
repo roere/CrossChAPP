@@ -249,6 +249,17 @@ final class OrganizationRepository
         $statement->execute([':org_id' => $orgId, ':updated_at' => self::now()]);
     }
 
+    public function markDetailNotLoaded(int $orgId): void
+    {
+        $statement = $this->database->prepare(<<<'SQL'
+            UPDATE organizations
+            SET detail_status = 'not_loaded', updated_at = :updated_at
+            WHERE org_id = :org_id
+              AND detail_status != 'loaded'
+            SQL);
+        $statement->execute([':org_id' => $orgId, ':updated_at' => self::now()]);
+    }
+
     /** @param array<string, mixed> $row @return array<string, mixed> */
     private function toApi(array $row): array
     {
