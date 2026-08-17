@@ -119,6 +119,18 @@ Content-Type: application/json
 
 Pro Request sind maximal 50 Einträge zulässig. Mehrere Einträge werden auch serverseitig sequenziell mit 300 ms Pause verarbeitet.
 
+### Batch-Import fehlender Chapterdetails
+
+Der Adminbereich kann die nächsten 10, 25 oder 50 noch nicht geladenen bestehenden Chapter über einen ausdrücklich gestarteten Batch importieren. `CORE_GROUP` und `PLANNED_GROUP` bleiben ausgeschlossen. Die Auswahl stammt ausschließlich aus SQLite und ist stabil nach `org_id` sortiert:
+
+```text
+GET /api/bni/pending.php?limit=25
+```
+
+Die geschützte Pending-API löst selbst keinen BNI-Request aus. Der Browser verarbeitet die Kandidaten anschließend einzeln über den bestehenden Detail-Endpunkt und wartet zwischen zwei Requests 300 ms. Erfolgreiche Ergebnisse und Fehlerstatus werden sofort in SQLite gespeichert. Dadurch setzt ein späterer Batch – auch nach einem Browserneustart – bei den weiterhin fehlenden Chaptern fort. Fehlerhafte Datensätze dürfen erneut versucht werden. „Nach aktuellem Chapter stoppen“ beendet den Lauf nach dem gerade aktiven Request, ohne bereits gespeicherte Ergebnisse zurückzunehmen.
+
+Der Detail-Batch ist vom Button „Grunddaten von BNI aktualisieren“ getrennt: Nur dieser separate Grunddatenimport ruft die BNI-Kartenquelle auf; ein Detail-Batch führt keinen `getMapData`-Sammelrequest aus.
+
 ### Lokale Daten
 
 ```text

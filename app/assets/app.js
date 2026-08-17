@@ -5,6 +5,7 @@
 
     const state = {
         organizations: [], selected: new Set(), expanded: new Set(), details: new Map(), statuses: new Map(),
+        batchRunning: false, batchStopRequested: false,
     };
     const typeLabels = { CHAPTER: 'Chapter', CORE_GROUP: 'Im Aufbau', PLANNED_GROUP: 'Geplant' };
     const countryLabels = { DE: 'Deutschland', AT: 'Österreich' };
@@ -16,6 +17,8 @@
         list: document.querySelector('#organization-list'), visibleCount: document.querySelector('#visible-count'),
         selectVisible: document.querySelector('#select-visible'), clearSelection: document.querySelector('#clear-selection'),
         loadDetails: document.querySelector('#load-details'), reloadDetails: document.querySelector('#reload-details'), selectionCount: document.querySelector('#selection-count'), progress: document.querySelector('#progress'),
+        batchStats: document.querySelector('#batch-stats'), batchSize: document.querySelector('#batch-size'), batchSizeOptions: document.querySelector('#batch-size-options'),
+        startBatch: document.querySelector('#start-batch'), stopBatch: document.querySelector('#stop-batch'), batchProgress: document.querySelector('#batch-progress'), batchMessage: document.querySelector('#batch-message'),
     };
 
     elements.form.addEventListener('submit', loadMap);
@@ -25,6 +28,13 @@
     elements.loadDetails.addEventListener('click', loadSelectedDetails);
     elements.list.addEventListener('change', handleSelection);
     elements.list.addEventListener('click', handleToggle);
+    elements.batchSizeOptions.addEventListener('click', selectBatchSize);
+    elements.startBatch.addEventListener('click', startDetailBatch);
+    elements.stopBatch.addEventListener('click', () => {
+        state.batchStopRequested = true;
+        elements.stopBatch.disabled = true;
+        elements.batchMessage.textContent = 'Der Import stoppt nach dem aktuellen Chapter.';
+    });
     loadLocal();
 
     async function loadLocal() {
@@ -67,7 +77,102 @@
         elements.results.hidden = false;
         elements.emptyDatabase.hidden = state.organizations.length !== 0;
         renderStats();
+        renderBatchStats();
         render();
+    }
+
+    function selectBatchSize(event) {
+        const button = event.target.closest('button[data-batch-size]');
+        if (!button || state.batchRunning) return;
+        elements.batchSizeOptions.querySelectorAll('button').forEach(option => option.setAttribute('aria-pressed', String(option === button)));
+        elements.batchSize.value = button.dataset.batchSize;
+    }
+
+    async function startDetailBatch() {
+        if (state.batchRunning) return;
+        state.batchRunning = true; state.batchStopRequested = false;
+        setBatchControls(true); setBatchMessage('Fehlende Chapter werden lokal ermittelt …');
+        elements.batchProgress.textContent = '';
+        let processed = 0; let successful = 0; let skipped = 0; let errors = 0; let target = 0;
+
+        try {
+            const pendingResponse = await fetch(`/api/bni/pending.php?limit=${encodeURIComponent(elements.batchSize.value)}`);
+            const pendingPayload = await pendingResponse.json();
+            if (!pendingResponse.ok) throw new Error(pendingPayload.error || 'Der Detailbatch konnte nicht vorbereitet werden.');
+            const chapters = Array.isArray(pendingPayload.chapters) ? pendingPayload.chapters : [];
+            target = chapters.length;
+            if (!target) {
+                setBatchMessage('Es sind keine fehlenden Chapterdetails vorhanden.', 'success');
+                return;
+            }
+
+            for (const chapter of chapters) {
+                if (state.batchStopRequested) break;
+                const item = state.organizations.find(organization => organization.orgId === chapter.orgId);
+                if (item) { state.statuses.set(item.orgId, 'lädt'); render(); }
+
+                try {
+                    const response = await fetch('/api/bni/details.php', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items: [{ orgId: chapter.orgId }], reload: false }),
+                    });
+                    const payload = await response.json(); const result = payload.results?.[0];
+                    if (response.ok && result?.status === 'loaded') {
+                        if (result.skipped) skipped += 1; else successful += 1;
+                        if (item && result.details) {
+                            Object.assign(item, result.details);
+                            state.details.set(item.orgId, item); state.statuses.set(item.orgId, 'loaded');
+                        }
+                    } else {
+                        errors += 1;
+                        if (item) state.statuses.set(item.orgId, 'error');
+                    }
+                } catch {
+                    errors += 1;
+                    if (item) state.statuses.set(item.orgId, 'error');
+                }
+
+                processed += 1;
+                elements.batchProgress.textContent = `${processed} von ${target} Chapterdetails geladen · Erfolgreich: ${successful} · Übersprungen: ${skipped} · Fehler: ${errors}`;
+                renderStats(); renderBatchStats(); render();
+                if (state.batchStopRequested) break;
+                if (processed < target) await wait(300);
+            }
+
+            if (state.batchStopRequested) setBatchMessage(`Import nach ${processed} von ${target} Chaptern gestoppt.`, 'success');
+            else setBatchMessage(`${processed} Chapter verarbeitet: ${successful} erfolgreich, ${skipped} übersprungen, ${errors} Fehler.`, errors ? 'error' : 'success');
+        } catch (error) {
+            setBatchMessage(error.message, 'error');
+        } finally {
+            state.batchRunning = false;
+            setBatchControls(false);
+            await loadLocal();
+        }
+    }
+
+    function setBatchControls(running) {
+        elements.startBatch.disabled = running;
+        elements.loadDetails.disabled = running;
+        elements.read.disabled = running;
+        elements.stopBatch.hidden = !running;
+        elements.stopBatch.disabled = false;
+        elements.batchSizeOptions.querySelectorAll('button').forEach(button => { button.disabled = running; });
+    }
+
+    function renderBatchStats() {
+        const chapters = state.organizations.filter(item => item.orgType === 'CHAPTER');
+        const loaded = chapters.filter(item => (state.statuses.get(item.orgId) || item.detailStatus) === 'loaded').length;
+        const errors = chapters.filter(item => (state.statuses.get(item.orgId) || item.detailStatus) === 'error').length;
+        const counts = [
+            ['Bestehende Chapter gesamt', chapters.length], ['Mit Detaildaten', loaded],
+            ['Ohne Detaildaten', chapters.length - loaded], ['Fehlerhafte Detailabrufe', errors],
+        ];
+        const fragment = document.createDocumentFragment();
+        counts.forEach(([label, value]) => {
+            const box = document.createElement('div'); const strong = document.createElement('strong'); const span = document.createElement('span');
+            strong.textContent = value; span.textContent = label; box.append(strong, span); fragment.append(box);
+        });
+        elements.batchStats.replaceChildren(fragment);
     }
 
     function visibleOrganizations() {
@@ -287,5 +392,6 @@
     function formatTimestamp(value) { return value ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—'; }
     function updateSelectionCount() { elements.selectionCount.textContent = `${state.selected.size} ausgewählt`; }
     function setMessage(text, type = '') { elements.message.textContent = text; elements.message.className = `message ${type}`; }
+    function setBatchMessage(text, type = '') { elements.batchMessage.textContent = text; elements.batchMessage.className = `message ${type}`; }
     function wait(milliseconds) { return new Promise(resolve => window.setTimeout(resolve, milliseconds)); }
 })();

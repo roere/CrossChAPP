@@ -18,6 +18,29 @@
 
     <section id="results" class="results" hidden>
         <div id="stats" class="stats" aria-label="Chapter-Statistik"></div>
+        <section class="panel batch-panel" aria-labelledby="batch-heading">
+            <div class="section-heading">
+                <div><p class="section-kicker">Kontrollierter Detailimport</p><h2 id="batch-heading">Fehlende Chapterdetails laden</h2></div>
+            </div>
+            <div id="batch-stats" class="batch-stats" aria-label="Detailstatus bestehender Chapter"></div>
+            <div class="batch-controls">
+                <fieldset class="choice-group batch-size-group">
+                    <legend>Batch-Größe</legend>
+                    <input id="batch-size" type="hidden" value="25">
+                    <div id="batch-size-options" class="batch-size-options" role="group" aria-label="Batch-Größe für Chapterdetails">
+                        <button type="button" data-batch-size="10" aria-pressed="false">10</button>
+                        <button type="button" data-batch-size="25" aria-pressed="true">25</button>
+                        <button type="button" data-batch-size="50" aria-pressed="false">50</button>
+                    </div>
+                </fieldset>
+                <div class="batch-actions">
+                    <button id="start-batch" type="button">Nächste fehlende Chapter laden</button>
+                    <button id="stop-batch" type="button" class="secondary" hidden>Nach aktuellem Chapter stoppen</button>
+                </div>
+            </div>
+            <div id="batch-progress" class="batch-progress" role="status" aria-live="polite"></div>
+            <div id="batch-message" class="message" role="status" aria-live="polite"></div>
+        </section>
         <div id="empty-database" class="panel empty-database" hidden>
             <strong>Die lokale Datenbank enthält noch keine BNI-Organisationen.</strong>
             <a href="#data-import">Grunddaten von BNI aktualisieren</a>

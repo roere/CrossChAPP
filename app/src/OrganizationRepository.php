@@ -122,6 +122,60 @@ final class OrganizationRepository
         return (int) $statement->fetchColumn();
     }
 
+    /** @return array{total: int, loaded: int, missing: int, error: int} */
+    public function chapterDetailStatistics(): array
+    {
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN detail_status = :loaded_status THEN 1 ELSE 0 END) AS loaded,
+                   SUM(CASE WHEN detail_status != :loaded_status THEN 1 ELSE 0 END) AS missing,
+                   SUM(CASE WHEN detail_status = :error_status THEN 1 ELSE 0 END) AS error
+            FROM organizations
+            WHERE org_type = :org_type
+            SQL);
+        $statement->execute([
+            ':loaded_status' => 'loaded',
+            ':error_status' => 'error',
+            ':org_type' => 'CHAPTER',
+        ]);
+        $row = $statement->fetch();
+
+        return [
+            'total' => (int) ($row['total'] ?? 0),
+            'loaded' => (int) ($row['loaded'] ?? 0),
+            'missing' => (int) ($row['missing'] ?? 0),
+            'error' => (int) ($row['error'] ?? 0),
+        ];
+    }
+
+    /** @return list<array{orgId: int}> */
+    public function findPendingChapters(int $limit): array
+    {
+        if ($limit < 1 || $limit > 50) {
+            throw new InvalidArgumentException('Das Batch-Limit muss zwischen 1 und 50 liegen.');
+        }
+
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT org_id
+            FROM organizations
+            WHERE org_type = :org_type
+              AND detail_status != :loaded_status
+              AND cms_security_hash IS NOT NULL
+              AND cms_security_hash != ''
+            ORDER BY org_id ASC
+            LIMIT :limit
+            SQL);
+        $statement->bindValue(':org_type', 'CHAPTER', PDO::PARAM_STR);
+        $statement->bindValue(':loaded_status', 'loaded', PDO::PARAM_STR);
+        $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+
+        return array_map(
+            static fn (array $row): array => ['orgId' => (int) $row['org_id']],
+            $statement->fetchAll(),
+        );
+    }
+
     /** @return array<string, mixed>|null */
     public function find(int $orgId): ?array
     {
