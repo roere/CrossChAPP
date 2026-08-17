@@ -34,11 +34,12 @@ $pageTitle = $requestedView === 'admin' ? 'Admin | CrossChAPP' : 'CrossChAPP';
                 <div class="header-navigation">
                     <nav aria-label="Hauptnavigation">
                         <a class="<?= $requestedView === 'search' ? 'active' : '' ?>" href="/">CrossChAPP</a>
-                        <a class="<?= $requestedView === 'admin' ? 'active' : '' ?>" href="/?view=admin">Admin</a>
+                        <?php if ($isAdmin): ?>
+                            <a class="<?= $requestedView === 'admin' ? 'active' : '' ?>" href="/?view=admin">Admin</a>
+                        <?php endif; ?>
                     </nav>
                     <div class="account-actions">
                         <?php if ($isAdmin): ?>
-                            <a class="account-admin" href="/?view=admin">Admin</a>
                             <button id="logout-button" type="button" class="header-button secondary">Logout</button>
                         <?php else: ?>
                             <a class="header-button" href="/?view=admin">Login</a>

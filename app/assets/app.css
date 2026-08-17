@@ -54,6 +54,12 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .panel, .table-panel { border: 1px solid var(--border); border-radius: 4px; background: var(--paper); box-shadow: var(--shadow); }
 .panel { padding: 1.5rem; }
 .source-panel { display: grid; grid-template-columns: minmax(250px, .65fr) minmax(420px, 1.35fr); gap: 1.5rem 3rem; align-items: end; border-top: 5px solid var(--bni-red); }
+.admin-local-heading { border-top: 5px solid var(--bni-red); }
+.admin-local-heading .message { margin-top: .8rem; }
+.admin-update-panel { margin-top: 1.5rem; }
+.empty-database { display: grid; gap: .65rem; margin-bottom: 1rem; border-left: 5px solid var(--bni-red); }
+.empty-database[hidden] { display: none; }
+.empty-database a { width: max-content; color: var(--bni-red-dark); font-size: .82rem; font-weight: 800; }
 h2 { margin: 0 0 .4rem; font-size: 1.15rem; letter-spacing: -.015em; }
 .panel p { margin: 0; color: var(--muted); line-height: 1.5; }
 label { display: grid; gap: .42rem; color: #3c3d40; font-size: .76rem; font-weight: 800; letter-spacing: .025em; }

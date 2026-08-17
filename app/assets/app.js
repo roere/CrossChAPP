@@ -11,6 +11,7 @@
     const elements = {
         form: document.querySelector('#source-form'), url: document.querySelector('#source-url'), read: document.querySelector('#read-button'),
         message: document.querySelector('#message'), results: document.querySelector('#results'), stats: document.querySelector('#stats'),
+        localMessage: document.querySelector('#local-message'), emptyDatabase: document.querySelector('#empty-database'),
         country: document.querySelector('#country-filter'), type: document.querySelector('#type-filter'), detail: document.querySelector('#detail-filter'), text: document.querySelector('#text-filter'),
         list: document.querySelector('#organization-list'), visibleCount: document.querySelector('#visible-count'),
         selectVisible: document.querySelector('#select-visible'), clearSelection: document.querySelector('#clear-selection'),
@@ -24,6 +25,21 @@
     elements.loadDetails.addEventListener('click', loadSelectedDetails);
     elements.list.addEventListener('change', handleSelection);
     elements.list.addEventListener('click', handleToggle);
+    loadLocal();
+
+    async function loadLocal() {
+        try {
+            const response = await fetch('/api/bni/local.php');
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Lokale Daten konnten nicht geladen werden.');
+            applyOrganizations(payload);
+            elements.localMessage.textContent = `${payload.count} Organisationen aus SQLite geladen, ${payload.with_details} mit Detaildaten.`;
+            elements.localMessage.className = 'message success';
+        } catch (error) {
+            elements.localMessage.textContent = error.message;
+            elements.localMessage.className = 'message error';
+        }
+    }
 
     async function loadMap(event) {
         event.preventDefault();
@@ -33,19 +49,25 @@
             const response = await fetch(`/api/bni/map.php?url=${encodeURIComponent(elements.url.value.trim())}`);
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Grunddaten konnten nicht geladen werden.');
-            state.organizations = payload.organizations;
-            const availableIds = new Set(state.organizations.map(item => item.orgId));
-            state.expanded = new Set([...state.expanded].filter(id => availableIds.has(id)));
-            state.selected.clear();
-            hydrateLocalDetails();
-            elements.results.hidden = false;
-            renderStats(); render();
+            applyOrganizations(payload);
             setMessage(`${payload.count} Grunddatensätze geladen, ${payload.with_details} mit lokalen Details.`, 'success');
         } catch (error) {
             setMessage(error.message, 'error');
         } finally {
             elements.read.disabled = false;
         }
+    }
+
+    function applyOrganizations(payload) {
+        state.organizations = Array.isArray(payload.organizations) ? payload.organizations : [];
+        const availableIds = new Set(state.organizations.map(item => item.orgId));
+        state.expanded = new Set([...state.expanded].filter(id => availableIds.has(id)));
+        state.selected.clear();
+        hydrateLocalDetails();
+        elements.results.hidden = false;
+        elements.emptyDatabase.hidden = state.organizations.length !== 0;
+        renderStats();
+        render();
     }
 
     function visibleOrganizations() {
@@ -236,10 +258,11 @@
 
     function renderStats() {
         const counts = [
-            ['Gesamt', state.organizations.length], ['Chapter', count('orgType', 'CHAPTER')],
+            ['Organisationen gesamt', state.organizations.length], ['Chapter', count('orgType', 'CHAPTER')],
             ['Im Aufbau', count('orgType', 'CORE_GROUP')], ['Geplant', count('orgType', 'PLANNED_GROUP')],
             ['Deutschland', count('countryCode', 'DE')], ['Österreich', count('countryCode', 'AT')],
-            ['Lokale Datenbank', state.organizations.length], ['Mit Details', state.organizations.filter(item => item.detailsLoadedAt).length],
+            ['Mit Detaildaten', state.organizations.filter(item => item.detailsLoadedAt).length],
+            ['Ohne Detaildaten', state.organizations.filter(item => !item.detailsLoadedAt).length],
         ];
         const fragment = document.createDocumentFragment();
         counts.forEach(([label, value], index) => {

@@ -40,7 +40,9 @@ Benutzername: admin
 Passwort: admin
 ```
 
-Die Anmeldung wird serverseitig mit sicherem Passwort-Hash und PHP-Session geprüft. Nach dem Login stehen der bisherige BNI-Sammelimport, Filter, Auswahl, selektive Detailpflege, Reload-Option und aufklappbare Details zur Verfügung.
+Die Anmeldung wird serverseitig mit sicherem Passwort-Hash und PHP-Session geprüft. Vor der Anmeldung ist der Admin-Navigationspunkt nicht sichtbar; direkte Adminaufrufe bleiben serverseitig geschützt. Nach dem Login stehen der BNI-Sammelimport, Filter, Auswahl, selektive Detailpflege, Reload-Option und aufklappbare Details zur Verfügung.
+
+Beim Öffnen des Adminbereichs wird zuerst der vorhandene SQLite-Bestand über die lokale API geladen. Dabei findet kein BNI-Abruf statt. Der getrennte Bereich „BNI-Daten aktualisieren“ startet erst nach einem bewussten Klick auf „Grunddaten von BNI aktualisieren“ genau einen Sammelrequest und baut die Ansicht anschließend aus den aktualisierten lokalen Daten neu auf.
 
 Der Sammelimport erzeugt weiterhin genau einen BNI-Request. Detailrequests laufen sequenziell mit 300 ms Abstand und sind auf 50 ausgewählte Organisationen begrenzt. Bereits gespeicherte Details werden standardmäßig nicht erneut geladen.
 

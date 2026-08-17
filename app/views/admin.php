@@ -7,23 +7,21 @@
 </section>
 
 <main class="shell content">
-    <section id="data-import" class="panel source-panel" aria-labelledby="source-heading">
+    <section class="panel admin-local-heading" aria-labelledby="local-heading">
         <div>
-            <h2 id="source-heading">BNI-Daten einlesen</h2>
-            <p>Ein Sammelabruf aktualisiert die lokale Chapterübersicht. Details werden nur nach Auswahl geladen.</p>
+            <p class="section-kicker">Gespeicherter Bestand</p>
+            <h2 id="local-heading">Lokale Datenbank</h2>
+            <p>Die Übersicht wird direkt aus SQLite geladen. Das Öffnen dieses Bereichs ruft keine BNI-Daten ab.</p>
         </div>
-        <form id="source-form" class="source-form">
-            <label for="source-url">BNI-DACH-Link</label>
-            <div class="input-row">
-                <input id="source-url" name="url" type="url" value="https://bni.de/de/findachapter" required>
-                <button id="read-button" type="submit">Auslesen</button>
-            </div>
-        </form>
-        <div id="message" class="message" role="status" aria-live="polite"></div>
+        <div id="local-message" class="message" role="status" aria-live="polite">Lokale Daten werden geladen …</div>
     </section>
 
     <section id="results" class="results" hidden>
         <div id="stats" class="stats" aria-label="Chapter-Statistik"></div>
+        <div id="empty-database" class="panel empty-database" hidden>
+            <strong>Die lokale Datenbank enthält noch keine BNI-Organisationen.</strong>
+            <a href="#data-import">Grunddaten von BNI aktualisieren</a>
+        </div>
         <section class="panel controls" aria-labelledby="filter-heading">
             <div class="section-heading">
                 <div><p class="section-kicker">Chapter finden</p><h2 id="filter-heading">Filter &amp; Aktionen</h2></div>
@@ -60,5 +58,21 @@
                 </table>
             </div>
         </section>
+    </section>
+
+    <section id="data-import" class="panel source-panel admin-update-panel" aria-labelledby="source-heading">
+        <div>
+            <p class="section-kicker">Bewusste Live-Aktion</p>
+            <h2 id="source-heading">BNI-Daten aktualisieren</h2>
+            <p>Die lokale Datenbank enthält die zuletzt importierten BNI-Daten. Mit „Grunddaten aktualisieren“ wird die aktuelle BNI-DACH-Kartenquelle erneut eingelesen.</p>
+        </div>
+        <form id="source-form" class="source-form">
+            <label for="source-url">BNI-DACH-Link</label>
+            <div class="input-row">
+                <input id="source-url" name="url" type="url" value="https://bni.de/de/findachapter" required>
+                <button id="read-button" type="submit">Grunddaten von BNI aktualisieren</button>
+            </div>
+        </form>
+        <div id="message" class="message" role="status" aria-live="polite"></div>
     </section>
 </main>
