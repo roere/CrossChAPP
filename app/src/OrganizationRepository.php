@@ -77,6 +77,51 @@ final class OrganizationRepository
         ];
     }
 
+    /** @return list<array<string, mixed>> */
+    public function searchableChapters(): array
+    {
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT * FROM organizations
+            WHERE org_type = :org_type
+              AND detail_status = :detail_status
+              AND chapter_name IS NOT NULL
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+              AND meeting_day IS NOT NULL
+              AND meeting_time IS NOT NULL
+              AND (status IS NULL OR status = :active_status)
+            ORDER BY org_id
+            SQL);
+        $statement->execute([
+            ':org_type' => 'CHAPTER',
+            ':detail_status' => 'loaded',
+            ':active_status' => 'CHAPTER',
+        ]);
+
+        return array_map([$this, 'toApi'], $statement->fetchAll());
+    }
+
+    public function searchableChapterCount(): int
+    {
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT COUNT(*) FROM organizations
+            WHERE org_type = :org_type
+              AND detail_status = :detail_status
+              AND chapter_name IS NOT NULL
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+              AND meeting_day IS NOT NULL
+              AND meeting_time IS NOT NULL
+              AND (status IS NULL OR status = :active_status)
+            SQL);
+        $statement->execute([
+            ':org_type' => 'CHAPTER',
+            ':detail_status' => 'loaded',
+            ':active_status' => 'CHAPTER',
+        ]);
+        return (int) $statement->fetchColumn();
+    }
+
     /** @return array<string, mixed>|null */
     public function find(int $orgId): ?array
     {

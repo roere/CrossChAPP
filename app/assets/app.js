@@ -1,6 +1,8 @@
 (() => {
     'use strict';
 
+    if (!document.querySelector('#source-form')) return;
+
     const state = {
         organizations: [], selected: new Set(), expanded: new Set(), details: new Map(), statuses: new Map(),
     };

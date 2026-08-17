@@ -3,9 +3,12 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/src/BniClient.php';
+require_once dirname(__DIR__, 2) . '/src/Auth.php';
 require_once dirname(__DIR__, 2) . '/src/Database.php';
 require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 require_once dirname(__DIR__, 2) . '/src/OrganizationRepository.php';
+
+Auth::requireAdminJson();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405);

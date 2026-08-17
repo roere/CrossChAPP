@@ -18,7 +18,7 @@ Diese Regeln gelten für das gesamte Projekt `bni-dach` und alle darin enthalten
 
 ## Projektziel
 
-Die Web-App `BNI DACH Finder` soll Chapter und Mitglieder von BNI in Deutschland, Österreich und der Schweiz auffindbar machen.
+Die Web-App `CrossChAPP` soll Chapter und Mitglieder von BNI in Deutschland, Österreich und der Schweiz auffindbar machen.
 
 Langfristig vorgesehen sind:
 

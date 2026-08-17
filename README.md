@@ -1,6 +1,6 @@
-# BNI DACH Finder
+# CrossChAPP
 
-Lokaler Proof of Concept zum kontrollierten Auslesen und lokalen Speichern öffentlicher BNI-Chapterdaten für Deutschland und Österreich.
+CrossChAPP findet passende BNI-Chaptertreffen in der Nähe. Die öffentliche Suche arbeitet mit lokal gespeicherten Chapterdetails; Import und Datenpflege liegen in einem geschützten Adminbereich.
 
 ## Start
 
@@ -12,15 +12,37 @@ docker compose up -d --build
 
 Danach ist die Anwendung unter <http://localhost:8082/> erreichbar.
 
-## Bedienung
+## Anwendersicht
 
-1. Den voreingestellten BNI-DACH-Link beibehalten und **Auslesen** anklicken.
-2. Die Anwendung lädt mit genau einem serverseitigen Request die öffentlichen Kartengrunddaten.
-3. Die Tabelle kann ohne weitere BNI-Requests nach Land, Typ, `orgId` und bereits geladenem Chapternamen gefiltert werden.
-4. Einzelne Zeilen markieren oder mit **Alle sichtbaren auswählen** nur die aktuelle Filtermenge auswählen.
-5. Mit **Details für ausgewählte laden** höchstens 50 Datensätze abrufen.
+Unter <http://localhost:8082/> stehen folgende Suchkriterien bereit:
 
-Detailrequests laufen sequenziell und mit 300 ms Abstand. Bereits lokal gespeicherte Details werden nach einem Browser-Neuladen wieder angezeigt und standardmäßig nicht erneut bei BNI abgefragt. Die Checkbox **Bereits geladene Details erneut abrufen** erlaubt eine bewusste Aktualisierung.
+- gemeinsames Feld für PLZ oder Ort
+- beliebig viele Wochentage; ohne Auswahl gelten alle Tage
+- Uhrzeit `egal`, `früh` oder `spät`
+- Sortierung nach Entfernung, Uhrzeit oder Mitgliederzahl
+
+`früh` bedeutet Meetingbeginn vor 09:00 Uhr, `spät` beginnt ab 09:00 Uhr. Standard ist Entfernung aufsteigend; maximal 20 Ergebnisse werden dargestellt.
+
+Die Suche berücksichtigt ausschließlich bestehende `CHAPTER`-Datensätze mit lokal vorhandenen Namen, Koordinaten, Wochentag und Uhrzeit. Sie löst niemals einen BNI-Request oder eine automatische Detailnachladung aus.
+
+## Geocoding und Entfernung
+
+Die Benutzereingabe wird pro Suche mit höchstens einem Request über die öffentliche Nominatim-Such-API von OpenStreetMap geocodiert. `countrycodes=de,at,ch` begrenzt die Ortsauflösung. Eine lokale Sperre verhindert parallele Geocodingrequests. Chapterkoordinaten kommen ausschließlich aus SQLite.
+
+Die Luftlinienentfernung wird lokal mit der Haversine-Formel berechnet; eine Routing-API wird nicht verwendet.
+
+## Adminansicht
+
+Der Adminbereich ist unter <http://localhost:8082/?view=admin> erreichbar. Lokale Entwicklungsanmeldung:
+
+```text
+Benutzername: admin
+Passwort: admin
+```
+
+Die Anmeldung wird serverseitig mit sicherem Passwort-Hash und PHP-Session geprüft. Nach dem Login stehen der bisherige BNI-Sammelimport, Filter, Auswahl, selektive Detailpflege, Reload-Option und aufklappbare Details zur Verfügung.
+
+Der Sammelimport erzeugt weiterhin genau einen BNI-Request. Detailrequests laufen sequenziell mit 300 ms Abstand und sind auf 50 ausgewählte Organisationen begrenzt. Bereits gespeicherte Details werden standardmäßig nicht erneut geladen.
 
 ## SQLite-Datenbank
 
@@ -48,6 +70,23 @@ Beim nächsten API-Zugriff wird eine leere Datenbank mit aktuellem Schema angele
 
 ## Lokale API
 
+### Öffentliche Suche
+
+```text
+GET  /api/search-basis.php
+POST /api/search.php
+```
+
+Die Such-API kommuniziert nur mit Nominatim und SQLite, nie mit BNI.
+
+### Authentifizierung
+
+```text
+POST /api/auth/login.php
+POST /api/auth/logout.php
+GET  /api/auth/status.php
+```
+
 ### Health
 
 ```text
@@ -61,6 +100,8 @@ GET /api/bni/map.php?url=https%3A%2F%2Fbni.de%2Fde%2Ffindachapter
 ```
 
 Der Browser übergibt den BNI-DACH-Seitenlink nur zur Prüfung. Serverzugriffe sind auf HTTPS-Ziele unter `bni.de` und dessen Subdomains begrenzt; der tatsächliche Sammel-Endpunkt und dessen Parameter sind fest im PHP-Client hinterlegt.
+
+Import-, Detail- und lokale Verwaltungs-API benötigen eine aktive Admin-Session.
 
 ### Chapterdetails
 
@@ -91,7 +132,7 @@ docker compose exec -T web php -m | grep -i pdo_sqlite
 docker compose exec -T web php -r 'new PDO("sqlite:/var/www/data/bni-dach.sqlite");'
 ```
 
-HTTP-Prüfungen erfolgen lokal auf Port 8082. Dazu gehören Health, Sammelabruf, lokale API, SSRF-Abweisung, 50er-Limit, ein selektiver Detailabruf und der bestehende Königsforst-Endpunkt. Der Testbestand wird nicht automatisch gelöscht.
+HTTP-Prüfungen erfolgen lokal auf Port 8082. Dazu gehören Authentifizierung, Adminschutz, Suchbasis, Geocoding, Tages-/Zeitfilter, Haversine-Sortierung, Health, Sammelabruf, SSRF-Abweisung, 50er-Limit und der bestehende Königsforst-Endpunkt. Die Suche darf dabei keinen BNI-Request auslösen. Der SQLite-Testbestand wird nicht automatisch gelöscht.
 
 ## Bestehende PoC-Endpunkte
 
@@ -106,4 +147,5 @@ Dieser unabhängige Endpunkt liest weiterhin die öffentliche Mitgliederliste de
 - Die Kartenquelle umfasst derzeit Deutschland und Österreich, nicht die Schweiz.
 - Ergebnisse hängen von Struktur und Verfügbarkeit der öffentlichen BNI-Endpunkte ab.
 - Es werden nur Organisations- und Chapterdaten gespeichert, keine Mitglieder.
-- Der PoC enthält noch keine Authentifizierung oder Profilbeanspruchung.
+- Die lokale Adminanmeldung ist noch kein Mehrbenutzersystem und besitzt noch keine Rollenverwaltung.
+- Geocoding hängt von der Verfügbarkeit des öffentlichen Nominatim-Dienstes ab.
