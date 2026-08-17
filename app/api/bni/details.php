@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/src/BniClient.php';
+require_once dirname(__DIR__, 2) . '/src/Database.php';
 require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
+require_once dirname(__DIR__, 2) . '/src/OrganizationRepository.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405);
@@ -25,7 +27,10 @@ if (count($items) > 50) {
 }
 
 $client = new BniClient();
+$repository = new OrganizationRepository((new Database())->connection());
+$reload = ($payload['reload'] ?? false) === true;
 $results = [];
+$processed = [];
 
 foreach ($items as $index => $item) {
     if (!is_array($item)) {
@@ -34,15 +39,37 @@ foreach ($items as $index => $item) {
     }
 
     $orgId = isset($item['orgId']) ? (int) $item['orgId'] : null;
-    $hash = trim((string) ($item['cmsSecurityHash'] ?? ''));
+    if ($orgId === null || $orgId <= 0 || isset($processed[$orgId])) {
+        $results[] = ['orgId' => $orgId, 'status' => 'error', 'error' => 'Ungültige oder doppelte Organisations-ID.'];
+        continue;
+    }
+    $processed[$orgId] = true;
+    $organization = $repository->find($orgId);
+
+    if ($organization === null) {
+        $results[] = ['orgId' => $orgId, 'status' => 'error', 'error' => 'Die Organisation ist lokal nicht vorhanden.'];
+        continue;
+    }
+
+    if ($organization['detailStatus'] === 'loaded' && !$reload) {
+        $results[] = ['orgId' => $orgId, 'status' => 'loaded', 'skipped' => true, 'details' => $organization];
+        continue;
+    }
 
     try {
+        $details = $client->getChapterDetails((string) $organization['cmsSecurityHash']);
+        if (($details['orgId'] ?? null) !== $orgId) {
+            throw new RuntimeException('Die BNI-Detailantwort gehört zu einer anderen Organisation.');
+        }
+        $repository->saveDetails($orgId, $details);
         $results[] = [
             'orgId' => $orgId,
             'status' => 'loaded',
-            'details' => $client->getChapterDetails($hash),
+            'skipped' => false,
+            'details' => $repository->find($orgId),
         ];
     } catch (Throwable $exception) {
+        $repository->markDetailError($orgId);
         $results[] = [
             'orgId' => $orgId,
             'status' => 'error',

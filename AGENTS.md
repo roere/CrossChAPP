@@ -34,7 +34,7 @@ Langfristig vorgesehen sind:
 - Docker und Docker Compose
 - lokale Anwendung auf Port `8082`
 - Git-Branch `main`
-- derzeit keine Datenbank
+- lokale SQLite-Datenbank unter `data/bni-dach.sqlite` (nicht versionieren)
 - Health-Endpunkt: `GET /api/health.php`
 - Mitglieder-PoC: `GET /api/bni/koenigsforst/members.php`
 

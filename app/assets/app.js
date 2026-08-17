@@ -1,38 +1,27 @@
 (() => {
     'use strict';
 
-    const state = { organizations: [], selected: new Set(), details: new Map(), statuses: new Map() };
+    const state = {
+        organizations: [], selected: new Set(), expanded: new Set(), details: new Map(), statuses: new Map(),
+    };
     const typeLabels = { CHAPTER: 'Chapter', CORE_GROUP: 'Im Aufbau', PLANNED_GROUP: 'Geplant' };
     const countryLabels = { DE: 'Deutschland', AT: 'Österreich' };
-    const detailFields = [
-        ['Region', 'region'], ['Regions-ID', 'regionId'], ['Ort', 'city'], ['PLZ', 'postalCode'],
-        ['Straße', 'street'], ['Treffpunkt', 'venue'], ['Wochentag', 'meetingDay'], ['Uhrzeit', 'meetingTime'],
-        ['Meetingtyp', 'meetingType'], ['Meetingdauer', 'meetingDuration', value => `${value} Minuten`],
-        ['Mitgliederzahl', 'memberCount'], ['Zeitzone', 'timezone'], ['Status', 'status'],
-        ['Chapter-URL', 'chapterUrl', makeLink], ['Besucheranmeldung', 'visitorRegistrationUrl', makeLink],
-        ['Online-Meeting', 'onlineMeetingUrl', makeLink], ['Beschreibung', 'description', null, true],
-    ];
     const elements = {
         form: document.querySelector('#source-form'), url: document.querySelector('#source-url'), read: document.querySelector('#read-button'),
         message: document.querySelector('#message'), results: document.querySelector('#results'), stats: document.querySelector('#stats'),
-        country: document.querySelector('#country-filter'), type: document.querySelector('#type-filter'), text: document.querySelector('#text-filter'),
+        country: document.querySelector('#country-filter'), type: document.querySelector('#type-filter'), detail: document.querySelector('#detail-filter'), text: document.querySelector('#text-filter'),
         list: document.querySelector('#organization-list'), visibleCount: document.querySelector('#visible-count'),
         selectVisible: document.querySelector('#select-visible'), clearSelection: document.querySelector('#clear-selection'),
-        loadDetails: document.querySelector('#load-details'), selectionCount: document.querySelector('#selection-count'), progress: document.querySelector('#progress'),
+        loadDetails: document.querySelector('#load-details'), reloadDetails: document.querySelector('#reload-details'), selectionCount: document.querySelector('#selection-count'), progress: document.querySelector('#progress'),
     };
 
     elements.form.addEventListener('submit', loadMap);
-    [elements.country, elements.type, elements.text].forEach(element => element.addEventListener('input', render));
+    [elements.country, elements.type, elements.detail, elements.text].forEach(element => element.addEventListener('input', render));
     elements.selectVisible.addEventListener('click', () => { visibleOrganizations().forEach(item => state.selected.add(item.orgId)); render(); });
     elements.clearSelection.addEventListener('click', () => { state.selected.clear(); render(); });
     elements.loadDetails.addEventListener('click', loadSelectedDetails);
-    elements.list.addEventListener('change', event => {
-        const checkbox = event.target.closest('input[type="checkbox"][data-id]');
-        if (!checkbox) return;
-        const id = Number(checkbox.dataset.id);
-        checkbox.checked ? state.selected.add(id) : state.selected.delete(id);
-        updateSelectionCount();
-    });
+    elements.list.addEventListener('change', handleSelection);
+    elements.list.addEventListener('click', handleToggle);
 
     async function loadMap(event) {
         event.preventDefault();
@@ -43,10 +32,13 @@
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Grunddaten konnten nicht geladen werden.');
             state.organizations = payload.organizations;
-            state.selected.clear(); state.details.clear(); state.statuses.clear();
+            const availableIds = new Set(state.organizations.map(item => item.orgId));
+            state.expanded = new Set([...state.expanded].filter(id => availableIds.has(id)));
+            state.selected.clear();
+            hydrateLocalDetails();
             elements.results.hidden = false;
             renderStats(); render();
-            setMessage(`${payload.count} Grunddatensätze geladen.`, 'success');
+            setMessage(`${payload.count} Grunddatensätze geladen, ${payload.with_details} mit lokalen Details.`, 'success');
         } catch (error) {
             setMessage(error.message, 'error');
         } finally {
@@ -60,6 +52,7 @@
             const name = state.details.get(item.orgId)?.chapterName || '';
             return (!elements.country.value || item.countryCode === elements.country.value)
                 && (!elements.type.value || item.orgType === elements.type.value)
+                && (!elements.detail.value || (state.statuses.get(item.orgId) || 'not_loaded') === elements.detail.value)
                 && (!query || String(item.orgId).includes(query) || name.toLocaleLowerCase('de').includes(query));
         });
     }
@@ -68,58 +61,150 @@
         const visible = visibleOrganizations();
         const fragment = document.createDocumentFragment();
         visible.forEach(item => {
-            const details = state.details.get(item.orgId);
-            const status = state.statuses.get(item.orgId) || 'nicht geladen';
-            const row = document.createElement('tr'); row.className = 'organization';
-            appendCheckbox(row, item);
-            [item.orgId, countryLabels[item.countryCode] || item.countryCode || '—', typeLabels[item.orgType] || item.orgType || '—',
-                display(item.longitude), display(item.latitude), details?.chapterName || '—', statusLabel(status)]
-                .forEach((value, index) => appendCell(row, value, index === 6 ? `status-${status}` : ''));
-            fragment.append(row);
-            if (details) fragment.append(detailRow(details));
+            fragment.append(organizationRow(item));
+            if (state.expanded.has(item.orgId)) fragment.append(detailRow(item));
         });
         elements.list.replaceChildren(fragment);
-        elements.visibleCount.textContent = `${visible.length} von ${state.organizations.length} Datensätzen sichtbar`;
+        elements.visibleCount.textContent = `${visible.length} von ${state.organizations.length} sichtbar`;
         updateSelectionCount();
     }
 
+    function organizationRow(item) {
+        const details = state.details.get(item.orgId);
+        const status = state.statuses.get(item.orgId) || 'not_loaded';
+        const row = document.createElement('tr'); row.className = 'organization'; row.dataset.id = item.orgId;
+        appendCheckbox(row, item);
+        appendToggle(row, item);
+        appendCell(row, details?.chapterName || '—', 'chapter-name');
+        appendCell(row, item.orgId, 'column-orgid numeric');
+        appendCell(row, countryLabels[item.countryCode] || item.countryCode || '—', 'column-country');
+        appendCell(row, typeLabels[item.orgType] || item.orgType || '—', 'column-type');
+        appendCell(row, details?.city || '—', 'column-city');
+        appendCell(row, details?.meetingDay || '—', 'column-day');
+        appendCell(row, details?.meetingTime || '—', 'column-time');
+        appendStatusCell(row, status);
+        appendCell(row, formatTimestamp(item.detailsLoadedAt), 'column-updated updated-at');
+        return row;
+    }
+
     function appendCheckbox(row, item) {
-        const cell = document.createElement('td');
+        const cell = document.createElement('td'); cell.className = 'select-column';
         const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.dataset.id = item.orgId;
         checkbox.checked = state.selected.has(item.orgId); checkbox.setAttribute('aria-label', `Organisation ${item.orgId} auswählen`);
         cell.append(checkbox); row.append(cell);
     }
 
-    function appendCell(row, value, className = '') {
-        const cell = document.createElement('td'); cell.textContent = String(value); if (className) cell.className = className; row.append(cell);
+    function appendToggle(row, item) {
+        const expanded = state.expanded.has(item.orgId);
+        const cell = document.createElement('td'); cell.className = 'toggle-column';
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'row-toggle'; button.dataset.id = item.orgId;
+        button.setAttribute('aria-expanded', String(expanded)); button.setAttribute('aria-controls', `details-${item.orgId}`);
+        button.setAttribute('aria-label', `Details für Organisation ${item.orgId} ${expanded ? 'schließen' : 'öffnen'}`);
+        button.textContent = expanded ? '▼' : '▶';
+        cell.append(button); row.append(cell);
     }
 
-    function detailRow(details) {
-        const row = document.createElement('tr'); row.className = 'detail-row';
-        const cell = document.createElement('td'); cell.colSpan = 8;
-        const list = document.createElement('dl'); list.className = 'detail-grid';
-        detailFields.forEach(([label, key, format, wide]) => {
-            const wrapper = document.createElement('div'); if (wide) wrapper.className = 'wide';
+    function appendCell(row, value, className = '') {
+        const cell = document.createElement('td'); cell.textContent = display(value); cell.className = className; row.append(cell);
+    }
+
+    function appendStatusCell(row, status) {
+        const cell = document.createElement('td'); cell.className = 'status-column';
+        const statusClass = status === 'lädt' ? 'loading' : status;
+        const badge = document.createElement('span'); badge.className = `status-badge status-${statusClass}`; badge.textContent = statusLabel(status);
+        cell.append(badge); row.append(cell);
+    }
+
+    function detailRow(item) {
+        const row = document.createElement('tr'); row.className = 'detail-row'; row.id = `details-${item.orgId}`;
+        const cell = document.createElement('td'); cell.colSpan = 11;
+        const panel = document.createElement('div'); panel.className = 'detail-panel';
+        const details = state.details.get(item.orgId);
+
+        if (!details) {
+            const notice = document.createElement('div'); notice.className = 'empty-detail';
+            const title = document.createElement('strong'); title.textContent = 'Für dieses Chapter wurden noch keine Detaildaten geladen.';
+            const hint = document.createElement('p'); hint.textContent = "Chapter auswählen und 'Details für ausgewählte laden' verwenden.";
+            notice.append(title, hint); panel.append(notice); cell.append(panel); row.append(cell); return row;
+        }
+
+        const view = { ...details, detailStatus: state.statuses.get(item.orgId) || details.detailStatus };
+        const grid = document.createElement('div'); grid.className = 'detail-groups';
+        grid.append(
+            detailGroup('Chapter', [
+                ['Chaptername', view.chapterName], ['orgId', view.orgId], ['Typ', typeLabels[view.orgType] || view.orgType],
+                ['Region', view.region], ['Regions-ID', view.regionId], ['Land', countryLabels[view.countryCode] || view.countryCode],
+            ]),
+            detailGroup('Treffen', [
+                ['Wochentag', view.meetingDay], ['Uhrzeit', view.meetingTime], ['Meetingtyp', view.meetingType],
+                ['Meetingdauer', view.meetingDuration, minutes], ['Treffpunkt', view.venue],
+            ]),
+            detailGroup('Adresse', [['Straße', view.street], ['PLZ', view.postalCode], ['Ort', view.city]]),
+            detailGroup('Netzwerk', [
+                ['Mitgliederzahl', view.memberCount], ['Besucher-anmeldung', view.visitorRegistrationUrl, externalLink],
+                ['Chapter-Webseite', view.chapterUrl, externalLink], ['Online-Meeting', view.onlineMeetingUrl, externalLink],
+            ]),
+            detailGroup('System', [
+                ['Detailstatus', statusLabel(view.detailStatus)], ['Zuletzt aktualisiert', formatTimestamp(view.detailsLoadedAt)],
+                ['Zeitzone', view.timezone], ['Chapterstatus', view.status],
+            ]),
+        );
+        const description = detailGroup('Beschreibung', [['ChapterText', view.description]], 'description-group');
+        panel.append(grid, description); cell.append(panel); row.append(cell); return row;
+    }
+
+    function detailGroup(title, fields, extraClass = '') {
+        const section = document.createElement('section'); section.className = `detail-group ${extraClass}`.trim();
+        const heading = document.createElement('h3'); heading.textContent = title;
+        const list = document.createElement('dl');
+        fields.forEach(([label, raw, formatter]) => {
+            const wrapper = document.createElement('div');
             const term = document.createElement('dt'); term.textContent = label;
-            const value = document.createElement('dd'); const raw = details[key];
+            const value = document.createElement('dd');
             if (raw === null || raw === undefined || raw === '') value.textContent = '—';
-            else if (format) value.append(format(raw));
+            else if (formatter) value.append(formatter(raw));
             else value.textContent = String(raw);
             wrapper.append(term, value); list.append(wrapper);
         });
-        cell.append(list); row.append(cell); return row;
+        section.append(heading, list); return section;
     }
 
-    function makeLink(url) {
-        const anchor = document.createElement('a'); anchor.href = url; anchor.target = '_blank';
-        anchor.rel = 'noopener noreferrer'; anchor.textContent = url; return anchor;
+    function externalLink(url) {
+        try {
+            const parsed = new URL(url);
+            if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('unsupported');
+            const anchor = document.createElement('a'); anchor.href = parsed.href; anchor.target = '_blank';
+            anchor.rel = 'noopener noreferrer'; anchor.textContent = 'Öffnen ↗'; return anchor;
+        } catch {
+            return document.createTextNode(String(url));
+        }
+    }
+
+    function minutes(value) { return document.createTextNode(`${value} Minuten`); }
+
+    function handleSelection(event) {
+        const checkbox = event.target.closest('input[type="checkbox"][data-id]');
+        if (!checkbox) return;
+        const id = Number(checkbox.dataset.id);
+        checkbox.checked ? state.selected.add(id) : state.selected.delete(id);
+        updateSelectionCount();
+    }
+
+    function handleToggle(event) {
+        const button = event.target.closest('.row-toggle');
+        if (!button) return;
+        const id = Number(button.dataset.id);
+        state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
+        render();
+        document.querySelector(`.row-toggle[data-id="${id}"]`)?.focus();
     }
 
     async function loadSelectedDetails() {
         if (state.selected.size > 50) {
             setMessage('Bitte höchstens 50 Datensätze auswählen. Es wurden keine Details abgerufen.', 'error'); return;
         }
-        const pending = state.organizations.filter(item => state.selected.has(item.orgId) && !state.details.has(item.orgId) && state.statuses.get(item.orgId) !== 'loaded');
+        const pending = state.organizations.filter(item => state.selected.has(item.orgId)
+            && (elements.reloadDetails.checked || state.statuses.get(item.orgId) !== 'loaded'));
         if (!pending.length) { setMessage('Für die Auswahl sind keine neuen Details zu laden.'); return; }
         elements.loadDetails.disabled = true; elements.read.disabled = true;
         let completed = 0;
@@ -128,15 +213,17 @@
                 state.statuses.set(item.orgId, 'lädt'); render();
                 const response = await fetch('/api/bni/details.php', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ items: [{ orgId: item.orgId, cmsSecurityHash: item.cmsSecurityHash }] }),
+                    body: JSON.stringify({ items: [{ orgId: item.orgId }], reload: elements.reloadDetails.checked }),
                 });
                 const payload = await response.json(); const result = payload.results?.[0];
                 if (response.ok && result?.status === 'loaded') {
-                    state.details.set(item.orgId, result.details); state.statuses.set(item.orgId, 'loaded');
+                    Object.assign(item, result.details);
+                    state.details.set(item.orgId, item); state.statuses.set(item.orgId, 'loaded');
                 } else state.statuses.set(item.orgId, 'error');
                 completed += 1; elements.progress.textContent = `${completed} von ${pending.length} Details geladen`; render();
                 if (completed < pending.length) await wait(300);
             }
+            renderStats();
             setMessage(`${completed} Detailabrufe abgeschlossen.`, 'success');
         } catch (error) {
             setMessage(`Detailabruf abgebrochen: ${error.message}`, 'error');
@@ -147,13 +234,14 @@
 
     function renderStats() {
         const counts = [
-            ['Gesamtzahl', state.organizations.length], ['Chapter', count('orgType', 'CHAPTER')],
+            ['Gesamt', state.organizations.length], ['Chapter', count('orgType', 'CHAPTER')],
             ['Im Aufbau', count('orgType', 'CORE_GROUP')], ['Geplant', count('orgType', 'PLANNED_GROUP')],
             ['Deutschland', count('countryCode', 'DE')], ['Österreich', count('countryCode', 'AT')],
+            ['Lokale Datenbank', state.organizations.length], ['Mit Details', state.organizations.filter(item => item.detailsLoadedAt).length],
         ];
         const fragment = document.createDocumentFragment();
-        counts.forEach(([label, value]) => {
-            const box = document.createElement('div'); box.className = 'stat';
+        counts.forEach(([label, value], index) => {
+            const box = document.createElement('div'); box.className = `stat${index === 0 ? ' stat-primary' : ''}`;
             const strong = document.createElement('strong'); strong.textContent = value;
             const span = document.createElement('span'); span.textContent = label;
             box.append(strong, span); fragment.append(box);
@@ -162,8 +250,16 @@
     }
 
     function count(field, value) { return state.organizations.filter(item => item[field] === value).length; }
-    function display(value) { return value === null || value === undefined || value === '' ? '—' : value; }
-    function statusLabel(status) { return status === 'loaded' ? 'geladen' : status === 'error' ? 'Fehler' : status; }
+    function hydrateLocalDetails() {
+        state.details.clear(); state.statuses.clear();
+        state.organizations.forEach(item => {
+            state.statuses.set(item.orgId, item.detailStatus || 'not_loaded');
+            if (item.detailsLoadedAt) state.details.set(item.orgId, item);
+        });
+    }
+    function display(value) { return value === null || value === undefined || value === '' ? '—' : String(value); }
+    function statusLabel(status) { return status === 'loaded' ? 'geladen' : status === 'error' ? 'Fehler' : status === 'lädt' ? 'lädt' : 'nicht geladen'; }
+    function formatTimestamp(value) { return value ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—'; }
     function updateSelectionCount() { elements.selectionCount.textContent = `${state.selected.size} ausgewählt`; }
     function setMessage(text, type = '') { elements.message.textContent = text; elements.message.className = `message ${type}`; }
     function wait(milliseconds) { return new Promise(resolve => window.setTimeout(resolve, milliseconds)); }
