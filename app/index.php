@@ -22,6 +22,9 @@ if (isset($_GET['verify'])) {
 }
 $isAdmin = Auth::isAdmin();
 $currentUser = Auth::user();
+$accountDisplayName = $currentUser === null ? '' : ((string) ($currentUser['username'] ?? '') !== ''
+    ? (string) $currentUser['username']
+    : trim((string) $currentUser['first_name'] . ' ' . (string) $currentUser['last_name']));
 $viewParameter = (string) ($_GET['view'] ?? '');
 $requestedView = match ($viewParameter) {
     'admin' => 'admin',
@@ -78,7 +81,12 @@ $pageTitle = match ($requestedView) {
                     </nav>
                     <div class="account-actions">
                         <?php if ($currentUser !== null): ?>
-                            <?php if (!$isAdmin): ?><span class="account-user"><?= htmlspecialchars(trim((string) $currentUser['first_name'] . ' ' . (string) $currentUser['last_name']), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                            <div id="account-menu" class="account-menu">
+                                <button id="account-menu-trigger" type="button" class="account-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="account-dropdown"><?= htmlspecialchars($accountDisplayName, ENT_QUOTES, 'UTF-8') ?> <span aria-hidden="true">▼</span></button>
+                                <div id="account-dropdown" class="account-dropdown" role="menu" hidden>
+                                    <button id="open-change-password" type="button" role="menuitem">Passwort ändern</button>
+                                </div>
+                            </div>
                             <button id="logout-button" type="button" class="header-button secondary">Logout</button>
                         <?php else: ?>
                             <a class="header-button" href="/?view=login">Login</a>
@@ -88,6 +96,26 @@ $pageTitle = match ($requestedView) {
             </div>
         </div>
     </header>
+
+    <?php if ($currentUser !== null): ?>
+        <dialog id="change-password-dialog" class="account-dialog" aria-labelledby="change-password-heading">
+            <div class="account-dialog-card">
+                <button id="close-change-password" type="button" class="dialog-close" aria-label="Passwortdialog schließen">×</button>
+                <div id="change-password-content">
+                    <h2 id="change-password-heading">Passwort ändern</h2>
+                    <form id="change-password-form" novalidate>
+                        <input class="sr-only" name="account_identifier" value="<?= htmlspecialchars($accountDisplayName, ENT_QUOTES, 'UTF-8') ?>" autocomplete="username" tabindex="-1" aria-hidden="true">
+                        <div class="auth-name-row password-change-fields">
+                            <label>Neues Passwort<input name="password" type="password" minlength="8" autocomplete="new-password" required aria-describedby="change-password-error"><span id="change-password-error" class="field-error" hidden>Das Passwort muss mindestens 8 Zeichen lang sein.</span></label>
+                            <label>Neues Passwort wiederholen<input name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required aria-describedby="change-confirmation-error"><span id="change-confirmation-error" class="field-error" hidden>Die Passwörter stimmen nicht überein.</span></label>
+                        </div>
+                        <div class="registration-actions"><button type="submit">Passwort ändern</button><button id="cancel-change-password" type="button" class="secondary">Abbrechen</button></div>
+                    </form>
+                    <div id="change-password-message" class="message" role="alert" aria-live="polite"></div>
+                </div>
+            </div>
+        </dialog>
+    <?php endif; ?>
 
     <?php
     if ($requestedView === 'admin') {

@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 final class Auth
 {
-    private const SESSION_KEY = 'crosschapp_admin';
     private const IDENTITY_KEY = 'crosschapp_identity';
     private const CSRF_KEY = 'crosschapp_csrf';
-    private const DEV_USERNAME = 'admin';
-    private const DEV_PASSWORD_HASH = '$2y$10$/w.85OIJmzun7pFjgRPPaeD4Q4p.otU/T4wBIzkhPlniP1OY79sbW';
 
     public static function start(): void
     {
@@ -29,32 +26,15 @@ final class Auth
         session_start();
     }
 
-    public static function loginLegacyAdmin(string $username, string $password): bool
-    {
-        self::start();
-        $validUsername = hash_equals(self::DEV_USERNAME, $username);
-        $validPassword = password_verify($password, self::DEV_PASSWORD_HASH);
-
-        if (!$validUsername || !$validPassword) {
-            return false;
-        }
-
-        session_regenerate_id(true);
-        $_SESSION[self::SESSION_KEY] = true;
-        $_SESSION[self::IDENTITY_KEY] = ['user_id' => null, 'role' => 'admin', 'first_name' => 'Admin', 'last_name' => '', 'email' => null];
-        return true;
-    }
-
     /** @param array<string, mixed> $user */
     public static function loginUser(array $user): void
     {
         self::start();
         session_regenerate_id(true);
-        unset($_SESSION[self::SESSION_KEY]);
         $_SESSION[self::IDENTITY_KEY] = [
             'user_id' => (int) $user['id'], 'role' => (string) $user['role'],
             'first_name' => (string) $user['first_name'], 'last_name' => (string) $user['last_name'],
-            'email' => (string) $user['email'],
+            'email' => (string) $user['email'], 'username' => isset($user['username']) ? (string) $user['username'] : null,
         ];
     }
 
@@ -72,7 +52,7 @@ final class Auth
     public static function isAdmin(): bool
     {
         self::start();
-        return ($_SESSION[self::SESSION_KEY] ?? false) === true || (($_SESSION[self::IDENTITY_KEY]['role'] ?? null) === 'admin');
+        return ($_SESSION[self::IDENTITY_KEY]['role'] ?? null) === 'admin';
     }
 
     /** @return array<string, mixed>|null */
@@ -110,6 +90,15 @@ final class Auth
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['error' => 'Admin-Anmeldung erforderlich.'], JSON_UNESCAPED_UNICODE);
         exit;
+    }
+
+    /** @return array<string, mixed> */
+    public static function requireUserJson(): array
+    {
+        $user = self::user();
+        if ($user !== null && is_int($user['user_id'] ?? null) && $user['user_id'] > 0) return $user;
+        http_response_code(401); header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => 'Anmeldung erforderlich.'], JSON_UNESCAPED_UNICODE); exit;
     }
 
     private static function isHttps(): bool

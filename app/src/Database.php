@@ -136,6 +136,7 @@ final class Database
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 first_name TEXT NOT NULL,
                 last_name TEXT NOT NULL,
+                username TEXT COLLATE NOCASE,
                 email TEXT NOT NULL COLLATE NOCASE UNIQUE,
                 password_hash TEXT NOT NULL,
                 home_chapter_org_id INTEGER,
@@ -148,7 +149,19 @@ final class Database
                 FOREIGN KEY (home_chapter_org_id) REFERENCES organizations(org_id) ON DELETE SET NULL
             )
             SQL);
+        $this->addTableColumnIfMissing('users', 'username', 'TEXT COLLATE NOCASE');
+        $this->connection->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_users_home_chapter ON users(home_chapter_org_id)');
+        $now = gmdate('Y-m-d\TH:i:s\Z');
+        $admin = $this->connection->prepare(<<<'SQL'
+            INSERT INTO users (first_name, last_name, username, email, password_hash, role, status, email_verified_at, created_at, updated_at)
+            SELECT 'admin', '', 'admin', 'admin@localhost.invalid', :password_hash, 'admin', 'active', :verified_at, :created_at, :updated_at
+            WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin' COLLATE NOCASE)
+            SQL);
+        $admin->execute([
+            ':password_hash' => '$2y$10$/w.85OIJmzun7pFjgRPPaeD4Q4p.otU/T4wBIzkhPlniP1OY79sbW',
+            ':verified_at' => $now, ':created_at' => $now, ':updated_at' => $now,
+        ]);
         foreach (['email_verification_tokens', 'password_reset_tokens'] as $table) {
             $this->connection->exec(sprintf(<<<'SQL'
                 CREATE TABLE IF NOT EXISTS %s (

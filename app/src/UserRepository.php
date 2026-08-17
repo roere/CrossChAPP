@@ -21,7 +21,7 @@ final class UserRepository
     /** @return array<string, mixed>|null */
     public function findByLogin(string $login): ?array
     {
-        $statement = $this->database->prepare('SELECT * FROM users WHERE email = :login COLLATE NOCASE');
+        $statement = $this->database->prepare('SELECT * FROM users WHERE email = :login COLLATE NOCASE OR username = :login COLLATE NOCASE');
         $statement->execute([':login' => trim($login)]); $row = $statement->fetch();
         return is_array($row) ? $row : null;
     }
@@ -110,17 +110,29 @@ final class UserRepository
         $statement->execute([':now' => self::now(), ':id' => $userId]);
     }
 
+    public function updatePassword(int $userId, string $passwordHash): bool
+    {
+        $statement = $this->database->prepare('UPDATE users SET password_hash = :password_hash, updated_at = :updated_at WHERE id = :id AND status = \'active\'');
+        $statement->execute([':password_hash' => $passwordHash, ':updated_at' => self::now(), ':id' => $userId]);
+        return $statement->rowCount() === 1;
+    }
+
     public function rateLimited(string $type, string $identifier, string $ip, int $maxAttempts, int $windowSeconds): bool
     {
-        $statement = $this->database->prepare('SELECT COUNT(*) FROM auth_attempts WHERE attempt_type = :type AND (identifier_hash = :identifier OR ip_hash = :ip) AND attempted_at >= :since AND successful = 0');
-        $statement->execute([':type' => $type, ':identifier' => hash('sha256', strtolower(trim($identifier))), ':ip' => hash('sha256', $ip), ':since' => gmdate('Y-m-d\TH:i:s\Z', time() - $windowSeconds)]);
+        $statement = $this->database->prepare('SELECT COUNT(*) FROM auth_attempts WHERE attempt_type = :type AND identifier_hash = :identifier AND ip_hash = :ip AND attempted_at >= :since AND successful = 0');
+        $statement->execute([':type' => $type, ':identifier' => self::identifierHash($identifier), ':ip' => self::ipHash($ip), ':since' => gmdate('Y-m-d\TH:i:s\Z', time() - $windowSeconds)]);
         return (int) $statement->fetchColumn() >= $maxAttempts;
     }
 
     public function recordAttempt(string $type, string $identifier, string $ip, bool $successful): void
     {
+        if ($successful) {
+            $statement = $this->database->prepare('DELETE FROM auth_attempts WHERE attempt_type = :type AND identifier_hash = :identifier AND ip_hash = :ip AND successful = 0');
+            $statement->execute([':type' => $type, ':identifier' => self::identifierHash($identifier), ':ip' => self::ipHash($ip)]);
+            return;
+        }
         $statement = $this->database->prepare('INSERT INTO auth_attempts (attempt_type, identifier_hash, ip_hash, successful, attempted_at) VALUES (:type, :identifier, :ip, :successful, :at)');
-        $statement->execute([':type' => $type, ':identifier' => hash('sha256', strtolower(trim($identifier))), ':ip' => hash('sha256', $ip), ':successful' => $successful ? 1 : 0, ':at' => self::now()]);
+        $statement->execute([':type' => $type, ':identifier' => self::identifierHash($identifier), ':ip' => self::ipHash($ip), ':successful' => 0, ':at' => self::now()]);
     }
 
     /** @return array<string, mixed>|null */
@@ -132,6 +144,8 @@ final class UserRepository
     }
 
     private static function assertTokenTable(string $table): void { if (!in_array($table, ['email_verification_tokens', 'password_reset_tokens'], true)) throw new InvalidArgumentException('Ungültige Tokenart.'); }
+    private static function identifierHash(string $identifier): string { return hash('sha256', strtolower(trim($identifier))); }
+    private static function ipHash(string $ip): string { return hash('sha256', trim($ip)); }
     private static function randomToken(): string { return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '='); }
     private static function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }
 }

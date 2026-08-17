@@ -68,6 +68,17 @@ return result;
 """)
     assert all(value=='ascending/descending' for value in admin_sort['aria'].values()) and admin_sort['numeric'] and admin_sort['preserved'] and admin_sort['filtered'],admin_sort
     sort_network=request('POST',f'/session/{session}/log',{'type':'performance'});assert not sort_network,sort_network
+    admin_menu=script("const t=document.querySelector('#account-menu-trigger');t.click();const open=!document.querySelector('#account-dropdown').hidden,ts=getComputedStyle(t),ms=getComputedStyle(document.querySelector('#open-change-password'));document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));return {name:t.textContent.includes('admin'),open,closed:document.querySelector('#account-dropdown').hidden,hasPopup:t.getAttribute('aria-haspopup')==='menu',typography:[ts.fontFamily,ts.fontSize,ts.fontWeight,ts.lineHeight].join('|')===[ms.fontFamily,ms.fontSize,ms.fontWeight,ms.lineHeight].join('|')};")
+    assert all(admin_menu.values()),admin_menu
+    script("document.querySelector('#account-menu-trigger').click();document.querySelector('#open-change-password').click();const f=document.querySelector('#change-password-form');f.password.value='admin-test-87654321';f.password_confirmation.value='admin-test-87654321';f.requestSubmit();");time.sleep(.5)
+    assert script("return document.querySelector('#change-password-content').textContent.trim()==='Passwort wurde erfolgreich geändert.' && location.search.includes('view=admin');")
+    script("document.querySelector('#close-change-password').click();document.querySelector('#logout-button').click();");time.sleep(.4)
+    request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=login'});time.sleep(.2)
+    script("const f=document.querySelector('#login-form');f.login.value='admin';f.password.value='admin';f.requestSubmit();");time.sleep(.4)
+    assert 'nicht korrekt' in script("return document.querySelector('#login-message').textContent;")
+    expected_login_logs=request('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in expected_login_logs if entry.get('level')=='SEVERE' and '/api/auth/login.php' not in entry.get('message','')],expected_login_logs
+    script("const f=document.querySelector('#login-form');f.password.value='admin-test-87654321';f.requestSubmit();");time.sleep(.7)
+    assert 'view=admin' in script("return location.href;")
     script("document.querySelector('#misc-panel').open=true;document.querySelector('#misc-panel').dispatchEvent(new Event('toggle'));");time.sleep(.5)
     mail=script("return {password:document.querySelector('#mail-settings-form').elements.smtpPassword.value,templates:document.querySelectorAll('#email-templates-form textarea').length};")
     assert mail['password']=='' and mail['templates']==2

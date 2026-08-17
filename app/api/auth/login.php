@@ -26,10 +26,6 @@ $username = is_array($payload) ? trim((string) ($payload['login'] ?? $payload['u
 $password = is_array($payload) ? (string) ($payload['password'] ?? '') : '';
 $account = AccountFactory::create(); $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
 if ($account['users']->rateLimited('login', $username, $ip, 5, 900)) JsonResponse::send(['error' => 'Zu viele Anmeldeversuche. Bitte versuche es später erneut.'], 429);
-if (Auth::loginLegacyAdmin($username, $password)) {
-    $account['users']->recordAttempt('login', $username, $ip, true);
-    JsonResponse::send(['authenticated' => true, 'role' => 'admin']);
-}
 $result = $account['service']->authenticate($username, $password);
 if ($result['status'] === 'pending') {
     $account['users']->recordAttempt('login', $username, $ip, false);

@@ -12,6 +12,8 @@
     document.querySelector('#forgot-password-form')?.addEventListener('submit', forgotPassword);
     document.querySelector('#reset-password-form')?.addEventListener('submit', resetPassword);
     document.querySelector('#logout-button')?.addEventListener('click', logout);
+    initializeAccountMenu();
+    initializePasswordChange();
     document.querySelector('#chapter-search-form')?.addEventListener('submit', searchChapters);
 
     const searchState = {
@@ -63,6 +65,68 @@
         } finally {
             window.location.assign('/');
         }
+    }
+
+    function initializeAccountMenu() {
+        const menu = document.querySelector('#account-menu');
+        const trigger = document.querySelector('#account-menu-trigger');
+        const dropdown = document.querySelector('#account-dropdown');
+        if (!menu || !trigger || !dropdown) return;
+        let closeTimer = null;
+        const open = () => { window.clearTimeout(closeTimer); dropdown.hidden = false; trigger.setAttribute('aria-expanded', 'true'); };
+        const close = () => { dropdown.hidden = true; trigger.setAttribute('aria-expanded', 'false'); };
+        menu.addEventListener('mouseenter', open);
+        menu.addEventListener('mouseleave', () => { closeTimer = window.setTimeout(close, 120); });
+        trigger.addEventListener('click', event => { event.stopPropagation(); dropdown.hidden ? open() : close(); });
+        dropdown.addEventListener('click', close);
+        document.addEventListener('click', event => { if (!menu.contains(event.target)) close(); });
+        document.addEventListener('keydown', event => {
+            if (event.key !== 'Escape' || dropdown.hidden) return;
+            close(); trigger.focus();
+        });
+    }
+
+    function initializePasswordChange() {
+        const dialog = document.querySelector('#change-password-dialog');
+        const form = document.querySelector('#change-password-form');
+        if (!dialog || !form) return;
+        const password = form.password; const confirmation = form.password_confirmation;
+        document.querySelector('#open-change-password')?.addEventListener('click', () => { resetPasswordChange(form); dialog.showModal(); window.setTimeout(() => password.focus(), 0); });
+        document.querySelector('#cancel-change-password')?.addEventListener('click', () => { resetPasswordChange(form); dialog.close(); });
+        document.querySelector('#close-change-password')?.addEventListener('click', () => { resetPasswordChange(form); dialog.close(); });
+        dialog.addEventListener('close', () => { if (document.querySelector('#change-password-form')) resetPasswordChange(form); });
+        password.addEventListener('blur', () => validateChangedPassword(password));
+        confirmation.addEventListener('blur', () => { confirmation.dataset.touched = 'true'; validateChangedConfirmation(password, confirmation); });
+        password.addEventListener('input', () => {
+            if (confirmation.dataset.touched === 'true' || confirmation.value !== '') validateChangedConfirmation(password, confirmation);
+        });
+        form.addEventListener('submit', changePassword);
+    }
+
+    async function changePassword(event) {
+        event.preventDefault(); const form = event.currentTarget; const button = form.querySelector('button[type="submit"]');
+        const passwordValid = validateChangedPassword(form.password);
+        const confirmationValid = validateChangedConfirmation(form.password, form.password_confirmation);
+        if (!passwordValid || !confirmationValid) { (passwordValid ? form.password_confirmation : form.password).focus(); return; }
+        button.disabled = true;
+        try {
+            const response = await fetch('/api/auth/change-password.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ password: form.password.value, password_confirmation: form.password_confirmation.value }) });
+            const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Das Passwort konnte nicht geändert werden.');
+            const content = document.querySelector('#change-password-content'); const success = document.createElement('p');
+            success.className = 'password-change-success'; success.textContent = 'Passwort wurde erfolgreich geändert.'; content.replaceChildren(success);
+        } catch (error) {
+            const message = document.querySelector('#change-password-message'); message.textContent = error.message; message.className = 'message error';
+        } finally { button.disabled = false; }
+    }
+
+    function validateChangedPassword(input) { return setFieldValidity(input, input.value.length >= 8, '#change-password-error'); }
+    function validateChangedConfirmation(password, confirmation) { return setFieldValidity(confirmation, confirmation.value !== '' && confirmation.value === password.value, '#change-confirmation-error'); }
+    function resetPasswordChange(form) {
+        form.reset(); delete form.password_confirmation.dataset.touched;
+        form.querySelectorAll('.field-invalid').forEach(input => input.classList.remove('field-invalid'));
+        form.querySelectorAll('[aria-invalid]').forEach(input => input.removeAttribute('aria-invalid'));
+        form.querySelectorAll('.field-error').forEach(error => { error.hidden = true; });
+        const message = document.querySelector('#change-password-message'); if (message) { message.textContent = ''; message.className = 'message'; }
     }
 
     async function register(event) {

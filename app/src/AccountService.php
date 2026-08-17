@@ -63,4 +63,11 @@ final class AccountService
         if (!hash_equals($password, $confirmation)) throw new InvalidArgumentException('Die Passwörter stimmen nicht überein.');
         return $this->users->resetPassword($token, password_hash($password, PASSWORD_DEFAULT));
     }
+
+    public function changePassword(int $userId, string $password, string $confirmation): bool
+    {
+        if (strlen($password) < 8) throw new InvalidArgumentException('Das Passwort muss mindestens 8 Zeichen lang sein.');
+        if (!hash_equals($password, $confirmation)) throw new InvalidArgumentException('Die Passwörter stimmen nicht überein.');
+        return $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
+    }
 }
