@@ -41,11 +41,22 @@
                     </div>
                     <p>Früh: vor 09:00 Uhr · Spät: ab 09:00 Uhr</p>
                 </fieldset>
-                <label class="sort-field">Sortierung
-                    <select id="search-sort" name="sort">
-                        <option value="distance">Entfernung</option><option value="time">Uhrzeit</option><option value="members">Mitgliederzahl</option>
-                    </select>
-                </label>
+                <div class="search-selects">
+                    <fieldset class="choice-group result-limit-group">
+                        <legend>Anzahl Ergebnisse</legend>
+                        <input id="search-limit" name="limit" type="hidden" value="10">
+                        <div class="result-limit-options" role="group" aria-label="Anzahl der Suchergebnisse">
+                            <?php foreach (['5' => '5', '10' => '10', '20' => '20', '50' => '50', 'all' => 'Alle'] as $value => $label): ?>
+                                <button type="button" data-limit="<?= $value ?>" aria-pressed="<?= $value === 10 ? 'true' : 'false' ?>"><?= $label ?></button>
+                            <?php endforeach; ?>
+                        </div>
+                    </fieldset>
+                    <label class="sort-field">Sortierung
+                        <select id="search-sort" name="sort">
+                            <option value="distance">Entfernung</option><option value="time">Uhrzeit</option><option value="members">Mitgliederzahl</option>
+                        </select>
+                    </label>
+                </div>
             </div>
 
             <button id="search-button" type="submit" class="search-submit">Treffen finden</button>
@@ -57,6 +68,10 @@
     <section id="search-results" class="search-results" aria-labelledby="results-heading" hidden>
         <div class="results-summary">
             <div><p class="section-kicker">Suchergebnis</p><h2 id="results-heading"></h2><p id="search-around"></p></div>
+            <button id="map-toggle" type="button" class="secondary" aria-expanded="false" aria-controls="results-map">Karte anzeigen</button>
+        </div>
+        <div id="results-map-panel" class="results-map-panel" hidden>
+            <div id="results-map" role="region" aria-label="Karte mit Suchstandort und gefundenen Chaptern"></div>
         </div>
         <div id="result-list" class="result-list"></div>
     </section>

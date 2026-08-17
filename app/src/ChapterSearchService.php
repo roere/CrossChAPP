@@ -5,17 +5,22 @@ declare(strict_types=1);
 final class ChapterSearchService
 {
     private const EARLY_CUTOFF_MINUTES = 9 * 60;
-    private const RESULT_LIMIT = 20;
-
     public function __construct(private readonly OrganizationRepository $repository)
     {
     }
 
     /**
      * @param list<string> $days
-     * @return list<array<string, mixed>>
+     * @return array{results: list<array<string, mixed>>, totalMatching: int}
      */
-    public function search(float $latitude, float $longitude, array $days, string $timeFilter, string $sort): array
+    public function search(
+        float $latitude,
+        float $longitude,
+        array $days,
+        string $timeFilter,
+        string $sort,
+        ?int $limit = 10,
+    ): array
     {
         $results = [];
         foreach ($this->repository->searchableChapters() as $chapter) {
@@ -49,7 +54,10 @@ final class ChapterSearchService
             default => fn (array $a, array $b) => $a['distanceKm'] <=> $b['distanceKm'],
         });
 
-        return array_slice($results, 0, self::RESULT_LIMIT);
+        return [
+            'results' => $limit === null ? $results : array_slice($results, 0, $limit),
+            'totalMatching' => count($results),
+        ];
     }
 
     public function dataBasisCount(): int

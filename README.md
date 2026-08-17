@@ -19,11 +19,14 @@ Unter <http://localhost:8082/> stehen folgende Suchkriterien bereit:
 - gemeinsames Feld für PLZ oder Ort
 - beliebig viele Wochentage; ohne Auswahl gelten alle Tage
 - Uhrzeit `egal`, `früh` oder `spät`
+- Ergebnisanzahl 5, 10, 20, 50 oder alle lokalen Treffer; Standard ist 10
 - Sortierung nach Entfernung, Uhrzeit oder Mitgliederzahl
 
-`früh` bedeutet Meetingbeginn vor 09:00 Uhr, `spät` beginnt ab 09:00 Uhr. Standard ist Entfernung aufsteigend; maximal 20 Ergebnisse werden dargestellt.
+`früh` bedeutet Meetingbeginn vor 09:00 Uhr, `spät` beginnt ab 09:00 Uhr. Standard ist Entfernung aufsteigend. „Alle“ hebt nur das serverseitige Ergebnislimit auf und umfasst weiterhin ausschließlich passende SQLite-Datensätze.
 
 Die Suche berücksichtigt ausschließlich bestehende `CHAPTER`-Datensätze mit lokal vorhandenen Namen, Koordinaten, Wochentag und Uhrzeit. Sie löst niemals einen BNI-Request oder eine automatische Detailnachladung aus.
+
+Trefferkarten lassen sich ohne weiteren Request aufklappen und zeigen alle mit der Suchantwort gelieferten lokalen Chapterdetails. Die einblendbare Leaflet-Karte verwendet OpenStreetMap-Kacheln und markiert den geocodierten Suchstandort sowie genau die aktuell zurückgegebenen Treffer. Chapter werden weder für die Karte geocodiert noch bei BNI nachgeladen.
 
 ## Geocoding und Entfernung
 
