@@ -4,6 +4,7 @@
     if (!document.querySelector('#source-form')) return;
 
     const BNI_DETAIL_DELAY_MS = Number(document.querySelector('.admin-hero')?.dataset.detailDelayMs);
+    const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
     const state = {
         organizations: [], selected: new Set(), expanded: new Set(), details: new Map(), statuses: new Map(),
@@ -26,6 +27,9 @@
         automaticEnabled: document.querySelector('#automatic-refresh-enabled'), automaticDays: document.querySelector('#automatic-refresh-days'),
         automaticDailyLimit: document.querySelector('#automatic-refresh-daily-limit'),
         automationMessage: document.querySelector('#automation-message'), automationStats: document.querySelector('#automation-stats'), workerStatus: document.querySelector('#worker-status'),
+        miscPanel: document.querySelector('#misc-panel'), mailSettingsForm: document.querySelector('#mail-settings-form'),
+        mailSettingsMessage: document.querySelector('#mail-settings-message'), templatesForm: document.querySelector('#email-templates-form'), templatesMessage: document.querySelector('#email-templates-message'),
+        testMailAddress: document.querySelector('#test-mail-address'), sendTestMail: document.querySelector('#send-test-mail'), testMailMessage: document.querySelector('#test-mail-message'),
     };
 
     elements.form.addEventListener('submit', loadMap);
@@ -44,6 +48,10 @@
     });
     elements.automationForm.addEventListener('submit', saveAutomationSettings);
     elements.automationPanel.addEventListener('toggle', () => { if (elements.automationPanel.open) loadAutomationStats(); });
+    elements.miscPanel.addEventListener('toggle', () => { if (elements.miscPanel.open) loadMailConfiguration(); });
+    elements.mailSettingsForm.addEventListener('submit', saveMailSettings);
+    elements.templatesForm.addEventListener('submit', saveEmailTemplates);
+    elements.sendTestMail.addEventListener('click', sendTestMail);
     loadLocal();
     loadAutomationSettings();
 
@@ -66,7 +74,7 @@
         setMessage('Grunddaten werden mit einem Sammelrequest geladen …');
         elements.read.disabled = true;
         try {
-            const response = await fetch(`/api/bni/map.php?url=${encodeURIComponent(elements.url.value.trim())}`);
+            const response = await fetch(`/api/bni/map.php?url=${encodeURIComponent(elements.url.value.trim())}`, { headers: { 'X-CSRF-Token': CSRF_TOKEN } });
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Grunddaten konnten nicht geladen werden.');
             applyOrganizations(payload);
@@ -124,7 +132,7 @@
 
                 try {
                     const response = await fetch('/api/bni/details.php', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                         body: JSON.stringify({ items: [{ orgId: chapter.orgId }], reload: false }),
                     });
                     const payload = await response.json(); const result = payload.results?.[0];
@@ -196,7 +204,7 @@
         const button = document.querySelector('#save-automation'); button.disabled = true;
         try {
             const response = await fetch('/api/automation/settings.php', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                 body: JSON.stringify({
                     usage_refresh_enabled: elements.usageEnabled.checked,
                     usage_refresh_days: Number(elements.usageDays.value),
@@ -253,6 +261,39 @@
         }
         elements.workerStatus.textContent = stats.workerActive ? 'Hintergrunddienst aktiv' : 'Hintergrunddienst nicht aktiv';
         elements.workerStatus.className = `status-badge ${stats.workerActive ? 'status-loaded' : 'status-error'}`;
+    }
+
+    async function loadMailConfiguration() {
+        try {
+            const [settingsResponse, templatesResponse] = await Promise.all([fetch('/api/admin/mail-settings.php'), fetch('/api/admin/email-templates.php')]);
+            const settingsPayload = await settingsResponse.json(); const templatesPayload = await templatesResponse.json();
+            if (!settingsResponse.ok || !templatesResponse.ok) throw new Error('Die E-Mail-Konfiguration konnte nicht geladen werden.');
+            const form = elements.mailSettingsForm; const settings = settingsPayload.settings;
+            ['smtpHost', 'smtpPort', 'smtpUsername', 'encryption', 'senderEmail', 'senderName', 'baseUrl'].forEach(name => { form.elements[name].value = settings[name] ?? ''; });
+            form.elements.smtpPassword.value = ''; form.elements.smtpPassword.placeholder = settings.hasSmtpPassword ? '••••••••' : '';
+            const templates = templatesPayload.templates; elements.templatesForm.elements.verify_subject.value = templates.verify_email.subject; elements.templatesForm.elements.verify_body.value = templates.verify_email.body;
+            elements.templatesForm.elements.reset_subject.value = templates.reset_password.subject; elements.templatesForm.elements.reset_body.value = templates.reset_password.body;
+        } catch (error) { elements.mailSettingsMessage.textContent = error.message; elements.mailSettingsMessage.className = 'message error'; }
+    }
+
+    async function saveMailSettings(event) {
+        event.preventDefault(); const form = event.currentTarget;
+        try { const values = Object.fromEntries(new FormData(form)); values.smtpPort = Number(values.smtpPort); const response = await fetch('/api/admin/mail-settings.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN }, body: JSON.stringify(values) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); elements.mailSettingsMessage.textContent = 'E-Mail-Einstellungen gespeichert.'; elements.mailSettingsMessage.className = 'message success'; form.elements.smtpPassword.value = ''; form.elements.smtpPassword.placeholder = payload.settings.hasSmtpPassword ? '••••••••' : ''; }
+        catch (error) { elements.mailSettingsMessage.textContent = error.message; elements.mailSettingsMessage.className = 'message error'; }
+    }
+
+    async function saveEmailTemplates(event) {
+        event.preventDefault(); const form = event.currentTarget;
+        const body = { verify_email: { subject: form.elements.verify_subject.value, body: form.elements.verify_body.value }, reset_password: { subject: form.elements.reset_subject.value, body: form.elements.reset_body.value } };
+        try { const response = await fetch('/api/admin/email-templates.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN }, body: JSON.stringify(body) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); elements.templatesMessage.textContent = 'E-Mail-Vorlagen gespeichert.'; elements.templatesMessage.className = 'message success'; }
+        catch (error) { elements.templatesMessage.textContent = error.message; elements.templatesMessage.className = 'message error'; }
+    }
+
+    async function sendTestMail() {
+        elements.sendTestMail.disabled = true;
+        try { const response = await fetch('/api/admin/test-email.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN }, body: JSON.stringify({ email: elements.testMailAddress.value }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); elements.testMailMessage.textContent = payload.message; elements.testMailMessage.className = 'message success'; }
+        catch (error) { elements.testMailMessage.textContent = error.message; elements.testMailMessage.className = 'message error'; }
+        finally { elements.sendTestMail.disabled = false; }
     }
 
     function setBatchControls(running) {
@@ -446,7 +487,7 @@
             for (const item of pending) {
                 state.statuses.set(item.orgId, 'lädt'); render();
                 const response = await fetch('/api/bni/details.php', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                     body: JSON.stringify({ items: [{ orgId: item.orgId }], reload: elements.reloadDetails.checked }),
                 });
                 const payload = await response.json(); const result = payload.results?.[0];

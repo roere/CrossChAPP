@@ -1,0 +1,6 @@
+<?php
+declare(strict_types=1);
+require_once dirname(__DIR__, 2) . '/src/AccountFactory.php'; require_once dirname(__DIR__, 2) . '/src/AccountService.php'; require_once dirname(__DIR__, 2) . '/src/Auth.php'; require_once dirname(__DIR__, 2) . '/src/Database.php'; require_once dirname(__DIR__, 2) . '/src/JsonResponse.php'; require_once dirname(__DIR__, 2) . '/src/MailService.php'; require_once dirname(__DIR__, 2) . '/src/MailSettingsRepository.php'; require_once dirname(__DIR__, 2) . '/src/UserRepository.php';
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405); Auth::requireCsrfJson();
+try { $payload = json_decode(file_get_contents('php://input') ?: '', true, 8, JSON_THROW_ON_ERROR); $ok = AccountFactory::create()['service']->resetPassword((string) ($payload['token'] ?? ''), (string) ($payload['password'] ?? ''), (string) ($payload['password_confirmation'] ?? '')); if (!$ok) JsonResponse::send(['error' => 'Der Link ist ungültig oder abgelaufen.'], 400); JsonResponse::send(['reset' => true, 'message' => 'Dein Passwort wurde geändert.']); }
+catch (JsonException|InvalidArgumentException $e) { JsonResponse::send(['error' => $e->getMessage()], 400); }

@@ -16,6 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     JsonResponse::send(['error' => 'Nur GET und POST sind erlaubt.'], 405);
 }
+Auth::requireCsrfJson();
 
 try {
     $payload = json_decode(file_get_contents('php://input') ?: '', true, 32, JSON_THROW_ON_ERROR);

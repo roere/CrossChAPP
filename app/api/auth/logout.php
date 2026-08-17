@@ -8,6 +8,7 @@ require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405);
 }
+Auth::requireCsrfJson();
 
 Auth::logout();
 JsonResponse::send(['authenticated' => false]);

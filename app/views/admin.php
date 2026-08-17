@@ -141,4 +141,24 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
         </form>
         <div id="message" class="message" role="status" aria-live="polite"></div>
     </section>
+    <details id="misc-panel" class="panel misc-panel">
+        <summary>Sonstiges</summary>
+        <div class="misc-content">
+            <section><p class="section-kicker">Konfiguration</p><h2>E-Mail-Versand</h2>
+                <form id="mail-settings-form" class="mail-settings-grid">
+                    <label>SMTP-Server<input name="smtpHost"></label><label>SMTP-Port<input name="smtpPort" type="number" min="1" max="65535" value="587"></label>
+                    <label>SMTP-Benutzername<input name="smtpUsername" autocomplete="off"></label><label>SMTP-Passwort<input name="smtpPassword" type="password" autocomplete="new-password" placeholder="••••••••"></label>
+                    <label>Verschlüsselung<select name="encryption"><option value="starttls">STARTTLS</option><option value="tls">SSL/TLS</option><option value="none">keine</option></select></label>
+                    <label>Absender-E-Mail<input name="senderEmail" type="email"></label><label>Absendername<input name="senderName" value="CrossChAPP"></label><label>Basis-URL für Links<input name="baseUrl" type="url" value="http://localhost:8082"></label>
+                    <button type="submit">E-Mail-Einstellungen speichern</button>
+                </form><div id="mail-settings-message" class="message" role="status"></div>
+                <div class="test-mail-row"><label>Test-E-Mail-Adresse<input id="test-mail-address" type="email"></label><button id="send-test-mail" type="button" class="secondary">Test-E-Mail senden</button></div><div id="test-mail-message" class="message" role="status"></div>
+            </section>
+            <section><p class="section-kicker">Inhalte</p><h2>E-Mail-Vorlagen</h2><form id="email-templates-form">
+                <fieldset><legend>E-Mail-Adresse bestätigen</legend><label>Betreff<input name="verify_subject"></label><label>Text<textarea name="verify_body" rows="10"></textarea></label><p>{{first_name}}, {{last_name}}, {{email}}, {{verification_link}}, {{app_name}}</p></fieldset>
+                <fieldset><legend>Passwort zurücksetzen</legend><label>Betreff<input name="reset_subject"></label><label>Text<textarea name="reset_body" rows="10"></textarea></label><p>{{first_name}}, {{last_name}}, {{reset_link}}, {{app_name}}</p></fieldset>
+                <button type="submit">E-Mail-Vorlagen speichern</button>
+            </form><div id="email-templates-message" class="message" role="status"></div></section>
+        </div>
+    </details>
 </main>

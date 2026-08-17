@@ -126,6 +126,82 @@ final class Database
             )
             SQL);
         $this->connection->exec("INSERT OR IGNORE INTO automation_runtime (id, updated_at) VALUES (1, CURRENT_TIMESTAMP)");
+        $this->createAccountSchema();
+    }
+
+    private function createAccountSchema(): void
+    {
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                password_hash TEXT NOT NULL,
+                home_chapter_org_id INTEGER,
+                role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'disabled')),
+                email_verified_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_login_at TEXT,
+                FOREIGN KEY (home_chapter_org_id) REFERENCES organizations(org_id) ON DELETE SET NULL
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_users_home_chapter ON users(home_chapter_org_id)');
+        foreach (['email_verification_tokens', 'password_reset_tokens'] as $table) {
+            $this->connection->exec(sprintf(<<<'SQL'
+                CREATE TABLE IF NOT EXISTS %s (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    used_at TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                )
+                SQL, $table));
+            $this->connection->exec(sprintf('CREATE INDEX IF NOT EXISTS idx_%s_user_expiry ON %s(user_id, expires_at)', $table, $table));
+        }
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS mail_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                smtp_host TEXT,
+                smtp_port INTEGER NOT NULL DEFAULT 587,
+                smtp_username TEXT,
+                smtp_password TEXT,
+                encryption TEXT NOT NULL DEFAULT 'starttls' CHECK (encryption IN ('starttls', 'tls', 'none')),
+                sender_email TEXT,
+                sender_name TEXT NOT NULL DEFAULT 'CrossChAPP',
+                base_url TEXT NOT NULL DEFAULT 'http://localhost:8082',
+                updated_at TEXT NOT NULL
+            )
+            SQL);
+        $this->connection->exec("INSERT OR IGNORE INTO mail_settings (id, updated_at) VALUES (1, CURRENT_TIMESTAMP)");
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS email_templates (
+                template_key TEXT PRIMARY KEY CHECK (template_key IN ('verify_email', 'reset_password')),
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            SQL);
+        $verificationBody = "Hallo {{first_name}},\n\nvielen Dank für deine Registrierung bei CrossChAPP.\n\nBitte bestätige deine E-Mail-Adresse über folgenden Link:\n\n{{verification_link}}\n\nDer Link ist 24 Stunden gültig.\n\nViele Grüße\nCrossChAPP";
+        $resetBody = "Hallo {{first_name}},\n\nfür dein CrossChAPP-Konto wurde das Zurücksetzen des Passworts angefordert.\n\nÜber folgenden Link kannst du ein neues Passwort vergeben:\n\n{{reset_link}}\n\nDer Link ist 60 Minuten gültig.\n\nFalls du das Zurücksetzen nicht angefordert hast, kannst du diese Nachricht ignorieren.\n\nViele Grüße\nCrossChAPP";
+        $statement = $this->connection->prepare('INSERT OR IGNORE INTO email_templates (template_key, subject, body, updated_at) VALUES (:key, :subject, :body, :updated_at)');
+        $statement->execute([':key' => 'verify_email', ':subject' => 'Bitte bestätige deine E-Mail-Adresse bei CrossChAPP', ':body' => $verificationBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
+        $statement->execute([':key' => 'reset_password', ':subject' => 'Neues Passwort für CrossChAPP festlegen', ':body' => $resetBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS auth_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                attempt_type TEXT NOT NULL CHECK (attempt_type IN ('login', 'password_reset', 'resend_verification')),
+                identifier_hash TEXT NOT NULL,
+                ip_hash TEXT NOT NULL,
+                successful INTEGER NOT NULL DEFAULT 0,
+                attempted_at TEXT NOT NULL
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_auth_attempts_limit ON auth_attempts(attempt_type, identifier_hash, ip_hash, attempted_at)');
     }
 
     private function addColumnIfMissing(string $column, string $definition): void

@@ -54,6 +54,8 @@ Passwort: admin
 
 Die Anmeldung wird serverseitig mit sicherem Passwort-Hash und PHP-Session geprüft. Vor der Anmeldung ist der Admin-Navigationspunkt nicht sichtbar; direkte Adminaufrufe bleiben serverseitig geschützt. Nach dem Login stehen der BNI-Sammelimport, Filter, Auswahl, selektive Detailpflege, Reload-Option und aufklappbare Details zur Verfügung.
 
+`admin/admin` ist ausschließlich ein lokaler Entwicklungszugang und muss vor jedem produktiven Einsatz ersetzt werden.
+
 Beim Öffnen des Adminbereichs wird zuerst der vorhandene SQLite-Bestand über die lokale API geladen. Dabei findet kein BNI-Abruf statt. Der getrennte Bereich „BNI-Daten aktualisieren“ startet erst nach einem bewussten Klick auf „Grunddaten von BNI aktualisieren“ genau einen Sammelrequest und baut die Ansicht anschließend aus den aktualisierten lokalen Daten neu auf.
 
 Der Sammelimport erzeugt weiterhin genau einen BNI-Request. Detailrequests laufen sequenziell mit mindestens 1,5 Sekunden Abstand und sind auf 50 ausgewählte Organisationen begrenzt. Bereits gespeicherte Details werden standardmäßig nicht erneut geladen.
@@ -101,6 +103,34 @@ Die Such-API selbst kommuniziert nur mit Nominatim und SQLite. Ein optionaler X-
 POST /api/auth/login.php
 POST /api/auth/logout.php
 GET  /api/auth/status.php
+POST /api/auth/register.php
+GET  /api/auth/chapters.php
+POST /api/auth/verify-email.php
+POST /api/auth/resend-verification.php
+POST /api/auth/forgot-password.php
+POST /api/auth/reset-password.php
+```
+
+Der Login ist universell: Normale Benutzer melden sich mit ihrer E-Mail-Adresse an, der lokale Entwicklungsadmin weiterhin mit `admin`. Registrierungen benötigen Vorname, Nachname, eine eindeutige E-Mail-Adresse und ein Passwort mit mindestens acht Zeichen. Ein Heimatchapter ist optional und wird ausschließlich aus lokalen `CHAPTER`-Datensätzen in SQLite gewählt; die filterbare Auswahl löst keinen BNI-Request aus.
+
+Neue Benutzer bleiben bis zur E-Mail-Bestätigung im Status `pending`. Bestätigungs- und Passwort-Reset-Tokens entstehen mit `random_bytes()`, werden ausschließlich als SHA-256-Hash gespeichert, laufen nach 24 Stunden beziehungsweise 60 Minuten ab und sind einmal verwendbar. Passwörter werden ausschließlich mit `password_hash()` gespeichert und mit `password_verify()` geprüft; Klartextpasswörter werden weder gespeichert noch versendet. Passwort-Reset-Anfragen antworten unabhängig von der Existenz des Kontos identisch.
+
+Schreibende Auth- und Adminaktionen sind CSRF-geschützt. Fehlgeschlagene Anmeldungen sowie Reset- und erneute Bestätigungsanforderungen werden lokal in SQLite begrenzt. Nach erfolgreicher Anmeldung wird die Session-ID regeneriert. Normale Benutzer erhalten keine Adminrolle und sehen keine Adminnavigation.
+
+### E-Mail-Versand
+
+CrossChAPP versendet ausgehende Nachrichten per SMTP mit PHPMailer; IMAP wird nicht benötigt. Im standardmäßig geschlossenen Adminbereich „Sonstiges“ lassen sich SMTP-Server, Port, Benutzername, Verschlüsselung, Absender und Basis-URL konfigurieren. Ein leeres Passwortfeld behält das vorhandene SMTP-Passwort bei. API-Antworten geben das gespeicherte Passwort niemals zurück.
+
+Die deutschen Vorlagen `verification` und `password_reset` sind in SQLite gespeichert und im Adminbereich editierbar. Es werden ausschließlich die dort dokumentierten Platzhalter ersetzt. „Test-E-Mail senden“ verwendet die gespeicherte Konfiguration und zeigt bei Problemen eine bereinigte Fehlermeldung ohne SMTP-Secrets.
+
+Für diesen lokalen Entwicklungsstand darf das SMTP-Passwort in der außerhalb des Webroots liegenden SQLite-Datei gespeichert werden. Für einen produktiven Betrieb ist stattdessen eine dedizierte Secret-Verwaltung einzusetzen. Ohne konfigurierte SMTP-Daten wird keine Nachricht versendet; die Tests verwenden einen injizierbaren lokalen Testtransport.
+
+Geschützte Mail-APIs:
+
+```text
+GET|POST /api/admin/mail-settings.php
+GET|POST /api/admin/email-templates.php
+POST     /api/admin/test-email.php
 ```
 
 ### Health
@@ -192,7 +222,7 @@ docker compose exec -T web php -m | grep -i pdo_sqlite
 docker compose exec -T web php -r 'new PDO("sqlite:/var/www/data/bni-dach.sqlite");'
 ```
 
-HTTP-Prüfungen erfolgen lokal auf Port 8082. Dazu gehören Authentifizierung, Adminschutz, Suchbasis, Geocoding, Tages-/Zeitfilter, Haversine-Sortierung, Health, Sammelabruf, SSRF-Abweisung, 50er-Limit und der bestehende Königsforst-Endpunkt. Zusätzlich deckt `tests/automation-refresh.php` Einstellungen, Stale-Prüfung, Locking, Historie, Trigger, Worker-Limits sowie simulierte 429-, 403-, 5xx- und Netzwerkfehler ohne absichtlich erzeugtes Live-Rate-Limit ab. Der SQLite-Testbestand wird nicht automatisch gelöscht.
+HTTP-Prüfungen erfolgen lokal auf Port 8082. Dazu gehören Authentifizierung, Adminschutz, Suchbasis, Geocoding, Tages-/Zeitfilter, Haversine-Sortierung, Health, Sammelabruf, SSRF-Abweisung, 50er-Limit und der bestehende Königsforst-Endpunkt. `tests/account-auth.php` prüft Registrierung, optionale Heimatchapter, Hashes, Verifikation, Passwortreset, Rollen, Rate-Limit und Vorlagen mit einem In-Memory-Schema und Testtransport. `tests/account-browser.py` prüft den universellen Dialog, die lokale Chapterauswahl, Adminanmeldung und Mailkonfiguration praktisch in Chromium. Zusätzlich deckt `tests/automation-refresh.php` Einstellungen, Stale-Prüfung, Locking, Historie, Trigger, Worker-Limits sowie simulierte 429-, 403-, 5xx- und Netzwerkfehler ohne absichtlich erzeugtes Live-Rate-Limit ab. Der persistente SQLite-Bestand wird nicht automatisch gelöscht.
 
 ## Bestehende PoC-Endpunkte
 
@@ -207,5 +237,7 @@ Dieser unabhängige Endpunkt liest weiterhin die öffentliche Mitgliederliste de
 - Die Kartenquelle umfasst derzeit Deutschland und Österreich, nicht die Schweiz.
 - Ergebnisse hängen von Struktur und Verfügbarkeit der öffentlichen BNI-Endpunkte ab.
 - Es werden nur Organisations- und Chapterdaten gespeichert, keine Mitglieder.
-- Die lokale Adminanmeldung ist noch kein Mehrbenutzersystem und besitzt noch keine Rollenverwaltung.
+- Der lokale Entwicklungsadmin `admin/admin` ist fest konfiguriert und muss vor einem produktiven Einsatz ersetzt werden.
+- Ohne konfigurierte SMTP-Verbindung können Bestätigungs- und Reset-Nachrichten nicht extern zugestellt werden.
+- Ein vollständiger Benutzerprofilbereich ist noch nicht umgesetzt; nach dem Login wird zunächst nur der Kontoname angezeigt.
 - Geocoding hängt von der Verfügbarkeit des öffentlichen Nominatim-Dienstes ab.

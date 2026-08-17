@@ -1,19 +1,21 @@
-<section class="page-hero login-hero">
-    <div class="shell">
-        <p class="eyebrow">Geschützter Bereich</p>
-        <h1>Admin-Anmeldung</h1>
-        <p>Import und Datenpflege stehen nur angemeldeten Administratoren zur Verfügung.</p>
-    </div>
-</section>
+<section class="page-hero login-hero"><div class="shell"><p class="eyebrow">Benutzerkonto</p><h1><?= $authMode === 'register' ? 'Neues Konto anlegen' : ($authMode === 'forgot' ? 'Passwort zurücksetzen' : 'Anmelden') ?></h1><p>Verwalte dein persönliches CrossChAPP-Konto.</p></div></section>
 <main class="shell content auth-content">
-    <section class="panel login-panel" aria-labelledby="login-heading">
-        <p class="section-kicker">CrossChAPP Admin</p>
-        <h2 id="login-heading">Anmelden</h2>
-        <form id="login-form">
-            <label for="login-username">Benutzername<input id="login-username" name="username" autocomplete="username" required></label>
-            <label for="login-password">Passwort<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
-            <button type="submit">Anmelden</button>
-        </form>
-        <div id="login-message" class="message" role="alert" aria-live="polite"></div>
-    </section>
+<?php if ($authMode === 'register'): ?>
+<section class="panel login-panel registration-panel"><h2>Neues Konto anlegen</h2><form id="register-form" novalidate>
+<div class="auth-name-row"><label>Vorname *<input name="first_name" autocomplete="given-name" required></label><label>Nachname *<input name="last_name" autocomplete="family-name" required></label></div>
+<label>E-Mail-Adresse *<input name="email" type="email" autocomplete="email" required aria-describedby="register-email-error"><span id="register-email-error" class="field-error" hidden>Bitte gib eine gültige E-Mail-Adresse ein.</span></label>
+<fieldset class="home-chapter-picker"><legend>Heimatchapter <span>optional</span></legend><input id="home-chapter-id" name="home_chapter_org_id" type="hidden">
+<div class="home-chapter-filters"><label>Land<select id="home-chapter-country"><option value="">Alle</option><option value="DE">Deutschland</option><option value="AT">Österreich</option></select></label><label>Suche<input id="home-chapter-search" type="search" placeholder="Name, Ort, PLZ, Region oder orgId"></label><label>Ort / PLZ<input id="home-chapter-location" type="search" placeholder="Ort oder PLZ"></label></div>
+<button id="clear-home-chapter" type="button" class="secondary">Kein Heimatchapter auswählen</button><p id="selected-home-chapter">Kein Heimatchapter ausgewählt.</p><div id="home-chapter-results" class="home-chapter-results" role="radiogroup" aria-label="Heimatchapter auswählen"></div></fieldset>
+<div class="auth-name-row"><label>Passwort *<input name="password" type="password" minlength="8" autocomplete="new-password" required aria-describedby="register-password-help register-password-error"><span id="register-password-help">Mindestens 8 Zeichen</span><span id="register-password-error" class="field-error" hidden>Das Passwort muss mindestens 8 Zeichen lang sein.</span></label><label>Passwort wiederholen *<input name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required aria-describedby="register-confirmation-error"><span id="register-confirmation-error" class="field-error" hidden>Die Passwörter stimmen nicht überein.</span></label></div>
+<button type="submit">Konto anlegen</button></form><div id="register-message" class="message" role="alert" aria-live="polite"></div></section>
+<?php elseif ($authMode === 'forgot'): ?>
+<section class="panel login-panel"><h2>Passwort vergessen?</h2><form id="forgot-password-form"><label>E-Mail-Adresse<input name="email" type="email" autocomplete="email" required></label><button type="submit">Link zum Zurücksetzen senden</button></form><div id="forgot-message" class="message" role="status" aria-live="polite"></div><a href="/?view=login">Zur Anmeldung</a></section>
+<?php elseif ($authMode === 'reset'): ?>
+<section class="panel login-panel"><h2>Neues Passwort festlegen</h2><form id="reset-password-form" data-token="<?= htmlspecialchars($authToken, ENT_QUOTES, 'UTF-8') ?>"><label>Neues Passwort<input name="password" type="password" minlength="8" autocomplete="new-password" required></label><label>Passwort wiederholen<input name="password_confirmation" type="password" minlength="8" autocomplete="new-password" required></label><button type="submit">Passwort speichern</button></form><div id="reset-message" class="message" role="alert" aria-live="polite"></div></section>
+<?php elseif ($authMode === 'verify'): ?>
+<section class="panel login-panel"><h2>E-Mail-Adresse bestätigen</h2><div id="verify-email" data-token="<?= htmlspecialchars($authToken, ENT_QUOTES, 'UTF-8') ?>"><p>Bestätigungslink wird geprüft …</p></div><div id="verify-message" class="message" role="status" aria-live="polite"></div><a href="/?view=login">Zur Anmeldung</a></section>
+<?php else: ?>
+<section class="panel login-panel"><h2 id="login-heading">Anmelden</h2><form id="login-form"><label>E-Mail-Adresse oder Benutzername<input name="login" autocomplete="username" required></label><label>Passwort<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">Anmelden</button></form><div id="login-message" class="message" role="alert" aria-live="polite"></div><div class="auth-links"><a href="/?view=forgot">Passwort vergessen?</a><a href="/?view=register">Neues Konto anlegen</a></div></section>
+<?php endif; ?>
 </main>

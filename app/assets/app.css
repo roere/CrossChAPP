@@ -40,6 +40,7 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .nav-disabled { color: #aaa; cursor: not-allowed; }
 .nav-disabled small { margin-left: .4rem; padding: .18rem .35rem; border-radius: 3px; background: #efefef; font-size: .57rem; text-transform: uppercase; }
 .account-actions { display: flex; align-items: center; gap: .5rem; padding-left: 1rem; border-left: 1px solid #ececec; }
+.account-user { max-width: 220px; color: var(--anthracite); font-size: .78rem; font-weight: 800; }
 .header-button, .account-admin { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: .55rem .85rem; border: 1px solid var(--bni-red); border-radius: 3px; color: white; background: var(--bni-red); font-size: .76rem; font-weight: 800; text-decoration: none; }
 .header-button.secondary { color: #38393c; border-color: #aaa; background: white; }
 .account-admin { color: var(--bni-red-dark); border-color: transparent; background: transparent; }
@@ -262,15 +263,42 @@ tr.organization:hover { background: #faf7f7; }
 .auth-content { max-width: 580px; }
 .login-panel { border-top: 5px solid var(--bni-red); }
 .login-panel h2 { margin-top: .35rem; font-size: 1.55rem; }
-#login-form { display: grid; gap: 1rem; margin-top: 1.2rem; }
-#login-form button { justify-self: start; min-width: 130px; }
+#login-form, #register-form, #forgot-password-form, #reset-password-form { display: grid; gap: 1rem; margin-top: 1.2rem; }
+#login-form button, #register-form > button, #forgot-password-form button, #reset-password-form button { justify-self: start; min-width: 130px; }
 .login-panel .message { margin-top: .8rem; }
+.auth-links { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; }
+.auth-links a, .login-panel > a { color: var(--bni-red-dark); font-size: .78rem; font-weight: 800; }
+.registration-panel { max-width: 920px; }
+.auth-name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.registration-panel input.field-invalid { border-color: var(--bni-red); box-shadow: 0 0 0 1px var(--bni-red); }
+.field-error { color: var(--bni-red-dark); font-size: .7rem; font-weight: 700; }
+.field-error[hidden] { display: none; }
+.home-chapter-picker { display: grid; gap: .8rem; padding: 1rem; border: 1px solid var(--border); }
+.home-chapter-picker legend span { color: var(--muted); font-size: .7rem; }
+.home-chapter-filters { display: grid; grid-template-columns: .7fr 1.3fr 1fr; gap: .65rem; }
+.home-chapter-results { display: grid; max-height: 330px; overflow: auto; border: 1px solid var(--border); }
+.home-chapter-result { display: grid; grid-template-columns: auto 1fr; align-items: center; padding: .65rem; border-bottom: 1px solid #eee; cursor: pointer; }
+.home-chapter-result input { width: 18px; height: 18px; }
+.home-chapter-result span { display: grid; gap: .2rem; }
+.home-chapter-result small { color: var(--muted); font-weight: 400; }
+.misc-panel { margin-top: 1.5rem; }
+.misc-panel > summary { color: var(--bni-red-dark); font-weight: 800; cursor: pointer; }
+.misc-content { display: grid; gap: 2rem; margin-top: 1.2rem; }
+.misc-content section + section { padding-top: 1.4rem; border-top: 1px solid var(--border); }
+.mail-settings-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; margin-top: 1rem; }
+.mail-settings-grid button { align-self: end; }
+.test-mail-row { display: flex; align-items: end; gap: .8rem; margin-top: 1rem; }
+#email-templates-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+#email-templates-form fieldset { display: grid; gap: .7rem; }
+#email-templates-form textarea { resize: vertical; }
+#email-templates-form p { font-size: .7rem; overflow-wrap: anywhere; }
 
 @media (max-width: 1180px) {
     .stats { grid-template-columns: repeat(4, 1fr); }
     .column-orgid { display: none; }
     .detail-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .representation-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .mail-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 900px) {
@@ -336,6 +364,8 @@ tr.organization:hover { background: #faf7f7; }
     .result-detail-panel .detail-groups { grid-template-columns: 1fr; }
     #results-map { height: 320px; }
     .representation-filter-grid { grid-template-columns: 1fr; }
+    .auth-name-row, .home-chapter-filters, .mail-settings-grid, #email-templates-form { grid-template-columns: 1fr; }
+    .auth-links, .test-mail-row { flex-direction: column; align-items: stretch; }
     .date-add-row { align-items: stretch; }
     .date-add-row > * { width: 100%; }
     .representation-actions > button { width: 100%; }

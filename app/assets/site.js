@@ -1,7 +1,15 @@
 (() => {
     'use strict';
 
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const jsonHeaders = { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken };
+
     document.querySelector('#login-form')?.addEventListener('submit', login);
+    const registerForm = document.querySelector('#register-form');
+    registerForm?.addEventListener('submit', register);
+    initializeRegistrationValidation(registerForm);
+    document.querySelector('#forgot-password-form')?.addEventListener('submit', forgotPassword);
+    document.querySelector('#reset-password-form')?.addEventListener('submit', resetPassword);
     document.querySelector('#logout-button')?.addEventListener('click', logout);
     document.querySelector('#chapter-search-form')?.addEventListener('submit', searchChapters);
 
@@ -14,6 +22,8 @@
     document.querySelector('.result-limit-options')?.addEventListener('click', selectResultLimit);
 
     if (document.querySelector('#data-basis')) loadDataBasis();
+    if (document.querySelector('#home-chapter-results')) loadHomeChapters();
+    if (document.querySelector('#verify-email')) verifyEmail();
 
     function selectResultLimit(event) {
         const button = event.target.closest('button[data-limit]');
@@ -31,12 +41,12 @@
         button.disabled = true; message.textContent = '';
         try {
             const response = await fetch('/api/auth/login.php', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: form.username.value, password: form.password.value }),
+                method: 'POST', headers: jsonHeaders,
+                body: JSON.stringify({ login: form.login.value, password: form.password.value }),
             });
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Anmeldung fehlgeschlagen.');
-            window.location.assign('/?view=admin');
+            window.location.assign(payload.role === 'admin' ? '/?view=admin' : '/');
         } catch (error) {
             message.textContent = error.message; message.className = 'message error';
             form.password.value = ''; form.password.focus();
@@ -49,11 +59,108 @@
         const button = document.querySelector('#logout-button');
         button.disabled = true;
         try {
-            await fetch('/api/auth/logout.php', { method: 'POST' });
+            await fetch('/api/auth/logout.php', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
         } finally {
             window.location.assign('/');
         }
     }
+
+    async function register(event) {
+        event.preventDefault(); const form = event.currentTarget; const message = document.querySelector('#register-message'); const button = form.querySelector('button[type="submit"]');
+        const invalidField = validateRegistration(form);
+        if (invalidField) { invalidField.focus(); return; }
+        if (!form.checkValidity()) { form.reportValidity(); return; }
+        button.disabled = true;
+        try {
+            const response = await fetch('/api/auth/register.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+            const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Registrierung fehlgeschlagen.');
+            message.textContent = payload.message; message.className = 'message success'; form.reset(); clearRegistrationValidation(form); clearHomeChapter();
+        } catch (error) { message.textContent = error.message; message.className = 'message error'; }
+        finally { button.disabled = false; }
+    }
+
+    function initializeRegistrationValidation(form) {
+        if (!form) return;
+        form.email.addEventListener('blur', () => validateRegistrationEmail(form.email));
+        form.password.addEventListener('blur', () => validateRegistrationPassword(form.password));
+        form.password_confirmation.addEventListener('blur', () => {
+            form.password_confirmation.dataset.touched = 'true';
+            validateRegistrationConfirmation(form.password, form.password_confirmation);
+        });
+        form.password.addEventListener('input', () => {
+            if (form.password_confirmation.dataset.touched === 'true' || form.password_confirmation.value !== '') {
+                validateRegistrationConfirmation(form.password, form.password_confirmation);
+            }
+        });
+    }
+
+    function validateRegistration(form) {
+        const checks = [
+            [form.email, validateRegistrationEmail(form.email)],
+            [form.password, validateRegistrationPassword(form.password)],
+            [form.password_confirmation, validateRegistrationConfirmation(form.password, form.password_confirmation)],
+        ];
+        return checks.find(([, valid]) => !valid)?.[0] || null;
+    }
+
+    function validateRegistrationEmail(input) {
+        return setFieldValidity(input, input.value.trim() !== '' && input.validity.valid, '#register-email-error');
+    }
+
+    function validateRegistrationPassword(input) {
+        return setFieldValidity(input, input.value.length >= 8, '#register-password-error');
+    }
+
+    function validateRegistrationConfirmation(password, confirmation) {
+        return setFieldValidity(confirmation, confirmation.value !== '' && confirmation.value === password.value, '#register-confirmation-error');
+    }
+
+    function setFieldValidity(input, valid, errorSelector) {
+        const error = document.querySelector(errorSelector);
+        input.classList.toggle('field-invalid', !valid);
+        input.setAttribute('aria-invalid', String(!valid));
+        if (error) error.hidden = valid;
+        return valid;
+    }
+
+    function clearRegistrationValidation(form) {
+        form.querySelectorAll('.field-invalid').forEach(input => input.classList.remove('field-invalid'));
+        form.querySelectorAll('[aria-invalid]').forEach(input => input.removeAttribute('aria-invalid'));
+        form.querySelectorAll('.field-error').forEach(error => { error.hidden = true; });
+        delete form.password_confirmation.dataset.touched;
+    }
+
+    async function forgotPassword(event) {
+        event.preventDefault(); const form = event.currentTarget; const message = document.querySelector('#forgot-message');
+        const response = await fetch('/api/auth/forgot-password.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email: form.email.value }) });
+        const payload = await response.json(); message.textContent = payload.message; message.className = 'message success';
+    }
+
+    async function resetPassword(event) {
+        event.preventDefault(); const form = event.currentTarget; const message = document.querySelector('#reset-message');
+        try { const response = await fetch('/api/auth/reset-password.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ token: form.dataset.token, password: form.password.value, password_confirmation: form.password_confirmation.value }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); message.textContent = payload.message; message.className = 'message success'; form.reset(); }
+        catch (error) { message.textContent = error.message; message.className = 'message error'; }
+    }
+
+    async function verifyEmail() {
+        const container = document.querySelector('#verify-email'); const message = document.querySelector('#verify-message');
+        try { const response = await fetch('/api/auth/verify-email.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ token: container.dataset.token }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); message.textContent = payload.message; message.className = 'message success'; }
+        catch (error) { message.textContent = error.message; message.className = 'message error'; }
+        container.hidden = true;
+    }
+
+    async function loadHomeChapters() {
+        const result = document.querySelector('#home-chapter-results');
+        try { const response = await fetch('/api/auth/chapters.php'); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); result._chapters = payload.chapters; ['#home-chapter-country', '#home-chapter-search', '#home-chapter-location'].forEach(selector => document.querySelector(selector).addEventListener('input', renderHomeChapters)); document.querySelector('#clear-home-chapter').addEventListener('click', clearHomeChapter); result.addEventListener('change', selectHomeChapter); renderHomeChapters(); }
+        catch { result.textContent = 'Die lokale Chapterliste konnte nicht geladen werden.'; }
+    }
+
+    function renderHomeChapters() {
+        const result = document.querySelector('#home-chapter-results'); const country = document.querySelector('#home-chapter-country').value; const search = document.querySelector('#home-chapter-search').value.trim().toLocaleLowerCase('de'); const location = document.querySelector('#home-chapter-location').value.trim().toLocaleLowerCase('de');
+        const visible = (result._chapters || []).filter(item => { const full = [item.chapterName, item.city, item.postalCode, item.region, item.orgId].filter(Boolean).join(' ').toLocaleLowerCase('de'); const place = [item.city, item.postalCode].filter(Boolean).join(' ').toLocaleLowerCase('de'); return (!country || item.countryCode === country) && (!search || full.includes(search)) && (!location || place.includes(location)); }).slice(0, 80);
+        const fragment = document.createDocumentFragment(); visible.forEach(item => { const label = document.createElement('label'); label.className = 'home-chapter-result'; const radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'home_chapter_choice'; radio.value = item.orgId; radio.checked = document.querySelector('#home-chapter-id').value === String(item.orgId); const text = document.createElement('span'); const strong = document.createElement('strong'); strong.textContent = item.chapterName || `Organisation ${item.orgId}`; const small = document.createElement('small'); small.textContent = [item.postalCode, item.city, item.region, item.countryCode].filter(Boolean).join(' · '); text.append(strong, small); label.append(radio, text); fragment.append(label); }); result.replaceChildren(fragment); }
+    function selectHomeChapter(event) { const radio = event.target.closest('input[type="radio"]'); if (!radio) return; document.querySelector('#home-chapter-id').value = radio.value; document.querySelector('#selected-home-chapter').textContent = `Heimatchapter ausgewählt: ${radio.closest('label').querySelector('strong').textContent}`; }
+    function clearHomeChapter() { const input = document.querySelector('#home-chapter-id'); if (!input) return; input.value = ''; document.querySelector('#selected-home-chapter').textContent = 'Kein Heimatchapter ausgewählt.'; renderHomeChapters(); }
 
     async function loadDataBasis() {
         const element = document.querySelector('#data-basis');

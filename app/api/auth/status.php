@@ -9,4 +9,5 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     JsonResponse::send(['error' => 'Nur GET ist erlaubt.'], 405);
 }
 
-JsonResponse::send(['authenticated' => Auth::isAdmin()]);
+$user = Auth::user();
+JsonResponse::send(['authenticated' => $user !== null, 'user' => $user, 'isAdmin' => Auth::isAdmin(), 'csrfToken' => Auth::csrfToken()]);

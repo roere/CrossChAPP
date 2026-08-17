@@ -11,6 +11,7 @@ require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 require_once dirname(__DIR__, 2) . '/src/OrganizationRepository.php';
 
 Auth::requireAdminJson();
+Auth::requireCsrfJson();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405);

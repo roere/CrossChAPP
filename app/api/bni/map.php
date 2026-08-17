@@ -9,6 +9,7 @@ require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 require_once dirname(__DIR__, 2) . '/src/OrganizationRepository.php';
 
 Auth::requireAdminJson();
+Auth::requireCsrfJson();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     JsonResponse::send(['error' => 'Nur GET ist erlaubt.'], 405);
