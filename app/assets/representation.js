@@ -17,6 +17,17 @@
         selectVisible: document.querySelector('#select-visible-representations'), clear: document.querySelector('#clear-representations'),
         counts: document.querySelector('#representation-counts'), distanceHeading: document.querySelector('#representation-distance-heading'), list,
     };
+    const sortState = window.CrossChappSort.bind(document.querySelector('#representation-table'), render);
+    const sortFields = {
+        chapterName: { type: 'string', value: item => item.chapterName },
+        orgId: { type: 'number', value: item => item.orgId },
+        country: { type: 'string', value: item => countryLabels[item.countryCode] || item.countryCode },
+        type: { type: 'string', value: item => typeLabels[item.orgType] || item.orgType },
+        city: { type: 'string', value: item => item.city },
+        meetingDay: { type: 'weekday', value: item => item.meetingDay },
+        meetingTime: { type: 'time', value: item => item.meetingTime },
+        distance: { type: 'number', value: item => item.distanceKm },
+    };
 
     elements.addDate.addEventListener('click', addDate);
     elements.date.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); addDate(); } });
@@ -98,7 +109,7 @@
     function visibleOrganizations() {
         const days = activeWeekdays(); const query = elements.text.value.trim().toLocaleLowerCase('de');
         const radius = Number(elements.radius.value);
-        return state.organizations.map(item => ({ ...item, distanceKm: distanceFor(item) })).filter(item => {
+        const filtered = state.organizations.map(item => ({ ...item, distanceKm: distanceFor(item) })).filter(item => {
             const haystack = [item.chapterName, item.orgId, item.city, item.postalCode, item.region].filter(value => value !== null && value !== undefined).join(' ').toLocaleLowerCase('de');
             return (!days.size || (item.meetingDay && days.has(item.meetingDay)))
                 && (!elements.country.value || item.countryCode === elements.country.value)
@@ -106,6 +117,7 @@
                 && (!query || haystack.includes(query))
                 && (!state.location || (item.distanceKm !== null && item.distanceKm <= radius));
         });
+        return window.CrossChappSort.sort(filtered, sortState, sortFields);
     }
 
     function activeWeekdays() {

@@ -62,17 +62,31 @@ final class UserRepository
         } catch (Throwable $exception) { $this->database->rollBack(); throw $exception; }
     }
 
-    public function verifyEmail(string $token): bool
+    public function verifyEmail(string $token): bool { return $this->verifyEmailResult($token) === 'verified'; }
+
+    public function verifyEmailResult(string $token): string
     {
-        $row = $this->validToken('email_verification_tokens', $token); if ($row === null) return false; $now = self::now();
+        if (!preg_match('/^[A-Za-z0-9_-]{40,100}$/', $token)) return 'invalid';
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT token.*, users.email_verified_at, users.status AS user_status
+            FROM email_verification_tokens token
+            INNER JOIN users ON users.id = token.user_id
+            WHERE token.token_hash = :hash
+            SQL);
+        $statement->execute([':hash' => hash('sha256', $token)]); $row = $statement->fetch();
+        if (!is_array($row)) return 'invalid';
+        if ($row['used_at'] !== null) return 'used';
+        if (strtotime((string) $row['expires_at']) <= time()) return 'expired';
+        if ($row['email_verified_at'] !== null || $row['user_status'] === 'active') return 'already_verified';
+        $now = self::now();
         $this->database->beginTransaction();
         try {
             $tokenUpdate = $this->database->prepare('UPDATE email_verification_tokens SET used_at = :used_at WHERE id = :id AND used_at IS NULL');
             $tokenUpdate->execute([':used_at' => $now, ':id' => $row['id']]);
-            if ($tokenUpdate->rowCount() !== 1) { $this->database->rollBack(); return false; }
+            if ($tokenUpdate->rowCount() !== 1) { $this->database->rollBack(); return 'used'; }
             $userUpdate = $this->database->prepare("UPDATE users SET email_verified_at = :verified, status = 'active', updated_at = :updated WHERE id = :id AND status != 'disabled'");
             $userUpdate->execute([':verified' => $now, ':updated' => $now, ':id' => $row['user_id']]);
-            $this->database->commit(); return $userUpdate->rowCount() === 1;
+            $this->database->commit(); return $userUpdate->rowCount() === 1 ? 'verified' : 'already_verified';
         } catch (Throwable $exception) { $this->database->rollBack(); throw $exception; }
     }
 

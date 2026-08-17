@@ -46,6 +46,7 @@ final class AccountService
     }
 
     public function verify(string $token): bool { return $this->users->verifyEmail($token); }
+    public function verifyResult(string $token): string { return $this->users->verifyEmailResult($token); }
 
     public function requestPasswordReset(string $email): void
     {

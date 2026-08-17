@@ -42,6 +42,7 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .account-actions { display: flex; align-items: center; gap: .5rem; padding-left: 1rem; border-left: 1px solid #ececec; }
 .account-user { max-width: 220px; color: var(--anthracite); font-size: .78rem; font-weight: 800; }
 .header-button, .account-admin { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: .55rem .85rem; border: 1px solid var(--bni-red); border-radius: 3px; color: white; background: var(--bni-red); font-size: .76rem; font-weight: 800; text-decoration: none; }
+.header-button:hover { color: white; border-color: var(--bni-red-dark); background: var(--bni-red-dark); }
 .header-button.secondary { color: #38393c; border-color: #aaa; background: white; }
 .account-admin { color: var(--bni-red-dark); border-color: transparent; background: transparent; }
 
@@ -157,6 +158,11 @@ button.secondary:hover { border-color: #68696b; background: #f2f2f2; }
 .table-scroll { max-height: 70vh; overflow: auto; }
 table { width: 100%; border-collapse: separate; border-spacing: 0; background: white; }
 th { position: sticky; top: 0; z-index: 2; padding: .72rem .65rem; border-bottom: 1px solid #111; color: white; background: var(--anthracite); font-size: .66rem; text-align: left; letter-spacing: .055em; text-transform: uppercase; white-space: nowrap; }
+.sort-button { display: inline-flex; align-items: center; justify-content: space-between; width: 100%; min-height: 30px; margin: -.35rem -.4rem; padding: .35rem .4rem; border: 0; color: inherit; background: transparent; font: inherit; letter-spacing: inherit; text-align: left; text-transform: inherit; white-space: nowrap; }
+.sort-button:hover { color: white; background: rgb(255 255 255 / 12%); }
+.sort-button:focus-visible { outline-color: rgb(255 255 255 / 75%); }
+.sort-indicator { min-width: 1em; margin-left: .35rem; color: #fff; }
+th[aria-sort="ascending"], th[aria-sort="descending"] { background: #161719; }
 td { padding: .68rem .65rem; border-bottom: 1px solid #e9e9e9; font-size: .8rem; vertical-align: middle; }
 tr.organization { transition: background .15s ease; }
 tr.organization:hover { background: #faf7f7; }
@@ -267,9 +273,16 @@ tr.organization:hover { background: #faf7f7; }
 #login-form button, #register-form > button, #forgot-password-form button, #reset-password-form button { justify-self: start; min-width: 130px; }
 .login-panel .message { margin-top: .8rem; }
 .auth-links { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1rem; }
-.auth-links a, .login-panel > a { color: var(--bni-red-dark); font-size: .78rem; font-weight: 800; }
+.auth-links a, .login-panel > a:not(.header-button) { color: var(--bni-red-dark); font-size: .78rem; font-weight: 800; }
 .registration-panel { max-width: 920px; }
-.auth-name-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.auth-name-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 1rem; }
+#register-form .auth-name-row label { min-width: 0; align-content: start; }
+#register-form .auth-name-row input { width: 100%; height: 42px; min-height: 42px; box-sizing: border-box; }
+.registration-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+.registration-confirmation { color: var(--anthracite) !important; font-size: 1.05rem; font-weight: 800; }
+.verification-panel { display: grid; justify-items: start; gap: 1rem; }
+.verification-success { color: var(--success) !important; font-weight: 800; }
+.verification-error { color: var(--danger) !important; font-weight: 800; }
 .registration-panel input.field-invalid { border-color: var(--bni-red); box-shadow: 0 0 0 1px var(--bni-red); }
 .field-error { color: var(--bni-red-dark); font-size: .7rem; font-weight: 700; }
 .field-error[hidden] { display: none; }
@@ -365,6 +378,8 @@ tr.organization:hover { background: #faf7f7; }
     #results-map { height: 320px; }
     .representation-filter-grid { grid-template-columns: 1fr; }
     .auth-name-row, .home-chapter-filters, .mail-settings-grid, #email-templates-form { grid-template-columns: 1fr; }
+    .registration-actions { display: grid; grid-template-columns: 1fr; }
+    .registration-actions button { width: 100%; }
     .auth-links, .test-mail-row { flex-direction: column; align-items: stretch; }
     .date-add-row { align-items: stretch; }
     .date-add-row > * { width: 100%; }

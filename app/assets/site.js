@@ -8,6 +8,7 @@
     const registerForm = document.querySelector('#register-form');
     registerForm?.addEventListener('submit', register);
     initializeRegistrationValidation(registerForm);
+    document.querySelector('#cancel-registration')?.addEventListener('click', cancelRegistration);
     document.querySelector('#forgot-password-form')?.addEventListener('submit', forgotPassword);
     document.querySelector('#reset-password-form')?.addEventListener('submit', resetPassword);
     document.querySelector('#logout-button')?.addEventListener('click', logout);
@@ -23,7 +24,6 @@
 
     if (document.querySelector('#data-basis')) loadDataBasis();
     if (document.querySelector('#home-chapter-results')) loadHomeChapters();
-    if (document.querySelector('#verify-email')) verifyEmail();
 
     function selectResultLimit(event) {
         const button = event.target.closest('button[data-limit]');
@@ -74,9 +74,18 @@
         try {
             const response = await fetch('/api/auth/register.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
             const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Registrierung fehlgeschlagen.');
-            message.textContent = payload.message; message.className = 'message success'; form.reset(); clearRegistrationValidation(form); clearHomeChapter();
+            const panel = form.closest('.registration-panel');
+            const confirmation = document.createElement('p'); confirmation.className = 'registration-confirmation'; confirmation.textContent = 'Bitte bestätige deine E-Mail-Adresse.';
+            panel.replaceChildren(confirmation);
         } catch (error) { message.textContent = error.message; message.className = 'message error'; }
         finally { button.disabled = false; }
+    }
+
+    function cancelRegistration() {
+        const form = document.querySelector('#register-form');
+        form?.reset();
+        if (form) clearRegistrationValidation(form);
+        window.location.assign('/');
     }
 
     function initializeRegistrationValidation(form) {
@@ -140,13 +149,6 @@
         event.preventDefault(); const form = event.currentTarget; const message = document.querySelector('#reset-message');
         try { const response = await fetch('/api/auth/reset-password.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ token: form.dataset.token, password: form.password.value, password_confirmation: form.password_confirmation.value }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); message.textContent = payload.message; message.className = 'message success'; form.reset(); }
         catch (error) { message.textContent = error.message; message.className = 'message error'; }
-    }
-
-    async function verifyEmail() {
-        const container = document.querySelector('#verify-email'); const message = document.querySelector('#verify-message');
-        try { const response = await fetch('/api/auth/verify-email.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ token: container.dataset.token }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); message.textContent = payload.message; message.className = 'message success'; }
-        catch (error) { message.textContent = error.message; message.className = 'message error'; }
-        container.hidden = true;
     }
 
     async function loadHomeChapters() {

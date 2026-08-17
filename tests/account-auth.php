@@ -15,9 +15,9 @@ $storedToken = $pdo->query('SELECT token_hash FROM email_verification_tokens')->
 preg_match('/verify=([A-Za-z0-9_-]+)/',$mails[0]['body'],$match); $verifyToken=$match[1]??'';
 $check($verifyToken!=='' && $storedToken===hash('sha256',$verifyToken) && !str_contains((string)$storedToken,$verifyToken), 'Verifikationstoken nur gehasht gespeichert.');
 $check($service->authenticate('rene@example.test','sicher123')['status']==='pending','Unbestätigter Login abgewiesen.');
-$check($service->verify($verifyToken) && !$service->verify($verifyToken),'Verifikation einmalig.');
+$check($service->verifyResult($verifyToken)==='verified' && $service->verifyResult($verifyToken)==='used','Verifikation einmalig mit unterscheidbarem Status.');
 $expired = $users->issueToken('email_verification_tokens',(int)$user['id'],3600); $pdo->exec("UPDATE email_verification_tokens SET expires_at='2000-01-01T00:00:00Z' WHERE token_hash='" . hash('sha256',$expired) . "'");
-$check(!$service->verify($expired),'Abgelaufener Verifikationstoken abgewiesen.');
+$check($service->verifyResult($expired)==='expired' && $service->verifyResult('ungueltig')==='invalid','Abgelaufener und ungültiger Verifikationstoken unterschieden.');
 $check($service->authenticate('rene@example.test','sicher123')['status']==='success','Verifizierter Benutzer kann sich anmelden.');
 
 $service->requestPasswordReset('rene@example.test'); preg_match('/reset=([A-Za-z0-9_-]+)/',$mails[1]['body'],$match); $resetToken=$match[1]??'';

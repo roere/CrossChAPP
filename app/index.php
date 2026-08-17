@@ -3,19 +3,36 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/src/Auth.php';
+require_once __DIR__ . '/src/Database.php';
+require_once __DIR__ . '/src/UserRepository.php';
+require_once __DIR__ . '/src/MailSettingsRepository.php';
+require_once __DIR__ . '/src/MailService.php';
+require_once __DIR__ . '/src/AccountService.php';
+require_once __DIR__ . '/src/AccountFactory.php';
 
 Auth::start();
+if (isset($_GET['verify'])) {
+    try {
+        $_SESSION['verification_result'] = AccountFactory::create()['service']->verifyResult((string) $_GET['verify']);
+    } catch (Throwable) {
+        $_SESSION['verification_result'] = 'invalid';
+    }
+    header('Location: /?view=verified', true, 303);
+    exit;
+}
 $isAdmin = Auth::isAdmin();
 $currentUser = Auth::user();
 $viewParameter = (string) ($_GET['view'] ?? '');
 $requestedView = match ($viewParameter) {
     'admin' => 'admin',
-    'login', 'register', 'forgot', 'reset', 'verify' => 'auth',
+    'login', 'register', 'forgot', 'reset', 'verified' => 'auth',
     'vertretung' => 'vertretung',
     default => 'crosschaptern',
 };
-$authMode = isset($_GET['verify']) ? 'verify' : (isset($_GET['reset']) ? 'reset' : (in_array($viewParameter, ['register', 'forgot'], true) ? $viewParameter : 'login'));
-$authToken = (string) ($_GET[$authMode === 'verify' ? 'verify' : 'reset'] ?? '');
+$authMode = isset($_GET['reset']) ? 'reset' : (in_array($viewParameter, ['register', 'forgot', 'verified'], true) ? $viewParameter : 'login');
+$authToken = (string) ($_GET['reset'] ?? '');
+$verificationResult = $authMode === 'verified' ? (string) ($_SESSION['verification_result'] ?? 'invalid') : '';
+if ($authMode === 'verified') unset($_SESSION['verification_result']);
 $pageTitle = match ($requestedView) {
     'admin' => 'Admin | CrossChAPP',
     'vertretung' => 'Vertretung anbieten | CrossChAPP',
@@ -36,6 +53,7 @@ $pageTitle = match ($requestedView) {
     <?php endif; ?>
     <link rel="stylesheet" href="/assets/app.css">
     <script src="/assets/site.js" defer></script>
+    <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $isAdmin)): ?><script src="/assets/sort-utils.js" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung'): ?><script src="/assets/representation.js" defer></script><?php endif; ?>
     <?php if ($requestedView === 'admin' && $isAdmin): ?><script src="/assets/app.js" defer></script><?php endif; ?>
 </head>

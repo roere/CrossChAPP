@@ -31,6 +31,18 @@
         mailSettingsMessage: document.querySelector('#mail-settings-message'), templatesForm: document.querySelector('#email-templates-form'), templatesMessage: document.querySelector('#email-templates-message'),
         testMailAddress: document.querySelector('#test-mail-address'), sendTestMail: document.querySelector('#send-test-mail'), testMailMessage: document.querySelector('#test-mail-message'),
     };
+    const sortState = window.CrossChappSort.bind(document.querySelector('#admin-organization-table'), render);
+    const sortFields = {
+        chapterName: { type: 'string', value: item => state.details.get(item.orgId)?.chapterName },
+        orgId: { type: 'number', value: item => item.orgId },
+        country: { type: 'string', value: item => countryLabels[item.countryCode] || item.countryCode },
+        type: { type: 'string', value: item => typeLabels[item.orgType] || item.orgType },
+        city: { type: 'string', value: item => state.details.get(item.orgId)?.city },
+        meetingDay: { type: 'weekday', value: item => state.details.get(item.orgId)?.meetingDay },
+        meetingTime: { type: 'time', value: item => state.details.get(item.orgId)?.meetingTime },
+        detailStatus: { type: 'string', value: item => statusLabel(state.statuses.get(item.orgId) || 'not_loaded') },
+        detailsLoadedAt: { type: 'date', value: item => item.detailsLoadedAt },
+    };
 
     elements.form.addEventListener('submit', loadMap);
     [elements.country, elements.type, elements.detail, elements.text].forEach(element => element.addEventListener('input', render));
@@ -323,13 +335,14 @@
 
     function visibleOrganizations() {
         const query = elements.text.value.trim().toLocaleLowerCase('de');
-        return state.organizations.filter(item => {
+        const filtered = state.organizations.filter(item => {
             const name = state.details.get(item.orgId)?.chapterName || '';
             return (!elements.country.value || item.countryCode === elements.country.value)
                 && (!elements.type.value || item.orgType === elements.type.value)
                 && (!elements.detail.value || (state.statuses.get(item.orgId) || 'not_loaded') === elements.detail.value)
                 && (!query || String(item.orgId).includes(query) || name.toLocaleLowerCase('de').includes(query));
         });
+        return window.CrossChappSort.sort(filtered, sortState, sortFields);
     }
 
     function render() {

@@ -36,8 +36,8 @@
 
     <section class="table-panel representation-list-panel" aria-labelledby="representation-list-heading">
         <div class="list-heading"><div><p class="section-kicker">Lokale Datenbank</p><h2 id="representation-list-heading">Chapterliste</h2></div></div>
-        <div class="table-scroll"><table>
-            <thead><tr><th class="select-column"><span class="sr-only">Auswahl</span></th><th>Chaptername</th><th>orgId</th><th>Land</th><th>Typ</th><th>Ort</th><th>Wochentag</th><th>Uhrzeit</th><th id="representation-distance-heading" hidden>Entfernung</th></tr></thead>
+        <div class="table-scroll"><table id="representation-table">
+            <thead><tr><th class="select-column"><span class="sr-only">Auswahl</span></th><th data-sort-key="chapterName"><button type="button" class="sort-button">Chaptername <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="orgId"><button type="button" class="sort-button">orgId <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="country"><button type="button" class="sort-button">Land <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="type"><button type="button" class="sort-button">Typ <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="city"><button type="button" class="sort-button">Ort <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="meetingDay"><button type="button" class="sort-button">Wochentag <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="meetingTime"><button type="button" class="sort-button">Uhrzeit <span class="sort-indicator" aria-hidden="true"></span></button></th><th id="representation-distance-heading" data-sort-key="distance" hidden><button type="button" class="sort-button">Entfernung <span class="sort-indicator" aria-hidden="true"></span></button></th></tr></thead>
             <tbody id="representation-list"><tr><td colspan="9">Lokale Organisationen werden geladen …</td></tr></tbody>
         </table></div>
     </section>

@@ -114,11 +114,11 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                 <p id="visible-count" class="visible-count"></p>
             </div>
             <div class="table-scroll">
-                <table>
+                <table id="admin-organization-table">
                     <thead><tr>
                         <th class="select-column"><span class="sr-only">Auswahl</span></th><th class="toggle-column"><span class="sr-only">Details</span></th>
-                        <th>Chaptername</th><th class="column-orgid">orgId</th><th class="column-country">Land</th><th class="column-type">Typ</th>
-                        <th>Ort</th><th class="column-day">Wochentag</th><th class="column-time">Uhrzeit</th><th>Detailstatus</th><th class="column-updated">Zuletzt aktualisiert</th>
+                        <th data-sort-key="chapterName"><button type="button" class="sort-button">Chaptername <span class="sort-indicator" aria-hidden="true"></span></button></th><th class="column-orgid" data-sort-key="orgId"><button type="button" class="sort-button">orgId <span class="sort-indicator" aria-hidden="true"></span></button></th><th class="column-country" data-sort-key="country"><button type="button" class="sort-button">Land <span class="sort-indicator" aria-hidden="true"></span></button></th><th class="column-type" data-sort-key="type"><button type="button" class="sort-button">Typ <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                        <th data-sort-key="city"><button type="button" class="sort-button">Ort <span class="sort-indicator" aria-hidden="true"></span></button></th><th class="column-day" data-sort-key="meetingDay"><button type="button" class="sort-button">Wochentag <span class="sort-indicator" aria-hidden="true"></span></button></th><th class="column-time" data-sort-key="meetingTime"><button type="button" class="sort-button">Uhrzeit <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="detailStatus"><button type="button" class="sort-button">Detailstatus <span class="sort-indicator" aria-hidden="true"></span></button></th><th class="column-updated" data-sort-key="detailsLoadedAt"><button type="button" class="sort-button">Zuletzt aktualisiert <span class="sort-indicator" aria-hidden="true"></span></button></th>
                     </tr></thead>
                     <tbody id="organization-list"></tbody>
                 </table>

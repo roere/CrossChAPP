@@ -13,7 +13,7 @@ def request(method, path, payload=None):
         return json.loads(response.read())["value"]
 
 
-session = request("POST", "/session", {"capabilities": {"alwaysMatch": {"browserName": "chrome", "goog:chromeOptions": {"args": ["--headless", "--no-sandbox", "--disable-gpu", "--window-size=1440,1000"]}}}})["sessionId"]
+session = request("POST", "/session", {"capabilities": {"alwaysMatch": {"browserName": "chrome", "goog:chromeOptions": {"args": ["--headless", "--no-sandbox", "--disable-gpu", "--window-size=1440,1000"]}, "goog:loggingPrefs": {"browser": "ALL", "performance": "ALL"}}}})["sessionId"]
 
 
 def script(source):
@@ -25,6 +25,28 @@ try:
     time.sleep(1)
     initial = script("return {rows:document.querySelectorAll('#representation-list tr').length,min:document.querySelector('#representation-date').min,title:document.querySelector('h1').textContent};")
     assert initial["rows"] == 881 and initial["min"] and "Vertretung für folgende Chapter" in initial["title"]
+    typed = script("""
+const sort=(items,key,direction,type)=>window.CrossChappSort.sort(items,{key,direction},{[key]:{type,value:item=>item.value}}).map(item=>item.id);
+return {
+ number:sort([{id:10,value:10},{id:2,value:2}], 'x','ascending','number'),
+ weekday:sort([{id:'Fr',value:'Freitag'},{id:'Mo',value:'Montag'},{id:'So',value:'Sonntag'}], 'x','ascending','weekday'),
+ weekdayDesc:sort([{id:'Fr',value:'Freitag'},{id:'Mo',value:'Montag'},{id:'So',value:'Sonntag'}], 'x','descending','weekday'),
+ time:sort([{id:'late',value:'09:15'},{id:'early',value:'06:45'},{id:'missing',value:null}], 'x','ascending','time'),
+ timeDesc:sort([{id:'late',value:'09:15'},{id:'early',value:'06:45'},{id:'missing',value:null}], 'x','descending','time'),
+ date:sort([{id:'new',value:'2026-08-17T12:00:00Z'},{id:'old',value:'2025-01-01T00:00:00Z'}], 'x','ascending','date'),
+ distance:sort([{id:'far',value:12.4},{id:'near',value:2.1}], 'x','ascending','number')
+};
+""")
+    assert typed == {"number":[2,10],"weekday":["Mo","Fr","So"],"weekdayDesc":["So","Fr","Mo"],"time":["early","late","missing"],"timeDesc":["late","early","missing"],"date":["old","new"],"distance":["near","far"]},typed
+    request("POST", f"/session/{session}/log", {"type": "performance"})
+    sorting = script("""
+const table=document.querySelector('#representation-table'),click=key=>table.querySelector(`th[data-sort-key="${key}"] .sort-button`).click(),result={aria:{}};
+for(const key of ['chapterName','orgId','country','type','city','meetingDay','meetingTime']){click(key);result.aria[key]=table.querySelector(`th[data-sort-key="${key}"]`).getAttribute('aria-sort');click(key);result.aria[key]+='/'+table.querySelector(`th[data-sort-key="${key}"]`).getAttribute('aria-sort');}
+click('orgId');const asc=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[2].textContent));click('orgId');const desc=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[2].textContent));result.numeric=asc.every((v,i,a)=>!i||a[i-1]<=v)&&desc.every((v,i,a)=>!i||a[i-1]>=v);
+const checkbox=document.querySelector('#representation-list input[data-org-id]');checkbox.click();const selected=checkbox.dataset.orgId;click('chapterName');result.preserved=!!document.querySelector(`#representation-list input[data-org-id="${selected}"]:checked`);return result;
+""")
+    assert all(value == "ascending/descending" for value in sorting["aria"].values()) and sorting["numeric"] and sorting["preserved"], sorting
+    assert not request("POST", f"/session/{session}/log", {"type": "performance"})
 
     past = script("const i=document.querySelector('#representation-date');i.value='2000-01-01';document.querySelector('#add-representation-date').click();return document.querySelector('#representation-date-message').textContent;")
     assert "heutiges oder zukünftiges" in past
@@ -46,6 +68,7 @@ try:
     time.sleep(1)
     radius = script("return {message:document.querySelector('#representation-location-message').textContent,distances:[...document.querySelectorAll('#representation-list tr')].map(r=>r.cells[8]?.textContent).filter(Boolean)};")
     assert "aktiv" in radius["message"] and radius["distances"] and all(float(value.replace(" km", "").replace(".", "").replace(",", ".")) <= 100 for value in radius["distances"])
+    distance_sort = script("""const b=document.querySelector('th[data-sort-key="distance"] .sort-button');b.click();const a=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[8].textContent.replace(' km','').replace('.','').replace(',','.')));const asc=a.every((v,i,x)=>!i||x[i-1]<=v);b.click();const d=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[8].textContent.replace(' km','').replace('.','').replace(',','.')));return asc&&d.every((v,i,x)=>!i||x[i-1]>=v);""");assert distance_sort
 
     preserved = script("document.querySelector('#select-visible-representations').click();const before=document.querySelector('#representation-counts').textContent;const r=document.querySelector('#representation-radius');r.value='1';r.dispatchEvent(new Event('input',{bubbles:true}));return {before,after:document.querySelector('#representation-counts').textContent,selected:document.querySelector('#representation-counts').textContent.match(/· (\\d+)/)[1]};")
     assert int(preserved["selected"]) > 0 and preserved["before"].split("·")[1] == preserved["after"].split("·")[1]
@@ -56,6 +79,6 @@ try:
     logs = request("POST", f"/session/{session}/log", {"type": "browser"})
     severe = [entry for entry in logs if entry.get("level") == "SEVERE"]
     assert not severe, severe
-    print("PASS Chromium: Datum, Alle Daten, Filter, Radius und stabile Auswahl")
+    print("PASS Chromium: Sortierung, Datum, Alle Daten, Filter, Radius und stabile Auswahl")
 finally:
     request("DELETE", f"/session/{session}")
