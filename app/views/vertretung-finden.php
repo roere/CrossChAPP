@@ -1,15 +1,9 @@
 <?php if ($currentUser === null): ?>
-<section class="page-hero representation-hero"><div class="shell"><p class="eyebrow">Vertretung finden</p><h1>Vertretung für dein Chapter finden</h1></div></section>
-<main class="shell content"><section class="panel representation-access-hint"><p>Um Vertretungsangebote für dein Heimatchapter zu sehen, musst du angemeldet sein.</p><a class="button-link" href="/?view=login">Anmelden</a></section></main>
+<main class="shell content no-hero-content"><h1 class="page-intro-title">Vertretung für Dein Chapter finden</h1><section class="panel representation-access-hint"><p>Um Vertretungsangebote für dein Heimatchapter zu sehen, musst du angemeldet sein.</p><a class="button-link" href="/?view=login">Anmelden</a></section></main>
 <?php elseif (!$hasRepresentationHomeChapter): ?>
-<section class="page-hero representation-hero"><div class="shell"><p class="eyebrow">Vertretung finden</p><h1>Vertretung für dein Chapter finden</h1></div></section>
-<main class="shell content"><section class="panel representation-access-hint"><p>Für dein Benutzerkonto ist noch kein Heimatchapter hinterlegt.</p><p>Ein Heimatchapter ist erforderlich, um passende Vertretungsangebote anzuzeigen.</p></section></main>
+<main class="shell content no-hero-content"><h1 class="page-intro-title">Vertretung für Dein Chapter finden</h1><section class="panel representation-access-hint"><p>Für dein Benutzerkonto ist noch kein Heimatchapter hinterlegt.</p><p>Ein Heimatchapter ist erforderlich, um passende Vertretungsangebote anzuzeigen.</p></section></main>
 <?php else: ?>
-<section class="page-hero representation-hero"><div class="shell">
-    <p class="eyebrow">Vertretung finden</p><h1>Vertretung für dein Chapter finden</h1>
-    <p id="representation-home-chapter">Dein Heimatchapter wird geladen …</p>
-</div></section>
-<main class="shell content">
+<main class="shell content no-hero-content"><h1 class="page-intro-title">Vertretung für Dein Chapter finden</h1>
     <section class="panel representation-requests" aria-labelledby="representation-requests-heading">
         <h2 id="representation-requests-heading">Meine Vertretungsgesuche</h2>
         <p>Termine auswählen</p>

@@ -10,6 +10,8 @@ try:
     request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=login'});time.sleep(.3)
     script("const f=document.querySelector('#login-form');f.login.value='admin';f.password.value='admin';f.requestSubmit();");time.sleep(.7)
     assert 'view=admin' in script('return location.href;')
+    layout=script("return {oldTitle:document.body.textContent.includes('Chapterdaten verwalten'),oldDescription:document.body.textContent.includes('BNI-Grunddaten importieren, lokale Details pflegen'),hero:!!document.querySelector('.admin-hero'),top:document.querySelector('.admin-local-heading').getBoundingClientRect().top};")
+    assert not layout['oldTitle'] and not layout['oldDescription'] and not layout['hero'] and layout['top']<280,layout
     script("document.querySelector('#automation-panel').open=true;document.querySelector('#automation-panel').dispatchEvent(new Event('toggle'));");time.sleep(.6)
     state=script("return {mapEnabled:document.querySelector('#map-refresh-enabled').checked,mapDays:Number(document.querySelector('#map-refresh-days').value),stats:document.querySelector('#automation-stats').textContent,blocks:[...document.querySelectorAll('#automation-form .automation-setting h3')].map(x=>x.textContent),hint:document.querySelector('#automation-form').textContent.includes('bestehende Chapter, Gruppen im Aufbau und geplante Gruppen')};")
     assert 1<=state['mapDays']<=30 and 'Automatische Grunddatenaktualisierung' in state['blocks'] and 'Grunddatenautomatik' in state['stats'] and 'Davon im Aufbau' in state['stats'] and 'Davon geplant' in state['stats'] and state['hint'],state

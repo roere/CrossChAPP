@@ -33,7 +33,7 @@
             const response = await fetch('/api/representation/find.php', { headers: { Accept: 'application/json' } });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Die Vertretungsangebote konnten nicht geladen werden.');
-            payload = data; document.querySelector('#representation-home-chapter').textContent = data.chapter?.chapterName || '—';
+            payload = data;
             configureRequestPicker(data);
             render(data);
         } catch (cause) {

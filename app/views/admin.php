@@ -1,15 +1,8 @@
 <?php
 require_once __DIR__ . '/../src/BniRequestPolicy.php';
 ?>
-<section class="page-hero admin-hero" data-detail-delay-ms="<?= BniRequestPolicy::DETAIL_DELAY_MS ?>">
-    <div class="shell">
-        <p class="eyebrow">Administration</p>
-        <h1>Chapterdaten verwalten</h1>
-        <p>BNI-Grunddaten importieren, lokale Details pflegen und den SQLite-Bestand kontrollieren.</p>
-    </div>
-</section>
-
-<main class="shell content">
+<main class="shell content no-hero-content" data-detail-delay-ms="<?= BniRequestPolicy::DETAIL_DELAY_MS ?>">
+    <p class="compact-view-context">Administration</p>
     <section class="panel admin-local-heading" aria-labelledby="local-heading">
         <div>
             <p class="section-kicker">Gespeicherter Bestand</p>

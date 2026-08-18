@@ -1,11 +1,13 @@
 <?php $today = (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->format('Y-m-d'); ?>
-<section class="page-hero representation-hero"><div class="shell">
-    <p class="eyebrow">Vertretung anbieten</p><h1>Vertretung für folgende Chapter anbieten</h1>
-    <p>Wähle Termine und passende Chapter aus deinem lokalen CrossChAPP-Datenbestand.</p>
-</div></section>
-
-<main class="shell content representation-content">
-    <p id="representation-login-hint" class="representation-login-hint" hidden>Zum Speichern eines Vertretungsangebots musst du angemeldet sein.</p>
+<main class="shell content no-hero-content">
+    <p class="page-intro-title">Vertretung anbieten</p>
+<?php if ($currentUser === null): ?>
+    <section class="panel representation-access-hint">
+        <p>Um Vertretungsangebote zu machen musst du angemeldet sein.</p>
+        <a class="button-link" href="/?view=login">Anmelden</a>
+    </section>
+<?php else: ?>
+    <div class="representation-content">
     <section class="panel representation-filters" aria-labelledby="representation-filter-heading">
         <div><p class="section-kicker">Auswahl eingrenzen</p><h2 id="representation-filter-heading">Filter</h2></div>
         <div class="representation-filter-grid">
@@ -49,8 +51,11 @@
         <h2 id="representation-own-heading">Meine Vertretungsangebote</h2>
         <div id="representation-own-list" class="representation-offer-grid"></div>
     </section>
+    </div>
+<?php endif; ?>
 </main>
 
+<?php if ($currentUser !== null): ?>
 <dialog id="delete-representation-dialog" class="account-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-representation-heading">
     <div class="account-dialog-card">
         <button id="close-delete-representation" type="button" class="dialog-close" aria-label="Löschdialog schließen">×</button>
@@ -64,3 +69,4 @@
         </div>
     </div>
 </dialog>
+<?php endif; ?>

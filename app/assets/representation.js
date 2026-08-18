@@ -16,7 +16,7 @@
         applyRadius: document.querySelector('#apply-representation-radius'), locationMessage: document.querySelector('#representation-location-message'),
         selectVisible: document.querySelector('#select-visible-representations'), clear: document.querySelector('#clear-representations'),
         counts: document.querySelector('#representation-counts'), distanceHeading: document.querySelector('#representation-distance-heading'), list,
-        loginHint: document.querySelector('#representation-login-hint'), save: document.querySelector('#save-representation-offer'), saveMessage: document.querySelector('#representation-save-message'),
+        save: document.querySelector('#save-representation-offer'), saveMessage: document.querySelector('#representation-save-message'),
         ownSection: document.querySelector('#my-representation-offers'), ownList: document.querySelector('#representation-own-list'),
         deleteDialog: document.querySelector('#delete-representation-dialog'), deleteSummary: document.querySelector('#delete-representation-summary'),
         deleteMessage: document.querySelector('#delete-representation-message'), confirmDelete: document.querySelector('#confirm-delete-representation'),
@@ -62,7 +62,6 @@
             if (!response.ok) throw new Error(payload.error || 'Die lokale Chapterliste konnte nicht geladen werden.');
             state.organizations = Array.isArray(payload.organizations) ? payload.organizations : [];
             state.viewer = payload.viewer || state.viewer;
-            elements.loginHint.hidden = state.viewer.authenticated;
             elements.ownSection.hidden = !state.viewer.authenticated;
             if (state.viewer.authenticated) loadOffers();
             render();

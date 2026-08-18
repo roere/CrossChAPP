@@ -1,15 +1,5 @@
-<section class="search-hero">
-    <div class="shell search-hero-inner">
-        <div>
-            <p class="eyebrow">Chaptertreffen entdecken</p>
-            <h1>CrossChAPP</h1>
-            <p>Finde passende BNI-Chaptertreffen in deiner Nähe.</p>
-        </div>
-        <div class="search-accent" aria-hidden="true">C</div>
-    </div>
-</section>
-
-<main class="shell public-content">
+<main class="shell public-content no-hero-content">
+    <p class="page-intro-title">Finde passende BNI-Chaptertreffen in deiner Nähe.</p>
     <section class="search-panel" aria-labelledby="search-heading">
         <div class="search-panel-heading">
             <p class="section-kicker">Deine Suche</p>

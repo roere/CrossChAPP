@@ -3,7 +3,7 @@
 
     if (!document.querySelector('#source-form')) return;
 
-    const BNI_DETAIL_DELAY_MS = Number(document.querySelector('.admin-hero')?.dataset.detailDelayMs);
+    const BNI_DETAIL_DELAY_MS = Number(document.querySelector('[data-detail-delay-ms]')?.dataset.detailDelayMs);
     const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
     const state = {
