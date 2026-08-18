@@ -29,12 +29,14 @@ $automaticEnabled = is_array($payload) ? ($payload['automatic_refresh_enabled'] 
 $usageDays = is_array($payload) ? filter_var($payload['usage_refresh_days'] ?? null, FILTER_VALIDATE_INT) : false;
 $automaticDays = is_array($payload) ? filter_var($payload['automatic_refresh_days'] ?? null, FILTER_VALIDATE_INT) : false;
 $dailyLimit = is_array($payload) ? filter_var($payload['automatic_refresh_daily_limit'] ?? null, FILTER_VALIDATE_INT) : false;
-if (!is_bool($usageEnabled) || !is_bool($automaticEnabled) || $usageDays === false || $automaticDays === false || $dailyLimit === false) {
+$mapEnabled = is_array($payload) ? ($payload['map_refresh_enabled'] ?? null) : null;
+$mapDays = is_array($payload) ? filter_var($payload['map_refresh_days'] ?? null, FILTER_VALIDATE_INT) : false;
+if (!is_bool($usageEnabled) || !is_bool($automaticEnabled) || !is_bool($mapEnabled) || $usageDays === false || $automaticDays === false || $dailyLimit === false || $mapDays === false) {
     JsonResponse::send(['error' => 'Die Automatisierungseinstellungen sind ungültig.'], 400);
 }
 
 try {
-    $repository->updateSettings($usageEnabled, $usageDays, $automaticEnabled, $automaticDays, $dailyLimit);
+    $repository->updateSettings($usageEnabled, $usageDays, $automaticEnabled, $automaticDays, $dailyLimit, $mapEnabled, $mapDays);
     JsonResponse::send(['settings' => $repository->settings()]);
 } catch (InvalidArgumentException $exception) {
     JsonResponse::send(['error' => $exception->getMessage()], 400);

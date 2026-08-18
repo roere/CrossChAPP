@@ -17,9 +17,11 @@ Danach ist die Anwendung unter <http://localhost:8082/> erreichbar.
 Die öffentliche Navigation besitzt zwei Bereiche:
 
 - **Crosschaptern** unter `/` beziehungsweise `/?view=crosschaptern` enthält die vollständige Chapter-Suche.
-- **Vertretung anbieten** unter `/?view=vertretung` bietet eine noch nicht persistente Auswahloberfläche für konkrete Termine, „Alle Daten“, lokale Chapterfilter und eine Chapterauswahl. Sie speichert noch kein Vertretungsangebot und ruft weder BNI- noch Mitgliederdaten ab.
+- **Vertretung anbieten** unter `/?view=vertretung` speichert für jedes ausgewählte Chapter ein eigenes Angebot mit konkreten künftigen Terminen oder „Immer“. Eine Mehrfachauswahl wird dabei atomar in mehrere Einzelangebote aufgeteilt; identische Angebote werden abgewiesen. Das eigene Heimatchapter ist sichtbar, aber client- und serverseitig ausgeschlossen. Eigene Angebote bleiben in SQLite erhalten und werden über einen barrierearmen CrossChAPP-Löschdialog gelöscht.
+- **Vertretung finden** ist immer in der Navigation sichtbar. Ausgeloggte Benutzer erhalten eine Anmeldungsmöglichkeit, Konten ohne Heimatchapter einen lokalen Hinweis; in beiden Fällen wird die Angebots-API nicht aufgerufen. Mit Heimatchapter werden ausschließlich aktuelle Angebote anderer Benutzer für dieses Chapter angezeigt; Namen erscheinen als Vorname plus Nachnamensinitial.
+- Beide Vertretungsbereiche verwenden ausschließlich lokale SQLite-Organisationsdaten. Sie lösen keine BNI-Abfragen aus. Schreibzugriffe sind session- und CSRF-geschützt; das Zielchapter der Suche wird serverseitig aus dem Benutzerprofil bestimmt.
 
-Die Vertretungsauswahl lädt ihre Organisationen ausschließlich aus SQLite. Konkrete Termine werden im Browser als ISO-Datum gehalten, deutsch dargestellt und auf den wiederkehrenden Meeting-Wochentag abgebildet. „Alle Daten“ deaktiviert diesen Filter vorübergehend, erhält aber die ausgewählten Termin-Chips. Land, Organisationstyp, Freitext und optional Ort/PLZ mit einem Radius von 1 bis 500 km lassen sich kombinieren. Nur die explizite Ortssuche verwendet den bestehenden Nominatim-Geocoder; Entfernungen zu den vorhandenen Chapterkoordinaten werden danach lokal mit der Haversine-Formel berechnet. Checkbox-, Datums- und sonstige Filteraktionen erzeugen keine weiteren Server- oder BNI-Requests.
+Die Vertretungsauswahl zeigt zuerst die Filter, danach Termine und Chapterliste. Sie lädt ihre Organisationen ausschließlich aus SQLite. Konkrete Termine werden im Browser als ISO-Datum gehalten, deutsch dargestellt und auf den wiederkehrenden Meeting-Wochentag abgebildet. „Alle Daten“ deaktiviert diesen Filter vorübergehend, erhält aber die ausgewählten Termin-Chips. Land, Organisationstyp, Freitext und optional Ort/PLZ mit einem Radius von 1 bis 500 km lassen sich kombinieren.
 
 „Alle sichtbaren auswählen“ betrifft ausschließlich das aktuelle kombinierte Filterergebnis. Ausgefilterte Auswahlen bleiben im Browserzustand erhalten, bis „Auswahl aufheben“ verwendet oder die Seite neu geladen wird.
 
@@ -93,6 +95,8 @@ GET  /api/search-basis.php
 POST /api/search.php
 GET  /api/representation/organizations.php
 POST /api/representation/geocode.php
+GET|POST|DELETE /api/representation/offers.php
+GET  /api/representation/find.php
 ```
 
 Die Such-API selbst kommuniziert nur mit Nominatim und SQLite. Ein optionaler X-Refresh erfolgt danach über den getrennten lokalen Refresh-Endpunkt.
@@ -174,14 +178,17 @@ Bei HTTP 429 endet der gesamte laufende Batch sofort. Ein vorhandener `Retry-Aft
 
 Der Detail-Batch ist vom Button „Grunddaten von BNI aktualisieren“ getrennt: Nur dieser separate Grunddatenimport ruft die BNI-Kartenquelle auf; ein Detail-Batch führt keinen `getMapData`-Sammelrequest aus.
 
-### Automatisierte Detailaktualisierung
+### Automatisierte Detail- und Grunddatenaktualisierung
 
-Der standardmäßig geschlossene Adminbereich „Automatisierter Import“ verwaltet zwei voneinander unabhängige, dauerhaft in SQLite gespeicherte Mechanismen. Beide sind initial deaktiviert:
+Der standardmäßig geschlossene Adminbereich „Automatisierter Import“ verwaltet drei voneinander unabhängige, dauerhaft in SQLite gespeicherte Mechanismen. Alle sind initial deaktiviert:
 
 - **X – Aktualisierung bei Nutzung:** Standardalter 7 Tage. Nach einer lokalen Suchantwort werden nur die tatsächlich ausgegebenen veralteten Treffer in eine deduplizierte Browser-Queue gestellt. Auch das Öffnen einer veralteten Detailkarte kann einen Refresh anstoßen. Lokale Daten bleiben sofort sichtbar; die Suche blockiert nicht.
 - **Y – automatische Aktualisierung:** Standardalter 30 Tage. Der lokale Docker-Worker prüft standardmäßig alle 60 Minuten und verarbeitet pro Lauf höchstens 10 fällige `CHAPTER`-Datensätze. Zuerst werden noch nie geladene Chapterdetails erstmalig geladen, danach erneut versuchbare Fehler und anschließend bereits geladene, aber veraltete Details. Innerhalb dieser Gruppen bleibt die Reihenfolge stabil.
+- **Z – automatische Grunddatenaktualisierung:** Standardalter 1 Tag, konfigurierbar von 1 bis 30 Tagen. Fehlt ein erfolgreicher Sammelimport oder ist `last_map_refresh_at` älter als Z, führt der Worker genau einen `getMapData`-Request aus und verwendet denselben SQLite-UPsert wie der manuelle Adminimport. Grunddaten laufen vor Y; Details werden weder gelöscht noch automatisch nachgeladen.
 
 Die Schwellwerte X und Y sind im Bereich 1 bis 365 Tage konfigurierbar. Änderungen werden erst mit „Einstellungen speichern“ aktiv. Der Worker läuft nur zusammen mit der lokalen Docker-Anwendung; ist Y ausgeschaltet, führt er keine BNI-Anfrage aus.
+
+Manuelle und automatische Grunddatenläufe verwenden ein gemeinsames, ablaufendes SQLite-Lock und werden als `map_manual` beziehungsweise `map_automatic` in `map_refresh_log` protokolliert. HTTP 429 berücksichtigt `Retry-After`, HTTP 403 und 429 stoppen den Lauf, 5xx-/Netzwerkfehler werden ohne schnelle Wiederholung protokolliert. Der nächste reguläre Workerzyklus darf erneut prüfen. Maprequests zählen nicht zum gemeinsamen Tageslimit der Detailrequests; ihre Erfolge, Fehler, Schutzstopps und Fälligkeit werden separat angezeigt.
 
 Zusätzlich gilt ein gemeinsames, in SQLite gespeichertes Tageslimit, standardmäßig 50. Es zählt jeden tatsächlich gestarteten externen Detailrequest der Trigger `usage_search`, `usage_detail` und `automatic` – unabhängig davon, ob er erfolgreich ist oder mit Fehler, HTTP 429 oder HTTP 403 endet. Lokale Prüfungen, frische oder gesperrte Chapter, Deduplizierungen und manuelle Adminimporte zählen nicht. Der Kalendertag wird in `Europe/Berlin` bestimmt. Ist das Limit erreicht, bleiben Suche und Detailansicht vollständig lokal nutzbar; X und Y starten bis zum nächsten lokalen Tag keine weiteren BNI-Requests. Der Adminbereich zeigt Verbrauch, Limit, Rest und Prozentwert.
 

@@ -11,6 +11,7 @@ require_once $appRoot . '/src/ChapterSearchService.php';
 require_once $appRoot . '/src/Database.php';
 require_once $appRoot . '/src/HttpClient.php';
 require_once $appRoot . '/src/OrganizationRepository.php';
+require_once $appRoot . '/src/MapRefreshService.php';
 
 $check = static function (bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
@@ -33,17 +34,22 @@ $check($defaults['usageRefreshEnabled'] === false && $defaults['usageRefreshDays
 $check($defaults['automaticRefreshEnabled'] === false && $defaults['automaticRefreshDays'] === 30, 'Y-Standardwerte.');
 $check($defaults['automaticRefreshBatchSize'] === 10 && $defaults['automaticRefreshIntervalMinutes'] === 60, 'Worker-Standardwerte.');
 $check($defaults['automaticRefreshDailyLimit'] === 50, 'Tageslimit-Standardwert.');
-$automation->updateSettings(true, 5, true, 20, 75);
+$check($defaults['mapRefreshEnabled'] === false && $defaults['mapRefreshDays'] === 1, 'Z-Standardwerte.');
+$automation->updateSettings(true, 5, true, 20, 75, true, 2);
 $saved = $automation->settings();
 $check($saved['usageRefreshEnabled'] && $saved['usageRefreshDays'] === 5, 'X persistent speichern.');
 $check($saved['automaticRefreshEnabled'] && $saved['automaticRefreshDays'] === 20, 'Y persistent speichern.');
 $check($saved['automaticRefreshDailyLimit'] === 75, 'Tageslimit persistent speichern.');
+$check($saved['mapRefreshEnabled'] && $saved['mapRefreshDays'] === 2, 'Z persistent speichern.');
 $invalid = false;
 try { $automation->updateSettings(true, 0, true, 366, 0); } catch (InvalidArgumentException) { $invalid = true; }
 $check($invalid, 'Ungültige Tage abweisen.');
 $invalidLimit = false;
 try { $automation->updateSettings(true, 5, true, 20, 1001); } catch (InvalidArgumentException) { $invalidLimit = true; }
 $check($invalidLimit, 'Tageslimit außerhalb 1 bis 1000 abweisen.');
+$invalidMapDays = false;
+try { $automation->updateSettings(true, 5, true, 20, 50, true, 31); } catch (InvalidArgumentException) { $invalidMapDays = true; }
+$check($invalidMapDays, 'Z-Tage außerhalb 1 bis 30 abweisen.');
 $automaticDue = $organizations->findAutomaticDueChapters(1, 10);
 $check(count($automaticDue) === 3, 'Y findet ungeladene und stale CHAPTER und schließt CORE_GROUP aus.');
 $check(array_column($automaticDue, 'orgId') === [2, 1, 4], 'Y priorisiert not_loaded vor alten loaded-Datensätzen stabil.');
@@ -198,4 +204,29 @@ $check($disabledService->refresh(11, 'usage_search', 1)['reason'] === 'disabled'
 $disabledRunner = new AutomaticRefreshRunner($limitOrganizations, $disabledService, static function (): void {});
 $check(count($disabledRunner->run(1, 10)) === 1 && $disabledCalls === 0, 'Y AUS beendet den Worker-Lauf ohne Request.');
 
-echo "PASS Automation: Settings, stale, Tageslimit, Refresh, Lock, Schutzstatus, Historie und Statistik\n";
+// Z: genau ein Maprequest, eigenes Lock/Log und kein Verbrauch des Detail-Tageslimits.
+$mapDatabase = (new Database(':memory:'))->connection(); $mapOrganizations = new OrganizationRepository($mapDatabase); $mapAutomation = new AutomationRepository($mapDatabase);
+$mapAutomation->updateSettings(false, 7, false, 30, 2, false, 1);
+$check($mapAutomation->mapRefreshDue(1), 'Noch nie geladene Grunddaten sind fällig.');
+$mapCalls = 0;
+$mapPayload = json_encode(['orgMaps' => [['orgId' => 99, 'cmsSecurityHash' => 'map', 'countryCode' => 'DE', 'orgType' => 'CHAPTER', 'coordinates' => '7.1,50.2']]], JSON_THROW_ON_ERROR);
+$mapService = new MapRefreshService($mapOrganizations, $mapAutomation, new BniClient(new HttpClient(static function () use (&$mapCalls, $mapPayload): array { $mapCalls++; return ['status' => 200, 'headers' => [], 'body' => $mapPayload]; })));
+$mapResult = $mapService->refresh('map_automatic');
+$check($mapResult['status'] === 'success' && $mapCalls === 1 && !$mapAutomation->mapRefreshDue(1), 'Z stale startet exakt einen Request und setzt last_map_refresh_at.');
+$mapOrganizations->saveDetails(99, ['chapterName' => 'Detail bleibt', 'meetingDay' => 'Montag', 'meetingTime' => '07:00']);
+$mapService->refresh('map_manual');
+$check($mapOrganizations->find(99)['chapterName'] === 'Detail bleibt' && $mapOrganizations->statistics()['count'] === 1, 'Map-UPsert bewahrt Details und erzeugt keine Dublette.');
+$check($mapAutomation->statistics(7, 30, 2)['dailyUsed'] === 0, 'Maprequests zählen nicht zum Detail-Tageslimit.');
+$check($mapAutomation->acquireMapLock('occupied'), 'Maplock kann belegt werden.');
+$check($mapService->refresh('map_automatic')['reason'] === 'locked' && $mapCalls === 2, 'Paralleler Maprefresh wird ohne Request verhindert.');
+$mapAutomation->releaseMapLock('occupied');
+$rateMap = new MapRefreshService($mapOrganizations, $mapAutomation, new BniClient(new HttpClient(static fn (): array => ['status' => 429, 'headers' => ['Retry-After: 120'], 'body' => '{}'])));
+$check($rateMap->refresh('map_automatic')['status'] === 'rate_limited', 'Map-429 wird ohne Retry protokolliert.');
+$forbiddenMap = new MapRefreshService($mapOrganizations, $mapAutomation, new BniClient(new HttpClient(static fn (): array => ['status' => 403, 'headers' => [], 'body' => '{}'])));
+$check($forbiddenMap->refresh('map_automatic')['status'] === 'forbidden', 'Map-403 stoppt ohne Retry.');
+$errorMap = new MapRefreshService($mapOrganizations, $mapAutomation, new BniClient(new HttpClient(static fn (): array => ['status' => 503, 'headers' => [], 'body' => '{}'])));
+$check($errorMap->refresh('map_automatic')['status'] === 'error', 'Map-5xx wird als Einzelfehler protokolliert.');
+$mapStatuses = $mapDatabase->query('SELECT status FROM map_refresh_log')->fetchAll(PDO::FETCH_COLUMN);
+$check(in_array('success', $mapStatuses, true) && in_array('rate_limited', $mapStatuses, true) && in_array('forbidden', $mapStatuses, true) && in_array('error', $mapStatuses, true), 'Map-Historie enthält Erfolgs- und Fehlerstatus.');
+
+echo "PASS Automation: X/Y/Z, Tageslimit, Refresh, Lock, Schutzstatus, Historie und Statistik\n";

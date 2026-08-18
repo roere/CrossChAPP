@@ -22,6 +22,11 @@ if (isset($_GET['verify'])) {
 }
 $isAdmin = Auth::isAdmin();
 $currentUser = Auth::user();
+$currentDatabaseUser = null;
+if ($currentUser !== null) {
+    try { $currentDatabaseUser = (new UserRepository((new Database())->connection()))->findById((int) $currentUser['user_id']); } catch (Throwable) {}
+}
+$hasRepresentationHomeChapter = $currentDatabaseUser !== null && $currentDatabaseUser['home_chapter_org_id'] !== null;
 $accountDisplayName = $currentUser === null ? '' : ((string) ($currentUser['username'] ?? '') !== ''
     ? (string) $currentUser['username']
     : trim((string) $currentUser['first_name'] . ' ' . (string) $currentUser['last_name']));
@@ -30,6 +35,7 @@ $requestedView = match ($viewParameter) {
     'admin' => 'admin',
     'login', 'register', 'forgot', 'reset', 'verified' => 'auth',
     'vertretung' => 'vertretung',
+    'vertretung-finden' => 'vertretung-finden',
     default => 'crosschaptern',
 };
 $authMode = isset($_GET['reset']) ? 'reset' : (in_array($viewParameter, ['register', 'forgot', 'verified'], true) ? $viewParameter : 'login');
@@ -39,6 +45,7 @@ if ($authMode === 'verified') unset($_SESSION['verification_result']);
 $pageTitle = match ($requestedView) {
     'admin' => 'Admin | CrossChAPP',
     'vertretung' => 'Vertretung anbieten | CrossChAPP',
+    'vertretung-finden' => 'Vertretung finden | CrossChAPP',
     default => 'Crosschaptern | CrossChAPP',
 };
 ?>
@@ -58,6 +65,7 @@ $pageTitle = match ($requestedView) {
     <script src="/assets/site.js" defer></script>
     <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $isAdmin)): ?><script src="/assets/sort-utils.js" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung'): ?><script src="/assets/representation.js" defer></script><?php endif; ?>
+    <?php if ($requestedView === 'vertretung-finden'): ?><script src="/assets/representation-find.js" defer></script><?php endif; ?>
     <?php if ($requestedView === 'admin' && $isAdmin): ?><script src="/assets/app.js" defer></script><?php endif; ?>
 </head>
 <body>
@@ -75,6 +83,7 @@ $pageTitle = match ($requestedView) {
                     <nav aria-label="Hauptnavigation">
                         <a class="<?= $requestedView === 'crosschaptern' ? 'active' : '' ?>" href="/?view=crosschaptern">Crosschaptern</a>
                         <a class="<?= $requestedView === 'vertretung' ? 'active' : '' ?>" href="/?view=vertretung">Vertretung anbieten</a>
+                        <a class="<?= $requestedView === 'vertretung-finden' ? 'active' : '' ?>" href="/?view=vertretung-finden">Vertretung finden</a>
                         <?php if ($isAdmin): ?>
                             <a class="<?= $requestedView === 'admin' ? 'active' : '' ?>" href="/?view=admin">Admin</a>
                         <?php endif; ?>
@@ -124,6 +133,8 @@ $pageTitle = match ($requestedView) {
         require __DIR__ . '/views/login.php';
     } elseif ($requestedView === 'vertretung') {
         require __DIR__ . '/views/vertretung.php';
+    } elseif ($requestedView === 'vertretung-finden') {
+        require __DIR__ . '/views/vertretung-finden.php';
     } else {
         require __DIR__ . '/views/search.php';
     }

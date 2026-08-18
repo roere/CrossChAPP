@@ -52,6 +52,10 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .header-button, .account-admin { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: .55rem .85rem; border: 1px solid var(--bni-red); border-radius: 3px; color: white; background: var(--bni-red); font-size: .76rem; font-weight: 800; text-decoration: none; }
 .header-button:hover { color: white; border-color: var(--bni-red-dark); background: var(--bni-red-dark); }
 .header-button.secondary { color: #38393c; border-color: #aaa; background: white; }
+.button-link { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: .6rem 1rem; border: 1px solid var(--bni-red); border-radius: 3px; color: white; background: var(--bni-red); font-weight: 800; text-decoration: none; }
+.button-link:hover, .button-link:focus-visible { color: white; background: var(--bni-red-dark); }
+.representation-access-hint { display: grid; justify-items: start; gap: .8rem; }
+.representation-access-hint p { margin: 0; }
 .account-admin { color: var(--bni-red-dark); border-color: transparent; background: transparent; }
 
 .page-hero { position: relative; overflow: hidden; padding: 3.4rem 0 5.2rem; color: white; background: linear-gradient(112deg, #27282b 0%, #35363a 65%, #4a252b 100%); }
@@ -83,6 +87,18 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .radius-input input { min-width: 0; }
 .representation-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .representation-actions strong { margin-left: auto; color: var(--muted); font-size: .78rem; }
+.representation-login-hint { padding: .8rem 1rem; border-left: 4px solid var(--bni-red); background: #fff3f4; font-weight: 700; }
+.representation-save-panel, .representation-own-panel { margin-top: 1.5rem; }
+.representation-save-panel h2, .representation-own-panel h2 { margin-top: 0; }
+.representation-offer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+.representation-offer-card { display: grid; align-content: start; gap: .8rem; padding: 1rem; border: 1px solid var(--border); border-top: 4px solid var(--bni-red); background: white; }
+.representation-offer-card h3 { margin: 0; font-size: 1rem; }
+.representation-offer-card button { justify-self: start; }
+.representation-offer-dates { display: flex; flex-wrap: wrap; gap: .4rem; }
+.offer-meta { margin: 0; color: var(--muted); font-size: .75rem; }
+.home-chapter-row { background: #f4f4f4; }
+.home-chapter-badge { display: inline-block; padding: .15rem .35rem; border-radius: 2px; color: white; background: var(--anthracite); font-size: .6rem; white-space: nowrap; }
+.delete-representation-summary { display: grid; gap: .65rem; margin: 1rem 0; padding: .8rem; background: var(--surface); border-left: 3px solid var(--bni-red); }
 .representation-list-panel { overflow: hidden; }
 .representation-list-panel td:nth-child(2) { min-width: 180px; font-weight: 800; }
 .empty-database { display: grid; gap: .65rem; margin-bottom: 1rem; border-left: 5px solid var(--bni-red); }
@@ -348,6 +364,7 @@ tr.organization:hover { background: #faf7f7; }
     .day-options { grid-template-columns: repeat(4, 1fr); }
     .result-list { grid-template-columns: 1fr; }
     .representation-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .representation-offer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {
@@ -403,4 +420,5 @@ tr.organization:hover { background: #faf7f7; }
     .date-add-row > * { width: 100%; }
     .representation-actions > button { width: 100%; }
     .representation-actions strong { width: 100%; margin-left: 0; }
+    .representation-offer-grid { grid-template-columns: 1fr; }
 }

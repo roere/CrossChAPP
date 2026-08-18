@@ -4,7 +4,8 @@
     const list = document.querySelector('#representation-list');
     if (!list) return;
 
-    const state = { organizations: [], selectedDates: new Set(), selectedOrganizations: new Set(), allDates: false, location: null };
+    const state = { organizations: [], offers: [], selectedDates: new Set(), selectedOrganizations: new Set(), allDates: false, location: null, viewer: { authenticated: false, homeChapterOrgId: null }, pendingDelete: null, deleteTrigger: null };
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const countryLabels = { DE: 'Deutschland', AT: 'Österreich', CH: 'Schweiz' };
     const typeLabels = { CHAPTER: 'Chapter', CORE_GROUP: 'Im Aufbau', PLANNED_GROUP: 'Geplant' };
     const elements = {
@@ -16,6 +17,11 @@
         applyRadius: document.querySelector('#apply-representation-radius'), locationMessage: document.querySelector('#representation-location-message'),
         selectVisible: document.querySelector('#select-visible-representations'), clear: document.querySelector('#clear-representations'),
         counts: document.querySelector('#representation-counts'), distanceHeading: document.querySelector('#representation-distance-heading'), list,
+        loginHint: document.querySelector('#representation-login-hint'), save: document.querySelector('#save-representation-offer'), saveMessage: document.querySelector('#representation-save-message'),
+        ownSection: document.querySelector('#my-representation-offers'), ownList: document.querySelector('#representation-own-list'),
+        deleteDialog: document.querySelector('#delete-representation-dialog'), deleteSummary: document.querySelector('#delete-representation-summary'),
+        deleteMessage: document.querySelector('#delete-representation-message'), confirmDelete: document.querySelector('#confirm-delete-representation'),
+        cancelDelete: document.querySelector('#cancel-delete-representation'), closeDelete: document.querySelector('#close-delete-representation'),
     };
     const sortState = window.CrossChappSort.bind(document.querySelector('#representation-table'), render);
     const sortFields = {
@@ -37,7 +43,7 @@
     elements.location.addEventListener('input', () => { state.location = null; elements.locationMessage.textContent = ''; render(); });
     elements.radius.addEventListener('input', () => { if (state.location) render(); });
     elements.applyRadius.addEventListener('click', applyRadius);
-    elements.selectVisible.addEventListener('click', () => { visibleOrganizations().forEach(item => state.selectedOrganizations.add(item.orgId)); render(); });
+    elements.selectVisible.addEventListener('click', () => { visibleOrganizations().filter(item => item.orgId !== state.viewer.homeChapterOrgId).forEach(item => state.selectedOrganizations.add(item.orgId)); render(); });
     elements.clear.addEventListener('click', () => { state.selectedOrganizations.clear(); render(); });
     elements.list.addEventListener('change', event => {
         const checkbox = event.target.closest('input[data-org-id]'); if (!checkbox) return;
@@ -45,6 +51,12 @@
         checkbox.checked ? state.selectedOrganizations.add(orgId) : state.selectedOrganizations.delete(orgId);
         renderCounts(visibleOrganizations().length);
     });
+    elements.save.addEventListener('click', saveOffer);
+    elements.ownList.addEventListener('click', openDeleteDialog);
+    elements.confirmDelete.addEventListener('click', deleteOffer);
+    elements.cancelDelete.addEventListener('click', closeDeleteDialog);
+    elements.closeDelete.addEventListener('click', closeDeleteDialog);
+    elements.deleteDialog.addEventListener('cancel', event => { event.preventDefault(); closeDeleteDialog(); });
     loadOrganizations();
 
     async function loadOrganizations() {
@@ -52,6 +64,10 @@
             const response = await fetch('/api/representation/organizations.php'); const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Die lokale Chapterliste konnte nicht geladen werden.');
             state.organizations = Array.isArray(payload.organizations) ? payload.organizations : [];
+            state.viewer = payload.viewer || state.viewer;
+            elements.loginHint.hidden = state.viewer.authenticated;
+            elements.ownSection.hidden = !state.viewer.authenticated;
+            if (state.viewer.authenticated) loadOffers();
             render();
         } catch (error) {
             elements.list.replaceChildren(messageRow(error.message));
@@ -137,10 +153,14 @@
         const row = document.createElement('tr');
         const select = document.createElement('td'); select.className = 'select-column';
         const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.dataset.orgId = item.orgId;
-        checkbox.checked = state.selectedOrganizations.has(item.orgId); checkbox.setAttribute('aria-label', `Organisation ${item.orgId} auswählen`); select.append(checkbox); row.append(select);
+        const isHomeChapter = item.orgId === state.viewer.homeChapterOrgId;
+        checkbox.checked = state.selectedOrganizations.has(item.orgId); checkbox.disabled = isHomeChapter;
+        checkbox.title = isHomeChapter ? 'Für dein eigenes Chapter kannst du kein Vertretungsangebot anlegen.' : '';
+        checkbox.setAttribute('aria-label', isHomeChapter ? `Organisation ${item.orgId}: eigenes Chapter, nicht auswählbar` : `Organisation ${item.orgId} auswählen`); select.append(checkbox); row.append(select);
         [item.chapterName || '—', item.orgId, countryLabels[item.countryCode] || item.countryCode || '—', typeLabels[item.orgType] || item.orgType || '—', locationLabel(item), item.meetingDay || '—', item.meetingTime || '—'].forEach(value => {
             const cell = document.createElement('td'); cell.textContent = String(value); row.append(cell);
         });
+        if (isHomeChapter) { row.classList.add('home-chapter-row'); const badge = document.createElement('span'); badge.className = 'home-chapter-badge'; badge.textContent = 'Heimatchapter'; row.children[1].append(' ', badge); }
         if (state.location) { const cell = document.createElement('td'); cell.textContent = item.distanceKm === null ? '—' : `${item.distanceKm.toLocaleString('de-DE', { maximumFractionDigits: 1 })} km`; row.append(cell); }
         return row;
     }
@@ -159,4 +179,68 @@
     function messageRow(text) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 9; cell.textContent = text; row.append(cell); return row; }
     function setDateMessage(text, type = '') { elements.dateMessage.textContent = text; elements.dateMessage.className = `message ${type}`.trim(); }
     function setLocationMessage(text, type = '') { elements.locationMessage.textContent = text; elements.locationMessage.className = `message ${type}`.trim(); }
+
+    async function saveOffer() {
+        if (!state.viewer.authenticated) { window.location.href = '/?view=login'; return; }
+        if (!state.selectedOrganizations.size) { setSaveMessage('Bitte wähle mindestens ein Chapter aus.', 'error'); return; }
+        if (!state.allDates && !state.selectedDates.size) { setSaveMessage('Bitte wähle mindestens einen Termin oder Alle Daten aus.', 'error'); return; }
+        elements.save.disabled = true; setSaveMessage('Vertretungsangebot wird gespeichert …');
+        try {
+            const response = await fetch('/api/representation/offers.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ orgIds: [...state.selectedOrganizations], allDates: state.allDates, dates: [...state.selectedDates] }) });
+            const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Das Vertretungsangebot konnte nicht gespeichert werden.');
+            state.selectedOrganizations.clear(); state.selectedDates.clear(); state.allDates = false; elements.allDates.checked = false;
+            renderDates(); render(); setSaveMessage(payload.count === 1 ? 'Vertretungsangebot gespeichert.' : `${payload.count} Vertretungsangebote gespeichert.`, 'success'); await loadOffers();
+        } catch (error) { setSaveMessage(error.message, 'error'); } finally { elements.save.disabled = false; }
+    }
+
+    async function loadOffers() {
+        try {
+            const response = await fetch('/api/representation/offers.php'); const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Die Angebote konnten nicht geladen werden.');
+            renderOffers(payload.offers || []);
+        } catch (error) { elements.ownList.replaceChildren(messageParagraph(error.message)); }
+    }
+
+    function renderOffers(offers) {
+        state.offers = offers;
+        if (!offers.length) { elements.ownList.replaceChildren(messageParagraph('Du hast noch keine Vertretungsangebote gespeichert.')); return; }
+        elements.ownList.replaceChildren(...offers.map(offer => {
+            const card = document.createElement('article'); card.className = 'representation-offer-card';
+            const heading = document.createElement('h3'); heading.textContent = offer.chapterName || '—';
+            const dates = document.createElement('div'); dates.className = 'representation-offer-dates';
+            if (offer.allDates) dates.append(offerBadge('Immer')); else offer.dates.forEach(date => dates.append(offerBadge(formatDate(date))));
+            const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary'; remove.dataset.deleteOffer = offer.id; remove.textContent = 'Löschen';
+            card.append(heading, dates, remove); return card;
+        }));
+    }
+
+    function openDeleteDialog(event) {
+        const button = event.target.closest('button[data-delete-offer]'); if (!button) return;
+        const offer = state.offers.find(item => item.id === Number(button.dataset.deleteOffer)); if (!offer) return;
+        state.pendingDelete = offer; state.deleteTrigger = button; elements.deleteMessage.textContent = '';
+        const heading = document.createElement('strong'); heading.textContent = offer.chapterName || '—';
+        const availability = document.createElement('div'); availability.className = 'representation-offer-dates';
+        if (offer.allDates) availability.append(offerBadge('Immer')); else offer.dates.forEach(date => availability.append(offerBadge(formatDate(date))));
+        elements.deleteSummary.replaceChildren(heading, availability); elements.deleteDialog.showModal(); elements.confirmDelete.focus();
+    }
+
+    function closeDeleteDialog() {
+        if (elements.deleteDialog.open) elements.deleteDialog.close();
+        const trigger = state.deleteTrigger; state.pendingDelete = null; state.deleteTrigger = null; elements.deleteMessage.textContent = '';
+        if (trigger?.isConnected) trigger.focus();
+    }
+
+    async function deleteOffer() {
+        if (!state.pendingDelete) return;
+        const offerId = state.pendingDelete.id; elements.confirmDelete.disabled = true; elements.cancelDelete.disabled = true;
+        try {
+            const response = await fetch('/api/representation/offers.php', { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ offerId }) });
+            const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Das Vertretungsangebot konnte nicht gelöscht werden.');
+            closeDeleteDialog(); setSaveMessage('Vertretungsangebot gelöscht.', 'success'); await loadOffers();
+        } catch (error) { elements.deleteMessage.textContent = error.message; elements.deleteMessage.className = 'message error'; }
+        finally { elements.confirmDelete.disabled = false; elements.cancelDelete.disabled = false; }
+    }
+    function offerBadge(text) { const chip = document.createElement('span'); chip.className = 'date-chip'; chip.textContent = text; return chip; }
+    function messageParagraph(text) { const paragraph = document.createElement('p'); paragraph.textContent = text; return paragraph; }
+    function setSaveMessage(text, type = '') { elements.saveMessage.textContent = text; elements.saveMessage.className = `message ${type}`.trim(); }
 })();

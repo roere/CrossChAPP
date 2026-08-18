@@ -16,6 +16,8 @@ $settings = $repository->settings();
 $statistics = $repository->statistics($settings['usageRefreshDays'], $settings['automaticRefreshDays'], $settings['automaticRefreshDailyLimit']);
 $lastSeen = is_string($statistics['workerLastSeenAt'] ?? null) ? strtotime($statistics['workerLastSeenAt']) : false;
 $statistics['workerActive'] = $lastSeen !== false && $lastSeen >= time() - ($settings['automaticRefreshIntervalMinutes'] * 120);
+$statistics['mapRefreshEnabled'] = $settings['mapRefreshEnabled'];
+$statistics['mapRefreshDays'] = $settings['mapRefreshDays'];
 JsonResponse::send([
     'statistics' => $statistics,
 ]);

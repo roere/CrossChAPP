@@ -23,11 +23,13 @@ final class AutomationRepository
             'automaticRefreshBatchSize' => (int) $row['automatic_refresh_batch_size'],
             'automaticRefreshIntervalMinutes' => (int) $row['automatic_refresh_interval_minutes'],
             'automaticRefreshDailyLimit' => (int) $row['automatic_refresh_daily_limit'],
+            'mapRefreshEnabled' => (bool) $row['map_refresh_enabled'],
+            'mapRefreshDays' => (int) $row['map_refresh_days'],
             'updatedAt' => (string) $row['updated_at'],
         ];
     }
 
-    public function updateSettings(bool $usageEnabled, int $usageDays, bool $automaticEnabled, int $automaticDays, int $dailyLimit = 50): void
+    public function updateSettings(bool $usageEnabled, int $usageDays, bool $automaticEnabled, int $automaticDays, int $dailyLimit = 50, bool $mapEnabled = false, int $mapDays = 1): void
     {
         if ($usageDays < 1 || $usageDays > 365 || $automaticDays < 1 || $automaticDays > 365) {
             throw new InvalidArgumentException('Die Anzahl der Tage muss zwischen 1 und 365 liegen.');
@@ -35,6 +37,7 @@ final class AutomationRepository
         if ($dailyLimit < 1 || $dailyLimit > 1000) {
             throw new InvalidArgumentException('Das Tageslimit muss zwischen 1 und 1000 liegen.');
         }
+        if ($mapDays < 1 || $mapDays > 30) throw new InvalidArgumentException('Das Grunddatenintervall muss zwischen 1 und 30 Tagen liegen.');
         $statement = $this->database->prepare(<<<'SQL'
             UPDATE automation_settings
             SET usage_refresh_enabled = :usage_enabled,
@@ -42,6 +45,8 @@ final class AutomationRepository
                 automatic_refresh_enabled = :automatic_enabled,
                 automatic_refresh_days = :automatic_days,
                 automatic_refresh_daily_limit = :daily_limit,
+                map_refresh_enabled = :map_enabled,
+                map_refresh_days = :map_days,
                 updated_at = :updated_at
             WHERE id = 1
             SQL);
@@ -51,8 +56,54 @@ final class AutomationRepository
             ':automatic_enabled' => $automaticEnabled ? 1 : 0,
             ':automatic_days' => $automaticDays,
             ':daily_limit' => $dailyLimit,
+            ':map_enabled' => $mapEnabled ? 1 : 0,
+            ':map_days' => $mapDays,
             ':updated_at' => self::now(),
         ]);
+    }
+
+    public function mapRefreshDue(int $days): bool
+    {
+        $statement = $this->database->prepare("SELECT COUNT(*) FROM automation_runtime WHERE id = 1 AND (last_map_refresh_at IS NULL OR datetime(last_map_refresh_at) < datetime('now', :age)) AND (map_retry_after_until IS NULL OR datetime(map_retry_after_until) <= datetime('now'))");
+        $statement->execute([':age' => '-' . $days . ' days']); return (int) $statement->fetchColumn() === 1;
+    }
+
+    public function acquireMapLock(string $token, int $seconds = 120): bool
+    {
+        $now = self::now(); $until = gmdate('Y-m-d\TH:i:s\Z', time() + $seconds);
+        $statement = $this->database->prepare("UPDATE automation_runtime SET map_lock_token = :token, map_lock_until = :until, updated_at = :now WHERE id = 1 AND (map_lock_until IS NULL OR map_lock_until <= :now)");
+        $statement->execute([':token' => $token, ':until' => $until, ':now' => $now]); return $statement->rowCount() === 1;
+    }
+
+    public function releaseMapLock(string $token): void
+    {
+        $statement = $this->database->prepare('UPDATE automation_runtime SET map_lock_token = NULL, map_lock_until = NULL, updated_at = :now WHERE id = 1 AND map_lock_token = :token');
+        $statement->execute([':now' => self::now(), ':token' => $token]);
+    }
+
+    public function startMapLog(string $trigger): int
+    {
+        $statement = $this->database->prepare("INSERT INTO map_refresh_log (trigger_type, started_at, status) VALUES (:trigger, :started, 'started')");
+        $statement->execute([':trigger' => $trigger, ':started' => self::now()]); return (int) $this->database->lastInsertId();
+    }
+
+    public function finishMapLog(int $id, string $status, ?int $httpStatus = null, ?string $category = null): void
+    {
+        $statement = $this->database->prepare('UPDATE map_refresh_log SET finished_at = :finished, status = :status, http_status = :http, error_category = :category WHERE id = :id');
+        $statement->execute([':finished' => self::now(), ':status' => $status, ':http' => $httpStatus, ':category' => $category, ':id' => $id]);
+    }
+
+    public function markMapRefreshSuccess(): void
+    {
+        $statement = $this->database->prepare('UPDATE automation_runtime SET last_map_refresh_at = :now, map_retry_after_until = NULL, updated_at = :now WHERE id = 1');
+        $statement->execute([':now' => self::now()]);
+    }
+
+    public function setMapRetryAfter(?int $seconds): void
+    {
+        if ($seconds === null) return;
+        $statement = $this->database->prepare('UPDATE automation_runtime SET map_retry_after_until = :until, updated_at = :now WHERE id = 1');
+        $statement->execute([':until' => gmdate('Y-m-d\TH:i:s\Z', time() + max(0, $seconds)), ':now' => self::now()]);
     }
 
     public function acquireLock(int $orgId, string $ownerToken, int $seconds = 90): bool
@@ -189,6 +240,16 @@ final class AutomationRepository
         $statement->execute([':day_start' => $dayStart, ':day_end' => $dayEnd]);
         $log = $statement->fetch();
         $runtime = $this->database->query('SELECT * FROM automation_runtime WHERE id = 1')->fetch();
+        $mapLog = $this->database->query(<<<'SQL'
+            SELECT
+              MAX(CASE WHEN status = 'success' THEN finished_at END) AS last_success,
+              MAX(CASE WHEN trigger_type = 'map_automatic' THEN started_at END) AS last_automatic_attempt,
+              SUM(CASE WHEN status = 'success' AND date(finished_at, 'localtime') = date('now', 'localtime') THEN 1 ELSE 0 END) AS success_today,
+              SUM(CASE WHEN finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS attempts_seven_days,
+              SUM(CASE WHEN status = 'error' AND finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS errors_seven_days,
+              SUM(CASE WHEN status IN ('rate_limited','forbidden') AND finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS protection_seven_days
+            FROM map_refresh_log
+            SQL)->fetch();
         $automaticDue = $this->automaticDueCounts($automaticDays);
         $usedToday = (int) ($log['automatic_requests_today'] ?? 0);
         return [
@@ -214,6 +275,15 @@ final class AutomationRepository
             'chaptersWithDetails' => $this->loadedCount(),
             'workerLastSeenAt' => $runtime['worker_last_seen_at'] ?? null,
             'nextAutomaticCheckAt' => $runtime['next_check_at'] ?? null,
+            'lastMapRefreshAt' => $runtime['last_map_refresh_at'] ?? null,
+            'lastAutomaticMapAttempt' => $mapLog['last_automatic_attempt'] ?? null,
+            'mapRefreshToday' => (int) ($mapLog['success_today'] ?? 0),
+            'mapRefreshSevenDays' => (int) ($mapLog['attempts_seven_days'] ?? 0),
+            'mapErrorsSevenDays' => (int) ($mapLog['errors_seven_days'] ?? 0),
+            'mapProtectionStopsSevenDays' => (int) ($mapLog['protection_seven_days'] ?? 0),
+            'mapRefreshDue' => $this->mapRefreshDue((int) ($this->settings()['mapRefreshDays'] ?? 1)),
+            'nextMapRefreshDueAt' => isset($runtime['last_map_refresh_at']) && $runtime['last_map_refresh_at'] !== null
+                ? gmdate('Y-m-d\TH:i:s\Z', strtotime((string) $runtime['last_map_refresh_at']) + ((int) ($this->settings()['mapRefreshDays'] ?? 1) * 86400)) : null,
         ];
     }
 

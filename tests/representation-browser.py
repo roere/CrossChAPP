@@ -21,10 +21,16 @@ def script(source):
 
 
 try:
+    request("POST", f"/session/{session}/url", {"url": "http://localhost:8082/?view=vertretung-finden"})
+    time.sleep(.4); request("POST", f"/session/{session}/log", {"type": "performance"})
+    public_find = script("return {nav:[...document.querySelectorAll('nav a')].map(x=>x.textContent.trim()),hint:document.body.textContent.includes('musst du angemeldet sein'),login:document.querySelector('.representation-access-hint a')?.textContent.trim(),list:!!document.querySelector('#available-representations')};")
+    assert 'Vertretung finden' in public_find['nav'] and public_find['hint'] and public_find['login']=='Anmelden' and not public_find['list'],public_find
+    assert not [entry for entry in request("POST", f"/session/{session}/log", {"type": "performance"}) if '/api/representation/find.php' in entry.get('message','')]
     request("POST", f"/session/{session}/url", {"url": "http://localhost:8082/?view=vertretung"})
     time.sleep(1)
     initial = script("return {rows:document.querySelectorAll('#representation-list tr').length,min:document.querySelector('#representation-date').min,title:document.querySelector('h1').textContent};")
     assert initial["rows"] == 881 and initial["min"] and "Vertretung für folgende Chapter" in initial["title"]
+    assert script("return document.querySelector('.representation-filters').compareDocumentPosition(document.querySelector('.representation-dates')) & Node.DOCUMENT_POSITION_FOLLOWING;")
     typed = script("""
 const sort=(items,key,direction,type)=>window.CrossChappSort.sort(items,{key,direction},{[key]:{type,value:item=>item.value}}).map(item=>item.id);
 return {

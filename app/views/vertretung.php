@@ -5,17 +5,7 @@
 </div></section>
 
 <main class="shell content representation-content">
-    <section class="panel representation-dates" aria-labelledby="representation-date-heading">
-        <div><p class="section-kicker">Termine</p><h2 id="representation-date-heading">Termine auswählen</h2></div>
-        <div class="date-add-row">
-            <label>Datum auswählen<input id="representation-date" type="date" min="<?= htmlspecialchars($today, ENT_QUOTES, 'UTF-8') ?>"></label>
-            <button id="add-representation-date" type="button">Hinzufügen</button>
-            <label class="all-dates-option"><input id="representation-all-dates" type="checkbox"> Alle Daten</label>
-        </div>
-        <div id="representation-date-message" class="message" role="status" aria-live="polite"></div>
-        <div id="representation-date-chips" class="date-chips" aria-label="Ausgewählte Termine"></div>
-    </section>
-
+    <p id="representation-login-hint" class="representation-login-hint" hidden>Zum Speichern eines Vertretungsangebots musst du angemeldet sein.</p>
     <section class="panel representation-filters" aria-labelledby="representation-filter-heading">
         <div><p class="section-kicker">Auswahl eingrenzen</p><h2 id="representation-filter-heading">Filter</h2></div>
         <div class="representation-filter-grid">
@@ -34,6 +24,17 @@
         </div>
     </section>
 
+    <section class="panel representation-dates" aria-labelledby="representation-date-heading">
+        <div><p class="section-kicker">Termine</p><h2 id="representation-date-heading">Termine auswählen</h2></div>
+        <div class="date-add-row">
+            <label>Datum auswählen<input id="representation-date" type="date" min="<?= htmlspecialchars($today, ENT_QUOTES, 'UTF-8') ?>"></label>
+            <button id="add-representation-date" type="button">Hinzufügen</button>
+            <label class="all-dates-option"><input id="representation-all-dates" type="checkbox"> Alle Daten</label>
+        </div>
+        <div id="representation-date-message" class="message" role="status" aria-live="polite"></div>
+        <div id="representation-date-chips" class="date-chips" aria-label="Ausgewählte Termine"></div>
+    </section>
+
     <section class="table-panel representation-list-panel" aria-labelledby="representation-list-heading">
         <div class="list-heading"><div><p class="section-kicker">Lokale Datenbank</p><h2 id="representation-list-heading">Chapterliste</h2></div></div>
         <div class="table-scroll"><table id="representation-table">
@@ -41,4 +42,26 @@
             <tbody id="representation-list"><tr><td colspan="9">Lokale Organisationen werden geladen …</td></tr></tbody>
         </table></div>
     </section>
+    <section class="panel representation-save-panel">
+        <button id="save-representation-offer" type="button">Vertretungsangebot speichern</button>
+        <div id="representation-save-message" class="message" role="status" aria-live="polite"></div>
+    </section>
+    <section id="my-representation-offers" class="panel representation-own-panel" aria-labelledby="representation-own-heading" hidden>
+        <h2 id="representation-own-heading">Meine Vertretungsangebote</h2>
+        <div id="representation-own-list" class="representation-offer-grid"></div>
+    </section>
 </main>
+
+<dialog id="delete-representation-dialog" class="account-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-representation-heading">
+    <div class="account-dialog-card">
+        <button id="close-delete-representation" type="button" class="dialog-close" aria-label="Löschdialog schließen">×</button>
+        <h2 id="delete-representation-heading">Vertretungsangebot löschen</h2>
+        <p>Möchtest du dieses Vertretungsangebot wirklich löschen?</p>
+        <div id="delete-representation-summary" class="delete-representation-summary"></div>
+        <div id="delete-representation-message" class="message" role="alert" aria-live="polite"></div>
+        <div class="registration-actions">
+            <button id="confirm-delete-representation" type="button">Löschen</button>
+            <button id="cancel-delete-representation" type="button" class="secondary">Abbrechen</button>
+        </div>
+    </div>
+</dialog>

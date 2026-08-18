@@ -82,6 +82,8 @@ final class Database
                 automatic_refresh_batch_size INTEGER NOT NULL DEFAULT 10,
                 automatic_refresh_interval_minutes INTEGER NOT NULL DEFAULT 60,
                 automatic_refresh_daily_limit INTEGER NOT NULL DEFAULT 50,
+                map_refresh_enabled INTEGER NOT NULL DEFAULT 0,
+                map_refresh_days INTEGER NOT NULL DEFAULT 1,
                 updated_at TEXT NOT NULL
             )
             SQL);
@@ -93,6 +95,8 @@ final class Database
             ) VALUES (1, 0, 7, 0, 30, 10, 60, CURRENT_TIMESTAMP)
             SQL);
         $this->addTableColumnIfMissing('automation_settings', 'automatic_refresh_daily_limit', 'INTEGER NOT NULL DEFAULT 50');
+        $this->addTableColumnIfMissing('automation_settings', 'map_refresh_enabled', 'INTEGER NOT NULL DEFAULT 0');
+        $this->addTableColumnIfMissing('automation_settings', 'map_refresh_days', 'INTEGER NOT NULL DEFAULT 1');
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS chapter_refresh_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,10 +126,30 @@ final class Database
                 worker_last_seen_at TEXT,
                 last_check_at TEXT,
                 next_check_at TEXT,
+                last_map_refresh_at TEXT,
+                map_lock_token TEXT,
+                map_lock_until TEXT,
+                map_retry_after_until TEXT,
                 updated_at TEXT NOT NULL
             )
             SQL);
         $this->connection->exec("INSERT OR IGNORE INTO automation_runtime (id, updated_at) VALUES (1, CURRENT_TIMESTAMP)");
+        $this->addTableColumnIfMissing('automation_runtime', 'last_map_refresh_at', 'TEXT');
+        $this->addTableColumnIfMissing('automation_runtime', 'map_lock_token', 'TEXT');
+        $this->addTableColumnIfMissing('automation_runtime', 'map_lock_until', 'TEXT');
+        $this->addTableColumnIfMissing('automation_runtime', 'map_retry_after_until', 'TEXT');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS map_refresh_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trigger_type TEXT NOT NULL CHECK (trigger_type IN ('map_manual', 'map_automatic')),
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                status TEXT NOT NULL CHECK (status IN ('started', 'success', 'error', 'rate_limited', 'forbidden', 'skipped')),
+                http_status INTEGER,
+                error_category TEXT
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_map_refresh_log_time ON map_refresh_log(started_at, trigger_type, status)');
         $this->createAccountSchema();
     }
 
@@ -215,6 +239,84 @@ final class Database
             )
             SQL);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_auth_attempts_limit ON auth_attempts(attempt_type, identifier_hash, ip_hash, attempted_at)');
+        $this->createRepresentationSchema();
+    }
+
+    private function createRepresentationSchema(): void
+    {
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_offers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                org_id INTEGER NOT NULL,
+                all_dates INTEGER NOT NULL DEFAULT 0 CHECK (all_dates IN (0, 1)),
+                date_signature TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->addTableColumnIfMissing('representation_offers', 'org_id', 'INTEGER');
+        $this->addTableColumnIfMissing('representation_offers', 'date_signature', "TEXT NOT NULL DEFAULT ''");
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_offer_chapters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                offer_id INTEGER NOT NULL,
+                org_id INTEGER NOT NULL,
+                UNIQUE (offer_id, org_id),
+                FOREIGN KEY (offer_id) REFERENCES representation_offers(id) ON DELETE CASCADE,
+                FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_offer_dates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                offer_id INTEGER NOT NULL,
+                offer_date TEXT NOT NULL,
+                UNIQUE (offer_id, offer_date),
+                FOREIGN KEY (offer_id) REFERENCES representation_offers(id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_offers_user ON representation_offers(user_id)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_offers_chapter ON representation_offers(org_id, user_id)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_chapters_org ON representation_offer_chapters(org_id, offer_id)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_dates_offer_date ON representation_offer_dates(offer_id, offer_date)');
+        $this->migrateRepresentationOffersToSingleChapter();
+    }
+
+    private function migrateRepresentationOffersToSingleChapter(): void
+    {
+        $legacy = $this->connection->query('SELECT * FROM representation_offers WHERE org_id IS NULL ORDER BY id')->fetchAll();
+        $dates = $this->connection->prepare('SELECT offer_date FROM representation_offer_dates WHERE offer_id = :offer_id ORDER BY offer_date');
+        $signatureUpdate = $this->connection->prepare('UPDATE representation_offers SET date_signature = :signature WHERE id = :id');
+        foreach ($this->connection->query("SELECT id FROM representation_offers WHERE org_id IS NOT NULL AND all_dates = 0 AND date_signature = ''")->fetchAll() as $offer) {
+            $dates->execute([':offer_id' => $offer['id']]);
+            $signatureUpdate->execute([':signature' => implode('|', $dates->fetchAll(PDO::FETCH_COLUMN)), ':id' => $offer['id']]);
+        }
+        if ($legacy === []) return;
+        $this->connection->beginTransaction();
+        try {
+            $chapters = $this->connection->prepare('SELECT org_id FROM representation_offer_chapters WHERE offer_id = :offer_id ORDER BY org_id');
+            $assign = $this->connection->prepare('UPDATE representation_offers SET org_id = :org_id, date_signature = :signature WHERE id = :id');
+            $clone = $this->connection->prepare('INSERT INTO representation_offers (user_id, org_id, all_dates, date_signature, created_at, updated_at) VALUES (:user_id, :org_id, :all_dates, :signature, :created_at, :updated_at)');
+            $cloneDate = $this->connection->prepare('INSERT INTO representation_offer_dates (offer_id, offer_date) VALUES (:offer_id, :offer_date)');
+            foreach ($legacy as $offer) {
+                $chapters->execute([':offer_id' => $offer['id']]); $orgIds = array_map('intval', $chapters->fetchAll(PDO::FETCH_COLUMN));
+                if ($orgIds === []) continue;
+                $dates->execute([':offer_id' => $offer['id']]); $offerDates = $dates->fetchAll(PDO::FETCH_COLUMN); $signature = implode('|', $offerDates);
+                $assign->execute([':org_id' => array_shift($orgIds), ':signature' => $signature, ':id' => $offer['id']]);
+                foreach ($orgIds as $orgId) {
+                    $clone->execute([':user_id' => $offer['user_id'], ':org_id' => $orgId, ':all_dates' => $offer['all_dates'], ':signature' => $signature, ':created_at' => $offer['created_at'], ':updated_at' => $offer['updated_at']]);
+                    $cloneId = (int) $this->connection->lastInsertId();
+                    foreach ($offerDates as $offerDate) $cloneDate->execute([':offer_id' => $cloneId, ':offer_date' => $offerDate]);
+                }
+            }
+            $this->connection->commit();
+        } catch (Throwable $exception) {
+            if ($this->connection->inTransaction()) $this->connection->rollBack();
+            throw $exception;
+        }
     }
 
     private function addColumnIfMissing(string $column, string $definition): void

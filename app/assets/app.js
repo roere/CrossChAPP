@@ -25,6 +25,7 @@
         automationPanel: document.querySelector('#automation-panel'), automationForm: document.querySelector('#automation-form'),
         usageEnabled: document.querySelector('#usage-refresh-enabled'), usageDays: document.querySelector('#usage-refresh-days'),
         automaticEnabled: document.querySelector('#automatic-refresh-enabled'), automaticDays: document.querySelector('#automatic-refresh-days'),
+        mapEnabled: document.querySelector('#map-refresh-enabled'), mapDays: document.querySelector('#map-refresh-days'),
         automaticDailyLimit: document.querySelector('#automatic-refresh-daily-limit'),
         automationMessage: document.querySelector('#automation-message'), automationStats: document.querySelector('#automation-stats'), workerStatus: document.querySelector('#worker-status'),
         miscPanel: document.querySelector('#misc-panel'), mailSettingsForm: document.querySelector('#mail-settings-form'),
@@ -206,6 +207,8 @@
             elements.automaticEnabled.checked = settings.automaticRefreshEnabled;
             elements.automaticDays.value = settings.automaticRefreshDays;
             elements.automaticDailyLimit.value = settings.automaticRefreshDailyLimit;
+            elements.mapEnabled.checked = settings.mapRefreshEnabled;
+            elements.mapDays.value = settings.mapRefreshDays;
         } catch (error) {
             setAutomationMessage(error.message, 'error');
         }
@@ -223,6 +226,8 @@
                     automatic_refresh_enabled: elements.automaticEnabled.checked,
                     automatic_refresh_days: Number(elements.automaticDays.value),
                     automatic_refresh_daily_limit: Number(elements.automaticDailyLimit.value),
+                    map_refresh_enabled: elements.mapEnabled.checked,
+                    map_refresh_days: Number(elements.mapDays.value),
                 }),
             });
             const payload = await response.json();
@@ -260,6 +265,12 @@
             ['Fehlerhaft / erneut versuchbar', stats.automaticRetryableErrors], ['Für Automatik fällig', stats.automaticDueTotal],
             ['Chapter mit Detaildaten', stats.chaptersWithDetails],
             ['Nächster automatischer Prüflauf', formatTimestamp(stats.nextAutomaticCheckAt)],
+            ['Grunddatenautomatik', stats.mapRefreshEnabled ? 'EIN' : 'AUS'], ['Grunddatenintervall Z', `${stats.mapRefreshDays} Tage`],
+            ['Letzte erfolgreiche Grunddatenaktualisierung', formatTimestamp(stats.lastMapRefreshAt)],
+            ['Letzter automatischer Grunddatenversuch', formatTimestamp(stats.lastAutomaticMapAttempt)],
+            ['Grunddatenaktualisierungen heute', stats.mapRefreshToday], ['Grunddatenläufe letzte 7 Tage', stats.mapRefreshSevenDays],
+            ['Grunddatenfehler letzte 7 Tage', stats.mapErrorsSevenDays], ['Grunddaten 429/403 letzte 7 Tage', stats.mapProtectionStopsSevenDays],
+            ['Grunddaten aktuell fällig', stats.mapRefreshDue ? 'Ja' : 'Nein'], ['Nächste Grunddatenfälligkeit', formatTimestamp(stats.nextMapRefreshDueAt)],
         ];
         const fragment = document.createDocumentFragment();
         fields.forEach(([label, value]) => {

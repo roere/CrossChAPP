@@ -8,6 +8,7 @@ require_once dirname(__DIR__) . '/src/BniRequestPolicy.php';
 require_once dirname(__DIR__) . '/src/ChapterRefreshService.php';
 require_once dirname(__DIR__) . '/src/Database.php';
 require_once dirname(__DIR__) . '/src/OrganizationRepository.php';
+require_once dirname(__DIR__) . '/src/MapRefreshService.php';
 
 $runOnce = in_array('--once', $argv, true);
 $requestedLimit = null;
@@ -24,6 +25,10 @@ do {
     $settings = $automation->settings();
     $interval = $settings['automaticRefreshIntervalMinutes'];
     $automation->updateWorkerRuntime($interval);
+
+    if ($settings['mapRefreshEnabled'] && $automation->mapRefreshDue($settings['mapRefreshDays'])) {
+        (new MapRefreshService($organizations, $automation))->refresh('map_automatic');
+    }
 
     if ($settings['automaticRefreshEnabled']) {
         $limit = $settings['automaticRefreshBatchSize'];

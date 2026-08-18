@@ -65,6 +65,15 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                             <label>Älter als <span class="days-input"><input id="automatic-refresh-days" type="number" min="1" max="365" value="30" required> Tage</span></label>
                             <p class="automation-hint">Maximal 10 Chapter pro automatischem Lauf. BNI-Abfragen erfolgen sequenziell mit mindestens 1,5 Sekunden Abstand.</p>
                         </section>
+                        <section class="automation-setting">
+                            <div>
+                                <h3>Automatische Grunddatenaktualisierung</h3>
+                                <p>Wenn aktiviert, aktualisiert CrossChAPP die BNI-Grunddaten automatisch, sobald der letzte erfolgreiche Grunddatenimport älter als Z Tage ist.</p>
+                            </div>
+                            <label class="switch-label"><input id="map-refresh-enabled" type="checkbox" role="switch"><span>BNI-Grunddaten automatisch aktualisieren</span></label>
+                            <label>Grunddaten aktualisieren, wenn älter als <span class="days-input"><input id="map-refresh-days" type="number" min="1" max="30" value="1" required> Tage</span></label>
+                            <p class="automation-hint">Pro Fälligkeit erfolgt genau ein Sammelrequest. Dieser zählt nicht zum Tageslimit der Detailrequests.</p>
+                        </section>
                         <section class="automation-setting automation-daily-limit">
                             <div>
                                 <h3>Gemeinsames Tageslimit</h3>
