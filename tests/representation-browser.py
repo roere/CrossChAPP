@@ -47,11 +47,10 @@ return {
     request("POST", f"/session/{session}/log", {"type": "performance"})
     sorting = script("""
 const table=document.querySelector('#representation-table'),click=key=>table.querySelector(`th[data-sort-key="${key}"] .sort-button`).click(),result={aria:{}};
-for(const key of ['chapterName','orgId','country','type','city','meetingDay','meetingTime']){click(key);result.aria[key]=table.querySelector(`th[data-sort-key="${key}"]`).getAttribute('aria-sort');click(key);result.aria[key]+='/'+table.querySelector(`th[data-sort-key="${key}"]`).getAttribute('aria-sort');}
-click('orgId');const asc=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[2].textContent));click('orgId');const desc=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[2].textContent));result.numeric=asc.every((v,i,a)=>!i||a[i-1]<=v)&&desc.every((v,i,a)=>!i||a[i-1]>=v);
+for(const key of ['chapterName','country','city','meetingDay','meetingTime']){click(key);result.aria[key]=table.querySelector(`th[data-sort-key="${key}"]`).getAttribute('aria-sort');click(key);result.aria[key]+='/'+table.querySelector(`th[data-sort-key="${key}"]`).getAttribute('aria-sort');}result.noType=!document.querySelector('#representation-type')&&!table.querySelector('th[data-sort-key="type"]')&&![...table.querySelectorAll('th')].some(x=>x.textContent.trim()==='Typ');
 const checkbox=document.querySelector('#representation-list input[data-org-id]');checkbox.click();const selected=checkbox.dataset.orgId;click('chapterName');result.preserved=!!document.querySelector(`#representation-list input[data-org-id="${selected}"]:checked`);return result;
 """)
-    assert all(value == "ascending/descending" for value in sorting["aria"].values()) and sorting["numeric"] and sorting["preserved"], sorting
+    assert all(value == "ascending/descending" for value in sorting["aria"].values()) and sorting["preserved"] and sorting["noType"], sorting
     assert not request("POST", f"/session/{session}/log", {"type": "performance"})
 
     past = script("const i=document.querySelector('#representation-date');i.value='2000-01-01';document.querySelector('#add-representation-date').click();return document.querySelector('#representation-date-message').textContent;")
@@ -67,14 +66,14 @@ const checkbox=document.querySelector('#representation-list input[data-org-id]')
     assert all_dates == {"chips": 2, "disabled": True, "classed": True}
     script("document.querySelector('#representation-all-dates').click();document.querySelectorAll('.date-chip button')[1].click();")
 
-    filtered = script("const set=(q,v)=>{const e=document.querySelector(q);e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}))};set('#representation-country','DE');set('#representation-type','CHAPTER');return [...document.querySelectorAll('#representation-list tr')].every(r=>r.cells[3]?.textContent==='Deutschland'&&r.cells[4]?.textContent==='Chapter'&&r.cells[6]?.textContent==='Freitag');")
+    filtered = script("const set=(q,v)=>{const e=document.querySelector(q);e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}))};set('#representation-country','DE');return [...document.querySelectorAll('#representation-list tr')].every(r=>r.cells[2]?.textContent==='Deutschland'&&r.cells[4]?.textContent==='Freitag');")
     assert filtered
 
     script("document.querySelector('#representation-location').value='51149 Köln';document.querySelector('#representation-radius').value='100';document.querySelector('#apply-representation-radius').click();")
     time.sleep(1)
-    radius = script("return {message:document.querySelector('#representation-location-message').textContent,distances:[...document.querySelectorAll('#representation-list tr')].map(r=>r.cells[8]?.textContent).filter(Boolean)};")
+    radius = script("return {message:document.querySelector('#representation-location-message').textContent,distances:[...document.querySelectorAll('#representation-list tr')].map(r=>r.cells[6]?.textContent).filter(Boolean)};")
     assert "aktiv" in radius["message"] and radius["distances"] and all(float(value.replace(" km", "").replace(".", "").replace(",", ".")) <= 100 for value in radius["distances"])
-    distance_sort = script("""const b=document.querySelector('th[data-sort-key="distance"] .sort-button');b.click();const a=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[8].textContent.replace(' km','').replace('.','').replace(',','.')));const asc=a.every((v,i,x)=>!i||x[i-1]<=v);b.click();const d=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[8].textContent.replace(' km','').replace('.','').replace(',','.')));return asc&&d.every((v,i,x)=>!i||x[i-1]>=v);""");assert distance_sort
+    distance_sort = script("""const b=document.querySelector('th[data-sort-key="distance"] .sort-button');b.click();const a=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[6].textContent.replace(' km','').replace('.','').replace(',','.')));const asc=a.every((v,i,x)=>!i||x[i-1]<=v);b.click();const d=[...document.querySelectorAll('#representation-list tr')].map(r=>Number(r.cells[6].textContent.replace(' km','').replace('.','').replace(',','.')));return asc&&d.every((v,i,x)=>!i||x[i-1]>=v);""");assert distance_sort
 
     preserved = script("document.querySelector('#select-visible-representations').click();const before=document.querySelector('#representation-counts').textContent;const r=document.querySelector('#representation-radius');r.value='1';r.dispatchEvent(new Event('input',{bubbles:true}));return {before,after:document.querySelector('#representation-counts').textContent,selected:document.querySelector('#representation-counts').textContent.match(/· (\\d+)/)[1]};")
     assert int(preserved["selected"]) > 0 and preserved["before"].split("·")[1] == preserved["after"].split("·")[1]

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import json, os, time, urllib.request
-BASE='http://127.0.0.1:9516'; CHAPTER_IDS=[int(value) for value in os.environ['CHAPTER_IDS'].split(',')]
+BASE='http://127.0.0.1:9516'; CHAPTER_IDS=[int(value) for value in os.environ['CHAPTER_IDS'].split(',')]; SEARCH_LOCATION=os.environ.get('SEARCH_LOCATION','Köln')
 def request(method,path,payload=None):
     req=urllib.request.Request(BASE+path,data=None if payload is None else json.dumps(payload).encode(),method=method,headers={'Content-Type':'application/json'})
     with urllib.request.urlopen(req) as response:return json.loads(response.read())['value']
@@ -44,11 +44,57 @@ try:
     script("document.querySelector('#save-representation-offer').click()");time.sleep(.7)
     dated=script("return [...document.querySelectorAll('#representation-own-list .representation-offer-card')].map(x=>({heading:x.querySelector('h3').textContent,dates:x.querySelectorAll('.date-chip').length}));")
     assert len(dated)==2 and all(x['dates']==2 for x in dated),dated
+    always_added=script(f"""const token=document.querySelector('meta[name="csrf-token"]').content;return fetch('/api/representation/offers.php',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':token}},body:JSON.stringify({{orgIds:[{CHAPTER_IDS[0]}],allDates:true,dates:[]}})}}).then(async r=>({{status:r.status,payload:await r.json()}}));""")
+    assert always_added['status']==201,always_added
     script("document.querySelector('#logout-button').click()");time.sleep(.4);login('representation-a@example.invalid')
     assert 'Vertretung finden' in script("return [...document.querySelectorAll('nav a')].map(x=>x.textContent.trim());")
     request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=vertretung-finden'});time.sleep(.7)
-    found=script("return {cards:document.querySelectorAll('.representation-offer-card').length,text:document.querySelector('#available-representations').textContent,email:document.body.textContent.includes('representation-b@example.invalid')};")
-    assert found['cards']==1 and 'Bernd B.' in found['text'] and not found['email'],found
-    logs=request('POST',f'/session/{session}/log',{'type':'browser'});assert not [x for x in logs if x.get('level')=='SEVERE' and '/api/representation/offers.php' not in x.get('message','')],logs
+    found=script("const dated=document.querySelector('#dated-representations');return {dates:dated.querySelectorAll('.representation-date-group').length,cards:dated.querySelectorAll('.representation-provider-card').length,text:dated.textContent,email:document.body.textContent.includes('representation-b@example.invalid'),orgId:/orgId/i.test(document.body.textContent)};")
+    assert found['dates']==2 and found['cards']==2 and 'Bernd B.' in found['text'] and not found['email'] and not found['orgId'],found
+    assert script("return document.querySelectorAll('#all-date-representations .representation-provider-card').length;")==1
+    overview=script("return {cards:document.querySelectorAll('#representation-offers-overview .representation-offer-card').length,buttons:[...document.querySelectorAll('#representation-offers-overview .representation-offer-card')].map(x=>x.querySelectorAll('.contact-provider').length),dateType:document.querySelector('#representation-request-date').type,dayHint:document.querySelector('#representation-request-day-hint').textContent};")
+    assert overview['cards']==2 and overview['buttons']==[1,1] and overview['dateType']=='date' and 'freitags' in overview['dayHint'],overview
+    multiple=script("document.querySelector('#representation-offers-overview .representation-offer-card .contact-provider').click();return {open:document.querySelector('#representation-contact-dialog').open,options:document.querySelectorAll('#representation-contact-date-options input').length,hidden:document.querySelector('#representation-contact-date-options').hidden};")
+    assert multiple=={'open':True,'options':2,'hidden':False},multiple
+    script("document.querySelector('#cancel-representation-contact').click();")
+    request_dates=script("const d=new Date();const next=(from,day)=>{const x=new Date(from);x.setHours(12,0,0,0);x.setDate(x.getDate()+((day-x.getDay()+7)%7));return x};const f1=next(d,5),f2=new Date(f1);f2.setDate(f1.getDate()+7);const w=next(d,3);return [f1,f2,w].map(x=>x.toISOString().slice(0,10));")
+    for value in request_dates[:2]:
+        script(f"const i=document.querySelector('#representation-request-date');i.value='{value}';document.querySelector('#add-representation-request').click();");time.sleep(.5)
+    request_state=script("return {chips:[...document.querySelectorAll('#representation-request-chips .date-chip')].map(x=>x.textContent.trim()),loading:document.body.textContent.includes('Vertretungsangebote werden geladen …')};")
+    assert len(request_state['chips'])==2 and not request_state['loading'],request_state
+    merged=script("return [...document.querySelectorAll('#dated-representations .representation-date-group')].slice(0,2).every(group=>group.querySelectorAll('.representation-provider-card').length===1);")
+    assert merged
+    client_invalid=script(f"const i=document.querySelector('#representation-request-date');i.value='{request_dates[2]}';i.dispatchEvent(new Event('change',{{bubbles:true}}));return {{invalid:i.getAttribute('aria-invalid'),message:document.querySelector('#representation-request-message').textContent}};")
+    assert client_invalid['invalid']=='true' and 'freitags' in client_invalid['message'],client_invalid
+    invalid_request=script(f"""const token=document.querySelector('meta[name="csrf-token"]').content;return fetch('/api/representation/requests.php',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':token}},body:JSON.stringify({{request_date:'{request_dates[2]}'}})}}).then(async r=>({{status:r.status,payload:await r.json()}}));""")
+    assert invalid_request['status']==400 and 'Meeting-Wochentag' in invalid_request['payload']['error'],invalid_request
+    script("document.querySelector('#representation-request-chips button').click();");time.sleep(.5)
+    assert script("return document.querySelectorAll('#representation-request-chips .date-chip').length;")==1
+    script("document.querySelector('#dated-representations .contact-provider').click();");time.sleep(.5)
+    contact=script("const d=document.querySelector('#representation-contact-dialog');return {open:d.open,fixed:document.querySelector('#representation-contact-fixed-date').textContent,dateHidden:document.querySelector('#representation-contact-date-label').hidden,hint:document.querySelector('#representation-contact-hint').textContent,message:document.querySelector('#representation-contact-message').value,before:document.querySelector('#representation-contact-before').textContent,after:document.querySelector('#representation-contact-after').textContent,subject:document.querySelector('#representation-contact-subject').textContent};")
+    assert contact['open'] and contact['dateHidden'] and 'Termin:' in contact['fixed'] and 'eMail Adresse' in contact['hint'] and len(contact['message'])>=20 and 'Anna Alpha' in contact['after'] and 'representation-a@example.invalid' in contact['after'] and 'Betreff:' in contact['subject'],contact
+    script("document.querySelector('#cancel-representation-contact').click()")
+    script("document.querySelector('#logout-button').click()");time.sleep(.4);login('representation-d@example.invalid');request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=vertretung-finden'});time.sleep(.5)
+    script(f"const i=document.querySelector('#representation-request-date');i.value='{request_dates[1]}';document.querySelector('#add-representation-request').click();");time.sleep(.5);script("document.querySelector('#logout-button').click()");time.sleep(.4);request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=crosschaptern'});time.sleep(.4)
+    location=json.dumps(SEARCH_LOCATION);script(f"const f=document.querySelector('#chapter-search-form');document.querySelector('#search-location').value={location};f.querySelector('[data-limit=\"all\"]').click();f.requestSubmit();");time.sleep(1.5)
+    anonymous=script(f"const c=document.querySelector('#result-{CHAPTER_IDS[0]}');return c?{{text:c.querySelector('.result-representation-requests')?.textContent||'',buttons:c.querySelectorAll('.request-contact-button').length}}:null;")
+    assert anonymous and 'Person 1' in anonymous['text'] and 'Person 2' in anonymous['text'] and 'Anna' not in anonymous['text'] and 'Dora' not in anonymous['text'] and anonymous['buttons']==2 and '@' not in anonymous['text'],anonymous
+    script(f"document.querySelector('#result-{CHAPTER_IDS[0]} .request-contact-button').click();");time.sleep(.4)
+    anonymous_dialog=script("return {open:document.querySelector('#request-contact-dialog').open,login:location.search.includes('view=login'),fields:!document.querySelector('#anonymous-request-contact-fields').hidden,message:document.querySelector('#request-contact-message').value};")
+    assert anonymous_dialog['open'] and not anonymous_dialog['login'] and anonymous_dialog['fields'] and len(anonymous_dialog['message'])>=20,anonymous_dialog
+    invalid_mail=script("const e=document.querySelector('#request-contact-email');e.value='ungueltig';e.dispatchEvent(new Event('blur',{bubbles:true}));return {invalid:e.getAttribute('aria-invalid'),text:document.querySelector('#request-contact-email-error').textContent};")
+    assert invalid_mail['invalid']=='true' and 'gültige E-Mail' in invalid_mail['text'],invalid_mail
+    script("const f=document.querySelector('#request-contact-form');document.querySelector('#request-contact-first-name').value='Max';document.querySelector('#request-contact-last-name').value='Mustermann';document.querySelector('#request-contact-email').value='max@example.test';document.querySelector('#request-contact-email').dispatchEvent(new Event('blur',{bubbles:true}));");time.sleep(.5)
+    anonymous_preview=script("const text=document.querySelector('#request-contact-content').textContent;return {after:document.querySelector('#request-contact-after').textContent,recipient:text.includes('representation-a@example.invalid'),owner:text.includes('Anna'),raw:text.includes('{{')||text.includes('}}')};")
+    assert 'Max Mustermann' in anonymous_preview['after'] and 'max@example.test' in anonymous_preview['after'] and not anonymous_preview['recipient'] and not anonymous_preview['owner'] and not anonymous_preview['raw'],anonymous_preview
+    script("document.querySelector('#cancel-request-contact').click()");
+    login('representation-b@example.invalid');request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=crosschaptern'});time.sleep(.4);request('POST',f'/session/{session}/log',{'type':'performance'});script(f"const f=document.querySelector('#chapter-search-form');document.querySelector('#search-location').value={location};f.querySelector('[data-limit=\"all\"]').click();f.requestSubmit();");time.sleep(1.5)
+    logged=script(f"const c=document.querySelector('#result-{CHAPTER_IDS[0]}');return c?{{text:c.querySelector('.result-representation-requests')?.textContent||'',buttons:c.querySelectorAll('.request-contact-button').length,email:c.textContent.includes('representation-a@example.invalid')}}:null;")
+    assert logged and 'Anna A.' in logged['text'] and 'Dora D.' in logged['text'] and logged['buttons']==2 and not logged['email'],logged
+    search_network=request('POST',f'/session/{session}/log',{'type':'performance'});messages=[json.loads(x['message'])['message'] for x in search_network];urls=[x['params']['request']['url'] for x in messages if x['method']=='Network.requestWillBeSent'];assert len([x for x in urls if '/api/search.php' in x])==1 and not [x for x in urls if '/api/representation/' in x] and not [x for x in urls if 'bni.de' in x],urls
+    script(f"document.querySelector('#result-{CHAPTER_IDS[0]} .request-contact-button').click();");time.sleep(.5)
+    request_preview=script("return {open:document.querySelector('#request-contact-dialog').open,before:document.querySelector('#request-contact-before').textContent,after:document.querySelector('#request-contact-after').textContent,email:document.querySelector('#request-contact-content').textContent.includes('representation-a@example.invalid'),anonymousFields:!document.querySelector('#anonymous-request-contact-fields').hidden};")
+    assert request_preview['open'] and 'Hallo Anna' in request_preview['before'] and 'Bernd Beta' in request_preview['after'] and not request_preview['email'] and not request_preview['anonymousFields'],request_preview
+    logs=request('POST',f'/session/{session}/log',{'type':'browser'});assert not [x for x in logs if x.get('level')=='SEVERE' and '/api/representation/offers.php' not in x.get('message','') and '/api/representation/requests.php' not in x.get('message','')],logs
     print('PASS Chromium: 3 Einzelangebote, Dublettenschutz, eigener Löschdialog, 2 Terminangebote und Vertretung finden')
 finally:request('DELETE',f'/session/{session}')

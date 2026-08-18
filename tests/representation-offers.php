@@ -35,8 +35,8 @@ try {
     assert(count($offers->forUser((int) $b['id'])) === $beforeDuplicate); // Kein Teil-Insert für 202.
 
     $matches = $offers->findForHomeChapter(101, (int) $a['id'], '2099-08-20');
-    assert(count($matches) === 1 && $matches[0]['providerName'] === 'Bernd B.' && !array_key_exists('email', $matches[0]));
-    assert($offers->findForHomeChapter(101, (int) $b['id'], '2099-08-20') === []);
+    assert(count($matches['allDatesOffers']) === 1 && $matches['allDatesOffers'][0]['displayName'] === 'Bernd B.' && !array_key_exists('email', $matches['allDatesOffers'][0]));
+    assert($offers->findForHomeChapter(101, (int) $b['id'], '2099-08-20') === ['datedOffers' => [], 'allDatesOffers' => []]);
     assert(!$offers->deleteForUser($alwaysIds[0], (int) $a['id']));
     assert($offers->deleteForUser($alwaysIds[0], (int) $b['id']));
 

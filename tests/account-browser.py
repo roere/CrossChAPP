@@ -81,7 +81,9 @@ return result;
     assert 'view=admin' in script("return location.href;")
     script("document.querySelector('#misc-panel').open=true;document.querySelector('#misc-panel').dispatchEvent(new Event('toggle'));");time.sleep(.5)
     mail=script("return {password:document.querySelector('#mail-settings-form').elements.smtpPassword.value,templates:document.querySelectorAll('#email-templates-form textarea').length};")
-    assert mail['password']=='' and mail['templates']==2
+    assert mail['password']=='' and mail['templates']==8
+    template_button=script("const b=document.querySelector('#email-templates-form button[type=submit]'),f=document.querySelector('#email-templates-form');return {button:b.getBoundingClientRect().width,form:f.getBoundingClientRect().width,left:Math.abs(b.getBoundingClientRect().left-f.getBoundingClientRect().left)<3,nav:[...document.querySelectorAll('nav a')].map(a=>a.textContent.trim())};")
+    assert template_button['button']<template_button['form']*.6 and template_button['left'] and 'CrossChAPPtern' in template_button['nav'],template_button
     script("document.querySelector('#logout-button').click();");time.sleep(.5)
     assert not script("return [...document.querySelectorAll('nav a')].some(a=>a.textContent.trim()==='Admin');")
 

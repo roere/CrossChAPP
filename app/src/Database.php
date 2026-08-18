@@ -217,17 +217,22 @@ final class Database
         $this->connection->exec("INSERT OR IGNORE INTO mail_settings (id, updated_at) VALUES (1, CURRENT_TIMESTAMP)");
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS email_templates (
-                template_key TEXT PRIMARY KEY CHECK (template_key IN ('verify_email', 'reset_password')),
+                template_key TEXT PRIMARY KEY,
                 subject TEXT NOT NULL,
                 body TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
             SQL);
+        $this->migrateEmailTemplates();
         $verificationBody = "Hallo {{first_name}},\n\nvielen Dank für deine Registrierung bei CrossChAPP.\n\nBitte bestätige deine E-Mail-Adresse über folgenden Link:\n\n{{verification_link}}\n\nDer Link ist 24 Stunden gültig.\n\nViele Grüße\nCrossChAPP";
         $resetBody = "Hallo {{first_name}},\n\nfür dein CrossChAPP-Konto wurde das Zurücksetzen des Passworts angefordert.\n\nÜber folgenden Link kannst du ein neues Passwort vergeben:\n\n{{reset_link}}\n\nDer Link ist 60 Minuten gültig.\n\nFalls du das Zurücksetzen nicht angefordert hast, kannst du diese Nachricht ignorieren.\n\nViele Grüße\nCrossChAPP";
         $statement = $this->connection->prepare('INSERT OR IGNORE INTO email_templates (template_key, subject, body, updated_at) VALUES (:key, :subject, :body, :updated_at)');
         $statement->execute([':key' => 'verify_email', ':subject' => 'Bitte bestätige deine E-Mail-Adresse bei CrossChAPP', ':body' => $verificationBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
         $statement->execute([':key' => 'reset_password', ':subject' => 'Neues Passwort für CrossChAPP festlegen', ':body' => $resetBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
+        $contactBody = "Hallo {{provider_first_name}},\n\n{{custom_message}}\n\n---\nAnfrage von:\n{{requester_full_name}}\n{{requester_email}}\nChapter: {{requester_chapter}}\nTermin: {{requested_date}}\n\nViele Grüße\n{{app_name}}";
+        $statement->execute([':key' => 'representation_contact', ':subject' => 'CrossChAPP – Vertretungsanfrage für {{requested_date}}', ':body' => $contactBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
+        $requestContactBody = "Hallo {{request_owner_first_name}},\n\n{{custom_message}}\n\n---\nRückmeldung von:\n{{contact_full_name}}\n{{contact_email}}\nBNI-Chapter: {{contact_chapter}}\nVertretung für: {{requested_chapter}}\nTermin: {{requested_date}}\n\nViele Grüße\n{{app_name}}";
+        $statement->execute([':key' => 'representation_request_contact', ':subject' => 'CrossChAPP – Rückmeldung zu deinem Vertretungsgesuch am {{requested_date}}', ':body' => $requestContactBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS auth_attempts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -262,10 +267,10 @@ final class Database
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS representation_offer_chapters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                offer_id INTEGER NOT NULL,
+                offer_id INTEGER,
                 org_id INTEGER NOT NULL,
                 UNIQUE (offer_id, org_id),
-                FOREIGN KEY (offer_id) REFERENCES representation_offers(id) ON DELETE CASCADE,
+                FOREIGN KEY (offer_id) REFERENCES representation_offers(id) ON DELETE SET NULL,
                 FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE
             )
             SQL);
@@ -282,7 +287,114 @@ final class Database
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_offers_chapter ON representation_offers(org_id, user_id)');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_chapters_org ON representation_offer_chapters(org_id, offer_id)');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_dates_offer_date ON representation_offer_dates(offer_id, offer_date)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                contact_hint TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            SQL);
+        $hint = 'Möchtest Du eine Anfrage senden? Die Person erhält Deinen Namen und Deine eMail Adresse und kann sich bei Dir zurückmelden.';
+        $insertSetting = $this->connection->prepare('INSERT OR IGNORE INTO representation_settings (id, contact_hint, updated_at) VALUES (1, :hint, :updated)');
+        $insertSetting->execute([':hint' => $hint, ':updated' => gmdate('Y-m-d\TH:i:s\Z')]);
+        $this->addTableColumnIfMissing('representation_settings', 'request_contact_hint', "TEXT NOT NULL DEFAULT 'Möchtest Du anbieten, die Vertretung zu übernehmen? Die Person erhält Deinen Namen und Deine eMail-Adresse und kann sich bei Dir zurückmelden.'");
+        $this->addTableColumnIfMissing('representation_settings', 'offer_custom_message', "TEXT NOT NULL DEFAULT 'Hallo,\n\nich suche für diesen Termin eine Vertretung für mein BNI-Chapter und würde mich freuen, wenn Du Dich bei mir meldest.\n\nViele Grüße'");
+        $this->addTableColumnIfMissing('representation_settings', 'request_custom_message', "TEXT NOT NULL DEFAULT 'Hallo,\n\nich kann mir vorstellen, die Vertretung an diesem Termin zu übernehmen. Melde Dich gerne bei mir, damit wir die Details abstimmen können.\n\nViele Grüße'");
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_contact_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                requester_user_id INTEGER NOT NULL,
+                offer_id INTEGER NOT NULL,
+                recipient_user_id INTEGER NOT NULL,
+                requested_date TEXT NOT NULL,
+                sent_at TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('started','success','error')),
+                FOREIGN KEY (requester_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (offer_id) REFERENCES representation_offers(id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->migrateRepresentationContactLogHistory();
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_contact_rate ON representation_contact_log(requester_user_id, sent_at)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_contact_duplicate ON representation_contact_log(requester_user_id, offer_id, requested_date, sent_at)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                org_id INTEGER NOT NULL,
+                request_date TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (user_id, org_id, request_date),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_requests_user_date ON representation_requests(user_id, org_id, request_date)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_request_contact_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                contact_user_id INTEGER NOT NULL,
+                request_id INTEGER NOT NULL,
+                recipient_user_id INTEGER NOT NULL,
+                sent_at TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('started','success','error')),
+                FOREIGN KEY (contact_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (request_id) REFERENCES representation_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_request_contact_rate ON representation_request_contact_log(contact_user_id, sent_at)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_request_contact_duplicate ON representation_request_contact_log(contact_user_id, request_id, sent_at)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_anonymous_request_contact_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id INTEGER NOT NULL,
+                recipient_user_id INTEGER NOT NULL,
+                sender_email_hash TEXT NOT NULL,
+                ip_hash TEXT NOT NULL,
+                sent_at TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('started','success','error')),
+                FOREIGN KEY (request_id) REFERENCES representation_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_anonymous_request_contact_rate ON representation_anonymous_request_contact_log(ip_hash, sent_at)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_anonymous_request_contact_duplicate ON representation_anonymous_request_contact_log(request_id, sender_email_hash, sent_at)');
         $this->migrateRepresentationOffersToSingleChapter();
+    }
+
+    private function migrateRepresentationContactLogHistory(): void
+    {
+        $sql = (string) $this->connection->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='representation_contact_log'")->fetchColumn();
+        if (!str_contains($sql, 'offer_id INTEGER NOT NULL') && str_contains($sql, 'ON DELETE SET NULL')) return;
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE representation_contact_log_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                requester_user_id INTEGER NOT NULL,
+                offer_id INTEGER,
+                recipient_user_id INTEGER NOT NULL,
+                requested_date TEXT NOT NULL,
+                sent_at TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('started','success','error')),
+                FOREIGN KEY (requester_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (offer_id) REFERENCES representation_offers(id) ON DELETE SET NULL,
+                FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('INSERT INTO representation_contact_log_new SELECT * FROM representation_contact_log');
+        $this->connection->exec('DROP TABLE representation_contact_log');
+        $this->connection->exec('ALTER TABLE representation_contact_log_new RENAME TO representation_contact_log');
+    }
+
+    private function migrateEmailTemplates(): void
+    {
+        $sql = (string) $this->connection->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='email_templates'")->fetchColumn();
+        if (!str_contains($sql, "'verify_email', 'reset_password'")) return;
+        $this->connection->exec('ALTER TABLE email_templates RENAME TO email_templates_legacy');
+        $this->connection->exec('CREATE TABLE email_templates (template_key TEXT PRIMARY KEY, subject TEXT NOT NULL, body TEXT NOT NULL, updated_at TEXT NOT NULL)');
+        $this->connection->exec('INSERT INTO email_templates SELECT * FROM email_templates_legacy');
+        $this->connection->exec('DROP TABLE email_templates_legacy');
     }
 
     private function migrateRepresentationOffersToSingleChapter(): void

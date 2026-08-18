@@ -261,9 +261,10 @@
             ['Aktualisierungen letzte 7 Tage', stats.updatesSevenDays], ['Erfolgreich letzte 7 Tage', stats.successSevenDays],
             ['Fehler letzte 7 Tage', stats.errorsSevenDays], ['Rate-Limit-Stopps letzte 7 Tage', stats.protectionStopsSevenDays],
             ['Letzter 429/403', formatTimestamp(stats.lastProtectionStop)], ['Aktuell stale nach X', stats.staleUsage],
-            ['Noch nie geladene Chapter', stats.automaticNeverLoaded], ['Veraltete Chapter nach Y', stats.staleAutomatic],
+            ['Noch nie geladene Organisationen', stats.automaticNeverLoaded], ['Veraltete Organisationen nach Y', stats.staleAutomatic],
             ['Fehlerhaft / erneut versuchbar', stats.automaticRetryableErrors], ['Für Automatik fällig', stats.automaticDueTotal],
-            ['Chapter mit Detaildaten', stats.chaptersWithDetails],
+            ['Davon Chapter', stats.automaticDueChapter], ['Davon im Aufbau', stats.automaticDueCoreGroup], ['Davon geplant', stats.automaticDuePlannedGroup],
+            ['Organisationen mit Detaildaten', stats.chaptersWithDetails],
             ['Nächster automatischer Prüflauf', formatTimestamp(stats.nextAutomaticCheckAt)],
             ['Grunddatenautomatik', stats.mapRefreshEnabled ? 'EIN' : 'AUS'], ['Grunddatenintervall Z', `${stats.mapRefreshDays} Tage`],
             ['Letzte erfolgreiche Grunddatenaktualisierung', formatTimestamp(stats.lastMapRefreshAt)],
@@ -296,6 +297,9 @@
             form.elements.smtpPassword.value = ''; form.elements.smtpPassword.placeholder = settings.hasSmtpPassword ? '••••••••' : '';
             const templates = templatesPayload.templates; elements.templatesForm.elements.verify_subject.value = templates.verify_email.subject; elements.templatesForm.elements.verify_body.value = templates.verify_email.body;
             elements.templatesForm.elements.reset_subject.value = templates.reset_password.subject; elements.templatesForm.elements.reset_body.value = templates.reset_password.body;
+            elements.templatesForm.elements.contact_hint.value = templatesPayload.contactHint || ''; elements.templatesForm.elements.contact_subject.value = templates.representation_contact.subject; elements.templatesForm.elements.contact_body.value = templates.representation_contact.body;
+            elements.templatesForm.elements.request_contact_hint.value = templatesPayload.requestContactHint || ''; elements.templatesForm.elements.request_contact_subject.value = templates.representation_request_contact.subject; elements.templatesForm.elements.request_contact_body.value = templates.representation_request_contact.body;
+            elements.templatesForm.elements.offer_custom_message.value = templatesPayload.offerCustomMessage || ''; elements.templatesForm.elements.request_custom_message.value = templatesPayload.requestCustomMessage || '';
         } catch (error) { elements.mailSettingsMessage.textContent = error.message; elements.mailSettingsMessage.className = 'message error'; }
     }
 
@@ -307,7 +311,7 @@
 
     async function saveEmailTemplates(event) {
         event.preventDefault(); const form = event.currentTarget;
-        const body = { verify_email: { subject: form.elements.verify_subject.value, body: form.elements.verify_body.value }, reset_password: { subject: form.elements.reset_subject.value, body: form.elements.reset_body.value } };
+        const body = { verify_email: { subject: form.elements.verify_subject.value, body: form.elements.verify_body.value }, reset_password: { subject: form.elements.reset_subject.value, body: form.elements.reset_body.value }, representation_contact: { subject: form.elements.contact_subject.value, body: form.elements.contact_body.value }, representation_request_contact: { subject: form.elements.request_contact_subject.value, body: form.elements.request_contact_body.value }, contactHint: form.elements.contact_hint.value, requestContactHint: form.elements.request_contact_hint.value, offerCustomMessage: form.elements.offer_custom_message.value, requestCustomMessage: form.elements.request_custom_message.value };
         try { const response = await fetch('/api/admin/email-templates.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN }, body: JSON.stringify(body) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); elements.templatesMessage.textContent = 'E-Mail-Vorlagen gespeichert.'; elements.templatesMessage.className = 'message success'; }
         catch (error) { elements.templatesMessage.textContent = error.message; elements.templatesMessage.className = 'message error'; }
     }

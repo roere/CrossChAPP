@@ -339,6 +339,21 @@ tr.organization:hover { background: #faf7f7; }
 #email-templates-form fieldset { display: grid; gap: .7rem; }
 #email-templates-form textarea { resize: vertical; }
 #email-templates-form p { font-size: .7rem; overflow-wrap: anywhere; }
+#email-templates-form .email-template-actions { grid-column: 1 / -1; display: flex; justify-content: flex-start; }
+#email-templates-form .email-template-actions button { width: auto; justify-self: start; }
+.mail-preview-fixed { white-space: pre-wrap; padding: .85rem; background: #f6f6f6; border-left: 3px solid var(--bni-red); margin: .75rem 0; line-height: 1.5; }
+.mail-preview-subject { font-weight: 700; }
+.request-contact-identity { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem 1rem; margin-bottom: 1rem; }
+.request-contact-identity label:last-of-type { grid-column: 1 / -1; }
+.request-contact-identity .field-error { min-height: 1.1em; }
+.result-representation-requests { margin: .9rem 0; padding: .8rem; background: #fff6f7; border-left: 4px solid var(--bni-red); }
+.result-representation-requests h4 { margin: 0 0 .55rem; text-transform: uppercase; color: var(--bni-red-dark); font-size: .85rem; }
+.result-representation-request { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .35rem 0; }
+#representation-contact-date-options div { display: grid; gap: .45rem; }
+#representation-contact-date-options label { display: flex; align-items: center; gap: .5rem; }
+.representation-date-group + .representation-date-group { margin-top: 1.5rem; }
+.representation-provider-card { display: flex; align-items: center; gap: .75rem; padding: 1rem; border: 1px solid var(--line, #ddd); border-radius: .5rem; background: #fff; }
+.representation-provider-card .contact-provider { margin-left: auto; }
 
 @media (max-width: 1180px) {
     .stats { grid-template-columns: repeat(4, 1fr); }
@@ -368,6 +383,8 @@ tr.organization:hover { background: #faf7f7; }
 }
 
 @media (max-width: 640px) {
+    .request-contact-identity { grid-template-columns: 1fr; }
+    .request-contact-identity label:last-of-type { grid-column: auto; }
     .shell { width: min(100% - 1rem, 1480px); }
     .topbar-inner { justify-content: space-between; }
     .header-inner { display: block; padding-top: .8rem; }

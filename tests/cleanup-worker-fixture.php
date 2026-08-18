@@ -1,0 +1,9 @@
+<?php
+declare(strict_types=1);
+require_once '/var/www/html/src/Database.php';$db=(new Database())->connection();$action=getenv('TEST_ACTION');$orgId=990000001;$email='cleanup-worker@example.invalid';
+$db->prepare('DELETE FROM users WHERE email=:email')->execute([':email'=>$email]);$db->prepare('DELETE FROM organizations WHERE org_id=:id')->execute([':id'=>$orgId]);
+if($action==='cleanup'){echo"PASS cleanup worker fixture cleanup\n";exit;}
+if($action!=='setup'){echo"SKIP cleanup worker fixture (TEST_ACTION fehlt)\n";exit;}$now=gmdate('Y-m-d\TH:i:s\Z');$past=(new DateTimeImmutable('yesterday',new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+$insertOrg=$db->prepare("INSERT INTO organizations(org_id,org_type,chapter_name,meeting_day,timezone,created_at,updated_at)VALUES(:id,'CHAPTER','Cleanup Worker','Montag','Europe/Berlin',:now,:now)");$insertOrg->execute([':id'=>$orgId,':now'=>$now]);
+$insertUser=$db->prepare("INSERT INTO users(first_name,last_name,email,password_hash,home_chapter_org_id,role,status,email_verified_at,created_at,updated_at)VALUES('Cleanup','Worker',:email,:hash,:org,'user','active',:now,:now,:now)");$insertUser->execute([':email'=>$email,':hash'=>password_hash('cleanup-password',PASSWORD_DEFAULT),':org'=>$orgId,':now'=>$now]);$userId=(int)$db->lastInsertId();
+$db->prepare('INSERT INTO representation_requests(user_id,org_id,request_date,created_at,updated_at)VALUES(?,?,?,?,?)')->execute([$userId,$orgId,$past,$now,$now]);$db->prepare("INSERT INTO representation_offers(user_id,org_id,all_dates,date_signature,created_at,updated_at)VALUES(?,?,0,?,?,?)")->execute([$userId,$orgId,$past,$now,$now]);$offerId=(int)$db->lastInsertId();$db->prepare('INSERT INTO representation_offer_dates(offer_id,offer_date)VALUES(?,?)')->execute([$offerId,$past]);echo json_encode(['userId'=>$userId]);

@@ -2,6 +2,7 @@
     'use strict';
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const authenticated = document.querySelector('meta[name="auth-status"]')?.content === 'authenticated';
     const jsonHeaders = { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken };
 
     document.querySelector('#login-form')?.addEventListener('submit', login);
@@ -23,6 +24,7 @@
     document.querySelector('#result-list')?.addEventListener('click', toggleResultDetails);
     document.querySelector('#map-toggle')?.addEventListener('click', toggleMap);
     document.querySelector('.result-limit-options')?.addEventListener('click', selectResultLimit);
+    initializeRequestContact();
 
     if (document.querySelector('#data-basis')) loadDataBasis();
     if (document.querySelector('#home-chapter-results')) loadHomeChapters();
@@ -223,8 +225,8 @@
 
     function renderHomeChapters() {
         const result = document.querySelector('#home-chapter-results'); const country = document.querySelector('#home-chapter-country').value; const search = document.querySelector('#home-chapter-search').value.trim().toLocaleLowerCase('de'); const location = document.querySelector('#home-chapter-location').value.trim().toLocaleLowerCase('de');
-        const visible = (result._chapters || []).filter(item => { const full = [item.chapterName, item.city, item.postalCode, item.region, item.orgId].filter(Boolean).join(' ').toLocaleLowerCase('de'); const place = [item.city, item.postalCode].filter(Boolean).join(' ').toLocaleLowerCase('de'); return (!country || item.countryCode === country) && (!search || full.includes(search)) && (!location || place.includes(location)); }).slice(0, 80);
-        const fragment = document.createDocumentFragment(); visible.forEach(item => { const label = document.createElement('label'); label.className = 'home-chapter-result'; const radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'home_chapter_choice'; radio.value = item.orgId; radio.checked = document.querySelector('#home-chapter-id').value === String(item.orgId); const text = document.createElement('span'); const strong = document.createElement('strong'); strong.textContent = item.chapterName || `Organisation ${item.orgId}`; const small = document.createElement('small'); small.textContent = [item.postalCode, item.city, item.region, item.countryCode].filter(Boolean).join(' · '); text.append(strong, small); label.append(radio, text); fragment.append(label); }); result.replaceChildren(fragment); }
+        const visible = (result._chapters || []).filter(item => { const full = [item.chapterName, item.city, item.postalCode, item.region].filter(Boolean).join(' ').toLocaleLowerCase('de'); const place = [item.city, item.postalCode].filter(Boolean).join(' ').toLocaleLowerCase('de'); return (!country || item.countryCode === country) && (!search || full.includes(search)) && (!location || place.includes(location)); }).slice(0, 80);
+        const fragment = document.createDocumentFragment(); visible.forEach(item => { const label = document.createElement('label'); label.className = 'home-chapter-result'; const radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'home_chapter_choice'; radio.value = item.orgId; radio.checked = document.querySelector('#home-chapter-id').value === String(item.orgId); const text = document.createElement('span'); const strong = document.createElement('strong'); strong.textContent = item.chapterName || 'Chapter'; const small = document.createElement('small'); small.textContent = [item.postalCode, item.city, item.region, item.countryCode].filter(Boolean).join(' · '); text.append(strong, small); label.append(radio, text); fragment.append(label); }); result.replaceChildren(fragment); }
     function selectHomeChapter(event) { const radio = event.target.closest('input[type="radio"]'); if (!radio) return; document.querySelector('#home-chapter-id').value = radio.value; document.querySelector('#selected-home-chapter').textContent = `Heimatchapter ausgewählt: ${radio.closest('label').querySelector('strong').textContent}`; }
     function clearHomeChapter() { const input = document.querySelector('#home-chapter-id'); if (!input) return; input.value = ''; document.querySelector('#selected-home-chapter').textContent = 'Kein Heimatchapter ausgewählt.'; renderHomeChapters(); }
 
@@ -314,12 +316,44 @@
         appendExternalAction(actions, chapter.visitorRegistrationUrl, 'Als Besucher anmelden', 'primary');
         const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'result-detail-toggle secondary';
         toggle.dataset.id = chapter.orgId; toggle.setAttribute('aria-expanded', 'false'); toggle.setAttribute('aria-controls', `result-details-${chapter.orgId}`);
-        toggle.setAttribute('aria-label', `Details für ${chapter.chapterName || `Organisation ${chapter.orgId}`} öffnen`); toggle.textContent = '▶ Details';
+        toggle.setAttribute('aria-label', `Details für ${chapter.chapterName || 'Chapter'} öffnen`); toggle.textContent = '▶ Details';
         actions.prepend(toggle);
         const details = resultDetailPanel(chapter); details.hidden = true;
         const refreshStatus = document.createElement('p'); refreshStatus.className = 'result-refresh-status'; refreshStatus.setAttribute('aria-live', 'polite');
-        article.append(header, facts, actions, refreshStatus, details);
+        const requests = representationRequests(chapter);
+        article.append(header, facts); if (requests) article.append(requests); article.append(actions, refreshStatus, details);
         return article;
+    }
+
+    function representationRequests(chapter) {
+        const requests = chapter.representationRequests || []; if (!requests.length) return null;
+        const section = document.createElement('section'); section.className = 'result-representation-requests';
+        const heading = document.createElement('h4'); heading.textContent = 'Vertretung gesucht'; section.append(heading);
+        const anonymousNumbers = new Map();
+        requests.forEach(item => { const row = document.createElement('div'); row.className = 'result-representation-request'; const text = document.createElement('span');
+            const currentNumber = (anonymousNumbers.get(item.requestDate) || 0) + 1; anonymousNumbers.set(item.requestDate, currentNumber);
+            const person = authenticated ? item.displayName : `Person ${currentNumber}`; text.textContent = `${formatDateOnly(item.requestDate)} · ${person}`; row.append(text);
+            if (item.canContact && item.requestId) { const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary request-contact-button'; button.textContent = 'Kontaktieren'; button.dataset.requestId = item.requestId; row.append(button); }
+            else if (item.isOwn) { const own = document.createElement('span'); own.className = 'offer-meta'; own.textContent = 'Dein Gesuch'; row.append(own); }
+            section.append(row);
+        }); return section;
+    }
+
+    function initializeRequestContact() {
+        const dialog = document.querySelector('#request-contact-dialog'); if (!dialog) return;
+        const form = document.querySelector('#request-contact-form'), message = document.querySelector('#request-contact-message'), error = document.querySelector('#request-contact-error');
+        const identityFields = document.querySelector('#anonymous-request-contact-fields'), firstName = document.querySelector('#request-contact-first-name'), lastName = document.querySelector('#request-contact-last-name'), email = document.querySelector('#request-contact-email'); let requestId = null; let previewTimer = null;
+        identityFields.hidden = authenticated; [firstName,lastName,email].forEach(input => input.disabled = authenticated);
+        const openContact = async id => { requestId = Number(id); error.textContent = ''; dialog.showModal(); await loadPreview(); };
+        document.querySelector('#result-list')?.addEventListener('click', async event => { const button = event.target.closest('.request-contact-button'); if (!button) return; await openContact(Number(button.dataset.requestId)); });
+        const close = () => { if (dialog.open) dialog.close(); requestId = null; };
+        document.querySelector('#close-request-contact').addEventListener('click', close); document.querySelector('#cancel-request-contact').addEventListener('click', close); dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+        const payload = action => ({ action, request_id:requestId, custom_message:message.value, ...(authenticated ? {} : { contact_first_name:firstName.value, contact_last_name:lastName.value, contact_email:email.value }) });
+        async function loadPreview() { try { const response = await fetch('/api/representation/request-contact.php', { method:'POST', headers:jsonHeaders, body:JSON.stringify(payload('preview')) }); const data=await response.json(); if(!response.ok)throw new Error(data.error); const preview=data.preview; document.querySelector('#request-contact-hint').textContent=preview.hint; document.querySelector('#request-contact-subject').textContent=`Betreff: ${preview.subject}`; document.querySelector('#request-contact-before').textContent=preview.before; document.querySelector('#request-contact-after').textContent=preview.after; if(message.value==='')message.value=preview.customMessage; if(authenticated)message.focus(); } catch(cause){error.textContent=cause.message||'Die Vorschau konnte nicht geladen werden.';error.className='message error';} }
+        const setFieldError = (input, id, text) => { input.setAttribute('aria-invalid', String(Boolean(text))); document.querySelector(`#${id}`).textContent = text; return !text; };
+        const validateIdentity = () => { if(authenticated)return true; const firstOk=setFieldError(firstName,'request-contact-first-name-error',firstName.value.trim()?'':'Bitte gib deinen Vornamen ein.'); const lastOk=setFieldError(lastName,'request-contact-last-name-error',lastName.value.trim()?'':'Bitte gib deinen Nachnamen ein.'); const mailOk=setFieldError(email,'request-contact-email-error',/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())?'':'Bitte gib eine gültige E-Mail-Adresse ein.'); return firstOk&&lastOk&&mailOk; };
+        [firstName,lastName,email].forEach(input => { input.addEventListener('blur', () => { validateIdentity(); window.clearTimeout(previewTimer); previewTimer=window.setTimeout(loadPreview,150); }); input.addEventListener('input', () => { window.clearTimeout(previewTimer); previewTimer=window.setTimeout(loadPreview,350); }); });
+        form.addEventListener('submit', async event => { event.preventDefault(); if(!validateIdentity()){form.querySelector('[aria-invalid="true"]')?.focus();return;} const submit=form.querySelector('button[type=submit]');submit.disabled=true;error.textContent='';try{const response=await fetch('/api/representation/request-contact.php',{method:'POST',headers:jsonHeaders,body:JSON.stringify(payload('send'))});const data=await response.json();if(!response.ok)throw new Error(data.error);document.querySelector('#request-contact-content').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Deine Rückmeldung wurde gesendet.'}));}catch(cause){error.textContent=cause.message||'Die Rückmeldung konnte nicht gesendet werden.';error.className='message error';submit.disabled=false;}});
     }
 
     function resultDetailPanel(chapter) {
@@ -327,7 +361,7 @@
         const grid = document.createElement('div'); grid.className = 'detail-groups';
         grid.append(
             detailGroup('Chapter', [
-                ['Chaptername', chapter.chapterName], ['orgId', chapter.orgId], ['Typ', typeLabel(chapter.orgType)],
+                ['Chaptername', chapter.chapterName],
                 ['Region', chapter.region], ['Regions-ID', chapter.regionId], ['Land', countryLabel(chapter.countryCode)],
             ]),
             detailGroup('Treffen', [
@@ -526,10 +560,10 @@
         } catch { return document.createTextNode(String(url)); }
     }
 
-    function typeLabel(value) { return ({ CHAPTER: 'Chapter', CORE_GROUP: 'Im Aufbau', PLANNED_GROUP: 'Geplant' })[value] || value || '—'; }
     function countryLabel(value) { return ({ DE: 'Deutschland', AT: 'Österreich', CH: 'Schweiz' })[value] || value || '—'; }
     function detailStatusLabel(value) { return value === 'loaded' ? 'geladen' : value === 'error' ? 'Fehler' : 'nicht geladen'; }
     function formatTimestamp(value) { return value ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—'; }
+    function formatDateOnly(value) { return new Intl.DateTimeFormat('de-DE', { weekday:'short', day:'2-digit', month:'2-digit', year:'numeric', timeZone:'Europe/Berlin' }).format(new Date(`${value}T12:00:00+02:00`)); }
 
     function formatNumber(value) {
         return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);

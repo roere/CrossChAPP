@@ -46,8 +46,9 @@ $pageTitle = match ($requestedView) {
     'admin' => 'Admin | CrossChAPP',
     'vertretung' => 'Vertretung anbieten | CrossChAPP',
     'vertretung-finden' => 'Vertretung finden | CrossChAPP',
-    default => 'Crosschaptern | CrossChAPP',
+    default => 'CrossChAPPtern | CrossChAPP',
 };
+$assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__ . '/assets/' . $asset) ?: 1);
 ?>
 <!doctype html>
 <html lang="de">
@@ -56,17 +57,18 @@ $pageTitle = match ($requestedView) {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
     <meta name="csrf-token" content="<?= htmlspecialchars(Auth::csrfToken(), ENT_QUOTES, 'UTF-8') ?>">
+    <meta name="auth-status" content="<?= $currentUser !== null ? 'authenticated' : 'anonymous' ?>">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23cf2030'/%3E%3Cpath d='M21 10a8 8 0 1 0 0 12l-3-3a4 4 0 1 1 0-6z' fill='white'/%3E%3C/svg%3E">
     <?php if ($requestedView === 'crosschaptern'): ?>
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
     <?php endif; ?>
-    <link rel="stylesheet" href="/assets/app.css">
-    <script src="/assets/site.js" defer></script>
-    <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $isAdmin)): ?><script src="/assets/sort-utils.js" defer></script><?php endif; ?>
-    <?php if ($requestedView === 'vertretung'): ?><script src="/assets/representation.js" defer></script><?php endif; ?>
-    <?php if ($requestedView === 'vertretung-finden'): ?><script src="/assets/representation-find.js" defer></script><?php endif; ?>
-    <?php if ($requestedView === 'admin' && $isAdmin): ?><script src="/assets/app.js" defer></script><?php endif; ?>
+    <link rel="stylesheet" href="/assets/app.css?v=<?= $assetVersion('app.css') ?>">
+    <script src="/assets/site.js?v=<?= $assetVersion('site.js') ?>" defer></script>
+    <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $isAdmin)): ?><script src="/assets/sort-utils.js?v=<?= $assetVersion('sort-utils.js') ?>" defer></script><?php endif; ?>
+    <?php if ($requestedView === 'vertretung'): ?><script src="/assets/representation.js?v=<?= $assetVersion('representation.js') ?>" defer></script><?php endif; ?>
+    <?php if ($requestedView === 'vertretung-finden'): ?><script src="/assets/representation-find.js?v=<?= $assetVersion('representation-find.js') ?>" defer></script><?php endif; ?>
+    <?php if ($requestedView === 'admin' && $isAdmin): ?><script src="/assets/app.js?v=<?= $assetVersion('app.js') ?>" defer></script><?php endif; ?>
 </head>
 <body>
     <header class="site-header">
@@ -81,7 +83,7 @@ $pageTitle = match ($requestedView) {
                 </a>
                 <div class="header-navigation">
                     <nav aria-label="Hauptnavigation">
-                        <a class="<?= $requestedView === 'crosschaptern' ? 'active' : '' ?>" href="/?view=crosschaptern">Crosschaptern</a>
+                        <a class="<?= $requestedView === 'crosschaptern' ? 'active' : '' ?>" href="/?view=crosschaptern">CrossChAPPtern</a>
                         <a class="<?= $requestedView === 'vertretung' ? 'active' : '' ?>" href="/?view=vertretung">Vertretung anbieten</a>
                         <a class="<?= $requestedView === 'vertretung-finden' ? 'active' : '' ?>" href="/?view=vertretung-finden">Vertretung finden</a>
                         <?php if ($isAdmin): ?>

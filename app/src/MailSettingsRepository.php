@@ -53,7 +53,7 @@ final class MailSettingsRepository
 
     public function saveTemplate(string $key, string $subject, string $body): void
     {
-        if (!in_array($key, ['verify_email', 'reset_password'], true) || trim($subject) === '' || trim($body) === '' || strlen($subject) > 250 || strlen($body) > 20000) throw new InvalidArgumentException('Die E-Mail-Vorlage ist ungültig.');
+        if (!in_array($key, ['verify_email', 'reset_password', 'representation_contact', 'representation_request_contact'], true) || trim($subject) === '' || trim($body) === '' || strlen($subject) > 250 || strlen($body) > 20000) throw new InvalidArgumentException('Die E-Mail-Vorlage ist ungültig.');
         $statement = $this->database->prepare('UPDATE email_templates SET subject = :subject, body = :body, updated_at = :updated_at WHERE template_key = :key');
         $statement->execute([':subject' => trim($subject), ':body' => trim($body), ':updated_at' => self::now(), ':key' => $key]);
     }
@@ -62,10 +62,52 @@ final class MailSettingsRepository
     public function render(string $key, array $variables): array
     {
         $templates = $this->templates(); if (!isset($templates[$key])) throw new RuntimeException('E-Mail-Vorlage fehlt.');
-        $allowed = $key === 'verify_email' ? ['first_name', 'last_name', 'email', 'verification_link', 'app_name'] : ['first_name', 'last_name', 'reset_link', 'app_name'];
+        $allowed = match ($key) {
+            'verify_email' => ['first_name', 'last_name', 'email', 'verification_link', 'app_name'],
+            'reset_password' => ['first_name', 'last_name', 'reset_link', 'app_name'],
+            'representation_contact' => ['provider_first_name', 'requester_first_name', 'requester_last_name', 'requester_full_name', 'requester_email', 'requester_chapter', 'requested_date', 'custom_message', 'app_name'],
+            'representation_request_contact' => ['request_owner_first_name', 'contact_first_name', 'contact_last_name', 'contact_full_name', 'contact_email', 'contact_chapter', 'requested_chapter', 'requested_date', 'custom_message', 'app_name'],
+            default => throw new RuntimeException('E-Mail-Vorlage fehlt.'),
+        };
         $replace = [];
         foreach ($allowed as $name) $replace['{{' . $name . '}}'] = $variables[$name] ?? '';
-        return ['subject' => strtr($templates[$key]['subject'], $replace), 'body' => strtr($templates[$key]['body'], $replace)];
+        $clean = static function (string $text): string {
+            $text = (string) preg_replace('/{{(?!custom_message\b)[^{}]+}}/', '', $text);
+            return (string) preg_replace('/\h+([,.;:!?])/', '$1', $text);
+        };
+        return ['subject' => $clean(strtr($templates[$key]['subject'], $replace)), 'body' => $clean(strtr($templates[$key]['body'], $replace))];
+    }
+
+    public function contactHint(): string
+    {
+        return (string) $this->database->query('SELECT contact_hint FROM representation_settings WHERE id = 1')->fetchColumn();
+    }
+
+    public function saveContactHint(string $hint): void
+    {
+        $hint = trim($hint);
+        if ($hint === '' || strlen($hint) > 4000) throw new InvalidArgumentException('Der Hinweistext ist ungültig.');
+        $statement = $this->database->prepare('UPDATE representation_settings SET contact_hint = :hint, updated_at = :updated WHERE id = 1');
+        $statement->execute([':hint' => $hint, ':updated' => self::now()]);
+    }
+
+    public function requestContactHint(): string { return (string) $this->database->query('SELECT request_contact_hint FROM representation_settings WHERE id = 1')->fetchColumn(); }
+    public function saveRequestContactHint(string $hint): void
+    {
+        $hint = trim($hint); if ($hint === '' || strlen($hint) > 4000) throw new InvalidArgumentException('Der Hinweistext ist ungültig.');
+        $statement = $this->database->prepare('UPDATE representation_settings SET request_contact_hint = :hint, updated_at = :updated WHERE id = 1');
+        $statement->execute([':hint' => $hint, ':updated' => self::now()]);
+    }
+
+    public function offerCustomMessage(): string { return (string) $this->database->query('SELECT offer_custom_message FROM representation_settings WHERE id = 1')->fetchColumn(); }
+    public function requestCustomMessage(): string { return (string) $this->database->query('SELECT request_custom_message FROM representation_settings WHERE id = 1')->fetchColumn(); }
+
+    public function saveCustomMessages(string $offerMessage, string $requestMessage): void
+    {
+        $offerMessage = trim($offerMessage); $requestMessage = trim($requestMessage);
+        if (strlen($offerMessage) < 20 || strlen($offerMessage) > 3000 || strlen($requestMessage) < 20 || strlen($requestMessage) > 3000) throw new InvalidArgumentException('Die Standardnachrichten sind ungültig.');
+        $statement = $this->database->prepare('UPDATE representation_settings SET offer_custom_message = :offer, request_custom_message = :request, updated_at = :updated WHERE id = 1');
+        $statement->execute([':offer' => $offerMessage, ':request' => $requestMessage, ':updated' => self::now()]);
     }
 
     private static function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }

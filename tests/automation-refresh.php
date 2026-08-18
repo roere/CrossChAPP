@@ -24,6 +24,7 @@ $organizations->upsertMapOrganizations([
     ['orgId' => 2, 'cmsSecurityHash' => 'two', 'countryCode' => 'DE', 'orgType' => 'CHAPTER', 'longitude' => 7, 'latitude' => 50],
     ['orgId' => 3, 'cmsSecurityHash' => 'core', 'countryCode' => 'DE', 'orgType' => 'CORE_GROUP', 'longitude' => 7, 'latitude' => 50],
     ['orgId' => 4, 'cmsSecurityHash' => 'four', 'countryCode' => 'DE', 'orgType' => 'CHAPTER', 'longitude' => 7, 'latitude' => 50],
+    ['orgId' => 6, 'cmsSecurityHash' => 'planned', 'countryCode' => 'DE', 'orgType' => 'PLANNED_GROUP', 'longitude' => 7, 'latitude' => 50],
 ]);
 $organizations->saveDetails(1, ['chapterName' => 'Alt', 'meetingDay' => 'Montag', 'meetingTime' => '07:00', 'status' => 'CHAPTER']);
 $organizations->saveDetails(4, ['chapterName' => 'Alt 4', 'meetingDay' => 'Montag', 'meetingTime' => '07:00', 'status' => 'CHAPTER']);
@@ -51,11 +52,12 @@ $invalidMapDays = false;
 try { $automation->updateSettings(true, 5, true, 20, 50, true, 31); } catch (InvalidArgumentException) { $invalidMapDays = true; }
 $check($invalidMapDays, 'Z-Tage außerhalb 1 bis 30 abweisen.');
 $automaticDue = $organizations->findAutomaticDueChapters(1, 10);
-$check(count($automaticDue) === 3, 'Y findet ungeladene und stale CHAPTER und schließt CORE_GROUP aus.');
-$check(array_column($automaticDue, 'orgId') === [2, 1, 4], 'Y priorisiert not_loaded vor alten loaded-Datensätzen stabil.');
+$check(count($automaticDue) === 5, 'Y findet ungeladene und stale Organisationen aller bekannten Typen.');
+$check(array_column($automaticDue, 'orgId') === [2, 3, 6, 1, 4], 'Y priorisiert not_loaded typunabhängig vor alten loaded-Datensätzen stabil.');
 $check($organizations->isStaleLoadedChapter(1, 1), 'X erkennt stale.');
 $check($organizations->isAutomaticDueChapter(2, 1), 'not_loaded und details_loaded_at NULL sind Y-fällig.');
-$check(!$organizations->isAutomaticDueChapter(3, 1), 'Nicht-CHAPTER ist nicht Y-fällig.');
+$check($organizations->isAutomaticDueChapter(3, 1), 'CORE_GROUP ist Y-fällig.');
+$check($organizations->isAutomaticDueChapter(6, 1), 'PLANNED_GROUP ist Y-fällig.');
 
 $detailsPayload = static fn (int $orgId): string => json_encode([
     'content' => ['orgId' => $orgId, 'orgType' => 'CHAPTER', 'chapterDetails' => [
@@ -79,9 +81,29 @@ $organizations->upsertMapOrganizations([
 $errorCandidate = $serviceFor(static fn () => ['status' => 503, 'headers' => [], 'body' => '{}'])
     ->refresh(5, 'automatic', 1);
 $check($errorCandidate['status'] === 'error' && $organizations->isAutomaticDueChapter(5, 1), 'Fehlerhaftes Chapter bleibt für Y erneut versuchbar.');
-$check(array_column($organizations->findAutomaticDueChapters(1, 10), 'orgId') === [5, 1, 4], 'Y priorisiert error vor alten loaded-Datensätzen.');
+$check(array_column($organizations->findAutomaticDueChapters(1, 10), 'orgId') === [3, 6, 5, 1, 4], 'Y priorisiert not_loaded, dann error, dann alte loaded-Datensätze.');
 $dueStats = $automation->statistics(1, 1);
-$check($dueStats['automaticNeverLoaded'] === 0 && $dueStats['automaticRetryableErrors'] === 1 && $dueStats['staleAutomatic'] === 2 && $dueStats['automaticDueTotal'] === 3, 'Y-Kategorien sind überschneidungsfrei und korrekt.');
+$check($dueStats['automaticNeverLoaded'] === 2 && $dueStats['automaticRetryableErrors'] === 1 && $dueStats['staleAutomatic'] === 2 && $dueStats['automaticDueTotal'] === 5, 'Y-Kategorien sind typübergreifend, überschneidungsfrei und korrekt.');
+$check($dueStats['automaticDueChapter'] === 3 && $dueStats['automaticDueCoreGroup'] === 1 && $dueStats['automaticDuePlannedGroup'] === 1, 'Y-Statistik schlüsselt die fälligen Organisationstypen korrekt auf.');
+
+// Erfolgreiche automatische und nutzungsabhängige Detailantworten sind nicht vom Organisationstyp abhängig.
+$typeDatabase = (new Database(':memory:'))->connection();
+$typeOrganizations = new OrganizationRepository($typeDatabase); $typeAutomation = new AutomationRepository($typeDatabase);
+$typeAutomation->updateSettings(true, 1, true, 1, 50);
+$typeOrganizations->upsertMapOrganizations([
+    ['orgId' => 31, 'cmsSecurityHash' => 'core-success', 'countryCode' => 'DE', 'orgType' => 'CORE_GROUP', 'longitude' => 7, 'latitude' => 50],
+    ['orgId' => 32, 'cmsSecurityHash' => 'planned-success', 'countryCode' => 'DE', 'orgType' => 'PLANNED_GROUP', 'longitude' => 7, 'latitude' => 50],
+]);
+$typeCalls = [];
+$typeService = new ChapterRefreshService($typeOrganizations, $typeAutomation, new BniClient(new HttpClient(static function (string $url) use (&$typeCalls): array {
+    $orgId = str_contains($url, 'core-success') ? 31 : 32; $typeCalls[] = $orgId;
+    return ['status' => 200, 'headers' => [], 'body' => json_encode(['content' => ['orgId' => $orgId, 'orgType' => $orgId === 31 ? 'CORE_GROUP' : 'PLANNED_GROUP', 'chapterDetails' => ['name' => 'Organisation ' . $orgId, 'meetingDay' => 'Freitag', 'meetingTime' => '07:00']]], JSON_THROW_ON_ERROR)];
+})));
+$check($typeService->refresh(31, 'automatic', 1)['status'] === 'success' && $typeOrganizations->find(31)['detailStatus'] === 'loaded', 'CORE_GROUP-Detailantwort wird durch Y gespeichert.');
+$check($typeService->refresh(32, 'automatic', 1)['status'] === 'success' && $typeOrganizations->find(32)['detailStatus'] === 'loaded', 'PLANNED_GROUP-Detailantwort wird durch Y gespeichert.');
+$typeDatabase->exec("UPDATE organizations SET details_loaded_at = '2020-01-01T00:00:00Z' WHERE org_id = 31");
+$check($typeService->refresh(31, 'usage_search', 1)['status'] === 'success' && $typeCalls === [31, 32, 31], 'X aktualisiert eine tatsächlich verwendete CORE_GROUP ohne Typ-Sperre.');
+
 $calls = 0;
 $success = $serviceFor(static function () use (&$calls, $detailsPayload): array {
     $calls++;

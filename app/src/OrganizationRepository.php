@@ -100,20 +100,16 @@ final class OrganizationRepository
     {
         $statement = $this->database->prepare(<<<'SQL'
             SELECT * FROM organizations
-            WHERE org_type = :org_type
-              AND detail_status = :detail_status
+            WHERE detail_status = :detail_status
               AND chapter_name IS NOT NULL
               AND latitude IS NOT NULL
               AND longitude IS NOT NULL
               AND meeting_day IS NOT NULL
               AND meeting_time IS NOT NULL
-              AND (status IS NULL OR status = :active_status)
             ORDER BY org_id
             SQL);
         $statement->execute([
-            ':org_type' => 'CHAPTER',
             ':detail_status' => 'loaded',
-            ':active_status' => 'CHAPTER',
         ]);
 
         return array_map([$this, 'toApi'], $statement->fetchAll());
@@ -123,19 +119,15 @@ final class OrganizationRepository
     {
         $statement = $this->database->prepare(<<<'SQL'
             SELECT COUNT(*) FROM organizations
-            WHERE org_type = :org_type
-              AND detail_status = :detail_status
+            WHERE detail_status = :detail_status
               AND chapter_name IS NOT NULL
               AND latitude IS NOT NULL
               AND longitude IS NOT NULL
               AND meeting_day IS NOT NULL
               AND meeting_time IS NOT NULL
-              AND (status IS NULL OR status = :active_status)
             SQL);
         $statement->execute([
-            ':org_type' => 'CHAPTER',
             ':detail_status' => 'loaded',
-            ':active_status' => 'CHAPTER',
         ]);
         return (int) $statement->fetchColumn();
     }
@@ -202,8 +194,7 @@ final class OrganizationRepository
         }
         $statement = $this->database->prepare(<<<'SQL'
             SELECT * FROM organizations
-            WHERE org_type = 'CHAPTER'
-              AND cms_security_hash IS NOT NULL AND cms_security_hash != ''
+            WHERE cms_security_hash IS NOT NULL AND cms_security_hash != ''
               AND (
                   detail_status IN ('not_loaded', 'error')
                   OR details_loaded_at IS NULL
@@ -230,7 +221,7 @@ final class OrganizationRepository
         if ($days < 1 || $days > 365) return false;
         $statement = $this->database->prepare(<<<'SQL'
             SELECT COUNT(*) FROM organizations
-            WHERE org_id = :org_id AND org_type = 'CHAPTER'
+            WHERE org_id = :org_id
               AND (
                   detail_status IN ('not_loaded', 'error')
                   OR details_loaded_at IS NULL
@@ -249,7 +240,6 @@ final class OrganizationRepository
         $statement = $this->database->prepare(<<<'SQL'
             SELECT COUNT(*) FROM organizations
             WHERE org_id = :org_id
-              AND org_type = 'CHAPTER'
               AND detail_status = 'loaded'
               AND details_loaded_at IS NOT NULL
               AND datetime(details_loaded_at) < datetime('now', :age)

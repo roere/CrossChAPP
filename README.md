@@ -14,9 +14,9 @@ Danach ist die Anwendung unter <http://localhost:8082/> erreichbar.
 
 ## Anwendersicht
 
-Die öffentliche Navigation besitzt zwei Bereiche:
+Die öffentliche Navigation besitzt drei Bereiche:
 
-- **Crosschaptern** unter `/` beziehungsweise `/?view=crosschaptern` enthält die vollständige Chapter-Suche.
+- **CrossChAPPtern** unter `/` beziehungsweise `/?view=crosschaptern` enthält die vollständige Chapter-Suche.
 - **Vertretung anbieten** unter `/?view=vertretung` speichert für jedes ausgewählte Chapter ein eigenes Angebot mit konkreten künftigen Terminen oder „Immer“. Eine Mehrfachauswahl wird dabei atomar in mehrere Einzelangebote aufgeteilt; identische Angebote werden abgewiesen. Das eigene Heimatchapter ist sichtbar, aber client- und serverseitig ausgeschlossen. Eigene Angebote bleiben in SQLite erhalten und werden über einen barrierearmen CrossChAPP-Löschdialog gelöscht.
 - **Vertretung finden** ist immer in der Navigation sichtbar. Ausgeloggte Benutzer erhalten eine Anmeldungsmöglichkeit, Konten ohne Heimatchapter einen lokalen Hinweis; in beiden Fällen wird die Angebots-API nicht aufgerufen. Mit Heimatchapter werden ausschließlich aktuelle Angebote anderer Benutzer für dieses Chapter angezeigt; Namen erscheinen als Vorname plus Nachnamensinitial.
 - Beide Vertretungsbereiche verwenden ausschließlich lokale SQLite-Organisationsdaten. Sie lösen keine BNI-Abfragen aus. Schreibzugriffe sind session- und CSRF-geschützt; das Zielchapter der Suche wird serverseitig aus dem Benutzerprofil bestimmt.
@@ -33,9 +33,11 @@ Unter <http://localhost:8082/> stehen folgende Suchkriterien bereit:
 - Ergebnisanzahl 5, 10, 20, 50 oder alle lokalen Treffer; Standard ist 10
 - Sortierung nach Entfernung, Uhrzeit oder Mitgliederzahl
 
+Ein öffentlicher Organisationstyp-Filter und eine Typkennzeichnung in Trefferkarten oder Details werden bewusst nicht angeboten.
+
 `früh` bedeutet Meetingbeginn vor 09:00 Uhr, `spät` beginnt ab 09:00 Uhr. Standard ist Entfernung aufsteigend. „Alle“ hebt nur das serverseitige Ergebnislimit auf und umfasst weiterhin ausschließlich passende SQLite-Datensätze.
 
-Die Suchantwort berücksichtigt ausschließlich bestehende `CHAPTER`-Datensätze mit lokal vorhandenen Namen, Koordinaten, Wochentag und Uhrzeit. Sie wird immer unmittelbar aus SQLite erzeugt und wartet nicht auf BNI. Ist die nutzungsabhängige Aktualisierung aktiviert, stößt der Browser erst nach der lokalen Antwort für tatsächlich angezeigte, veraltete Treffer einen getrennten kontrollierten Refresh an.
+Die Suchantwort berücksichtigt datengetrieben alle lokal bekannten Organisationstypen, sofern Detailstatus, Name, Koordinaten, Wochentag und Uhrzeit eine sinnvolle Treffendarstellung erlauben. Sie wird immer unmittelbar aus SQLite erzeugt und wartet nicht auf BNI. Ist die nutzungsabhängige Aktualisierung aktiviert, stößt der Browser erst nach der lokalen Antwort für tatsächlich angezeigte, veraltete Treffer einen getrennten kontrollierten Refresh an. Der Organisationstyp bleibt dabei intern erhalten, wird im öffentlichen Suchbereich aber weder gefiltert noch angezeigt.
 
 Trefferkarten lassen sich ohne weiteren Request aufklappen und zeigen alle mit der Suchantwort gelieferten lokalen Chapterdetails. Die einblendbare Leaflet-Karte verwendet OpenStreetMap-Kacheln und markiert den geocodierten Suchstandort sowie genau die aktuell zurückgegebenen Treffer. Chapter werden weder für die Karte geocodiert noch bei BNI nachgeladen.
 
@@ -183,7 +185,7 @@ Der Detail-Batch ist vom Button „Grunddaten von BNI aktualisieren“ getrennt:
 Der standardmäßig geschlossene Adminbereich „Automatisierter Import“ verwaltet drei voneinander unabhängige, dauerhaft in SQLite gespeicherte Mechanismen. Alle sind initial deaktiviert:
 
 - **X – Aktualisierung bei Nutzung:** Standardalter 7 Tage. Nach einer lokalen Suchantwort werden nur die tatsächlich ausgegebenen veralteten Treffer in eine deduplizierte Browser-Queue gestellt. Auch das Öffnen einer veralteten Detailkarte kann einen Refresh anstoßen. Lokale Daten bleiben sofort sichtbar; die Suche blockiert nicht.
-- **Y – automatische Aktualisierung:** Standardalter 30 Tage. Der lokale Docker-Worker prüft standardmäßig alle 60 Minuten und verarbeitet pro Lauf höchstens 10 fällige `CHAPTER`-Datensätze. Zuerst werden noch nie geladene Chapterdetails erstmalig geladen, danach erneut versuchbare Fehler und anschließend bereits geladene, aber veraltete Details. Innerhalb dieser Gruppen bleibt die Reihenfolge stabil.
+- **Y – automatische Aktualisierung:** Standardalter 30 Tage. Der lokale Docker-Worker prüft standardmäßig alle 60 Minuten und verarbeitet pro Lauf höchstens 10 fällige Organisationen der Typen `CHAPTER`, `CORE_GROUP` und `PLANNED_GROUP`. Zuerst werden noch nie geladene Details erstmalig geladen, danach erneut versuchbare Fehler und anschließend bereits geladene, aber veraltete Details. Innerhalb dieser Gruppen bleibt die Reihenfolge stabil. Welche Detailfelder tatsächlich verfügbar sind, hängt von der Antwort des öffentlichen BNI-Detailendpunkts ab; fehlende Felder bleiben lokal `NULL`.
 - **Z – automatische Grunddatenaktualisierung:** Standardalter 1 Tag, konfigurierbar von 1 bis 30 Tagen. Fehlt ein erfolgreicher Sammelimport oder ist `last_map_refresh_at` älter als Z, führt der Worker genau einen `getMapData`-Request aus und verwendet denselben SQLite-UPsert wie der manuelle Adminimport. Grunddaten laufen vor Y; Details werden weder gelöscht noch automatisch nachgeladen.
 
 Die Schwellwerte X und Y sind im Bereich 1 bis 365 Tage konfigurierbar. Änderungen werden erst mit „Einstellungen speichern“ aktiv. Der Worker läuft nur zusammen mit der lokalen Docker-Anwendung; ist Y ausgeschaltet, führt er keine BNI-Anfrage aus.
@@ -196,7 +198,9 @@ Alle Trigger (`manual`, `usage_search`, `usage_detail`, `automatic`) verwenden d
 
 `chapter_refresh_log` speichert ausschließlich technische Metadaten zu Trigger, Zeitpunkt, Ergebnis und HTTP-Fehlerkategorie. Daraus sowie aus den lokalen Chapterdaten entstehen die Adminstatistiken; dafür erfolgen keine BNI-Abfragen. `chapter_refresh_locks` enthält kurzlebige Sperren, `automation_runtime` den Worker-Heartbeat und den nächsten vorgesehenen Prüflauf.
 
-Die Y-Statistik trennt überschneidungsfrei zwischen noch nie geladenen Chaptern, erneut versuchbaren Fehlern und bereits geladenen, nach Y veralteten Chaptern. Deren Summe wird als „Für Automatik fällig“ angezeigt. Eine erfolgreiche Erstbefüllung setzt `detail_status = loaded` und `details_loaded_at`; enthält die Antwort die notwendigen Treffendaten, wächst dadurch automatisch die ausschließlich lokale Suchbasis.
+Die Y-Statistik trennt überschneidungsfrei zwischen noch nie geladenen Organisationen, erneut versuchbaren Fehlern und bereits geladenen, nach Y veralteten Organisationen. Sie weist die Fälligkeit zusätzlich nach Chapter, Gruppen im Aufbau und geplanten Gruppen aus. Eine erfolgreiche Erstbefüllung setzt `detail_status = loaded` und `details_loaded_at`; enthält die Antwort die notwendigen Treffendaten, wächst dadurch automatisch die ausschließlich lokale Suchbasis.
+
+Y berücksichtigt `CHAPTER`, `CORE_GROUP` („Im Aufbau“) und `PLANNED_GROUP` („Geplant“) nach denselben Fälligkeits-, Locking-, Tageslimit- und Schutzregeln. X besitzt ebenfalls keine Typ-Sperre und aktualisiert ausschließlich die konkret in einem Nutzungskontext ausgegebene Organisation. Z bleibt davon unabhängig und aktualisiert die Grunddaten aller Typen über genau einen Sammelrequest. Der ausdrücklich gestartete manuelle Detail-Batch bleibt dagegen weiterhin auf bestehende `CHAPTER` beschränkt.
 
 Geschützte Automatisierungs-APIs:
 
@@ -205,13 +209,29 @@ GET|POST /api/automation/settings.php
 GET      /api/automation/stats.php
 ```
 
-Die öffentliche lokale Refresh-API akzeptiert ausschließlich eine vorhandene `org_id` und den Trigger `usage_search` oder `usage_detail`; Aktivierung, Typ, Alter und Sperre werden serverseitig erneut geprüft:
+Die öffentliche lokale Refresh-API akzeptiert ausschließlich eine vorhandene `org_id` und den Trigger `usage_search` oder `usage_detail`; Aktivierung, Alter und Sperre werden serverseitig erneut geprüft:
 
 ```text
 POST /api/refresh/usage.php
 ```
 
 ### Lokale Daten
+
+### Vertretungsangebote und Kontaktanfragen
+
+„Vertretung finden“ zeigt ausschließlich Angebote für das serverseitig im Benutzerkonto hinterlegte Heimatchapter. Konkrete zukünftige Termine werden chronologisch gruppiert; pauschale „Immer“-Anbieter ergänzen diese vorhandenen Termine, erzeugen jedoch keine künstlichen Folgetermine, und erscheinen zusätzlich in einem eigenen Bereich. Anbieter werden nur als Vorname plus Nachnamensinitial dargestellt; E-Mail-Adresse, Benutzer-ID und Heimatchaptername des Anbieters werden nicht ausgegeben.
+
+Angemeldete Benutzer mit Heimatchapter können unter „Meine Vertretungsgesuche“ über einen nativen Datumspicker konkrete heutige oder zukünftige Meetingtermine speichern. Ein falscher Wochentag wird sofort clientseitig markiert und zwingend nochmals serverseitig abgewiesen. Der Server übernimmt das Zielchapter aus dem Benutzerkonto und akzeptiert nur den regulären Meeting-Wochentag in der hinterlegten Chapter-Zeitzone (Fallback `Europe/Berlin`). Gesuche werden additiv in `representation_requests` gespeichert, chronologisch angezeigt und über das X am Chip unmittelbar gelöscht. Ein Gesuch erzeugt einen sichtbaren Termin auch ohne vorhandenen Anbieter; pauschale „Immer“-Anbieter werden auch dort ergänzt. Es gibt weder frei wählbare Chapter-IDs noch BNI-Requests in diesem Ablauf.
+
+Kontaktanfragen werden über CrossChAPP-Overlays versendet. Im angebotsorientierten unteren Block besitzt jedes Angebot genau einen Kontaktbutton: Ein Einzeltermin ist fest vorbelegt, bei mehreren Terminen stehen ausschließlich die noch gültigen Angebotstermine zur Auswahl, ein „Immer“-Angebot verwendet weiterhin den regulären Meetingtag. Die administrativ konfigurierte Vorlage wird serverseitig am Platzhalter `{{custom_message}}` geteilt; Betreff sowie feste Teile vor und nach dem editierbaren Freitext zeigen bereits die vollständige spätere Mail. Unter Admin → Sonstiges sind für Angebotsanfragen und Antworten auf Gesuche zwei getrennte, persistente Standardnachrichten pflegbar. Sie befüllen den editierbaren Freitext beim Öffnen des jeweiligen Overlays. Fehlen Pflichtplatzhalter, ist der automatisch ergänzte Pflichtblock ebenfalls in der Vorschau sichtbar. Beim Versand übermittelt der Browser weiterhin nur Referenz, Termin und Freitext; der Server baut die Mail erneut aus der aktuellen Vorlage auf.
+
+CrossChAPPtern lädt aktive Vertretungsgesuche für alle tatsächlich zurückgegebenen Treffer in einer einzigen lokalen SQLite-Abfrage. Anonym enthält die API keinerlei Namensbestandteile; das Frontend nummeriert die Gesuche je sichtbarem Termin lediglich als „Person 1“, „Person 2“ usw. Eine Kontaktaufnahme ist ohne Konto möglich: Vorname, Nachname und E-Mail werden im Overlay validiert, erscheinen in der vollständigen Vorschau und bestimmen das Reply-To. Empfänger und Chapter kommen ausschließlich serverseitig aus dem Gesuch. Anonyme Kontakte sind per Session-CSRF, fünf Anfragen je IP und Stunde sowie zehnminütigem E-Mail-Hash-/Gesuch-Dublettenschutz abgesichert; Klartext-E-Mails werden nicht protokolliert. Eingeloggt bleiben Initialname, unveränderbare Kontodaten und das bestehende Limit von zehn Kontakten je Stunde erhalten. Die Vorlage „Vertretungsgesuch annehmen“, ihr Hinweistext und ihre Standardnachricht liegen unter Admin → Sonstiges.
+
+Unter „Vertretung anbieten“ gibt es bewusst keinen öffentlichen Organisationstyp-Filter und keine Typspalte oder Typ-Sortierung. `org_type` bleibt intern erhalten; Datum, Land, Freitext, Ort/PLZ und Umkreis bestimmen gemeinsam die sichtbare lokale Auswahl. Gerenderte Mailvorschauen und versendete Mails werden nach der erlaubten Platzhalterersetzung zusätzlich von verbliebenen `{{...}}`-Tokens bereinigt. Im anonymen Gesuchskontakt wird der Empfängername nicht eingesetzt; eine Vorlage wie `Hallo {{request_owner_first_name}},` erscheint dort neutral als `Hallo,`.
+
+`RepresentationCleanupService` entfernt bei jedem Workerzyklus sowie vor dem Lesen von Gesuchen/Angeboten abgelaufene Gesuche und vergangene Angebotstermine anhand der jeweiligen Chapter-Zeitzone. Bleibt bei einem datumsgebundenen Angebot kein heutiger oder zukünftiger Termin übrig, wird auch das leere Angebot entfernt. „Immer“-Angebote werden nicht automatisch gelöscht. Der Cleanup arbeitet ausschließlich in SQLite und erzeugt keine externen Requests.
+
+Die internen Organisations-IDs bleiben für APIs und Persistenz erhalten, werden in öffentlichen Chapter- und Vertretungsansichten jedoch nicht angezeigt. Der Adminbereich zeigt sie weiterhin.
 
 ```text
 GET /api/bni/local.php

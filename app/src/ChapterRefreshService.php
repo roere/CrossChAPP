@@ -32,8 +32,8 @@ final class ChapterRefreshService
             return ['orgId' => $orgId, 'status' => 'skipped', 'reason' => 'disabled'];
         }
         $organization = $this->organizations->find($orgId);
-        if ($organization === null || ($triggerType !== 'manual' && $organization['orgType'] !== 'CHAPTER')) {
-            return ['orgId' => $orgId, 'status' => 'skipped', 'reason' => 'not_chapter'];
+        if ($organization === null) {
+            return ['orgId' => $orgId, 'status' => 'skipped', 'reason' => 'not_found'];
         }
         if (!is_string($organization['cmsSecurityHash'] ?? null) || trim($organization['cmsSecurityHash']) === '') {
             return ['orgId' => $orgId, 'status' => 'skipped', 'reason' => 'missing_hash'];

@@ -7,12 +7,11 @@
     const state = { organizations: [], offers: [], selectedDates: new Set(), selectedOrganizations: new Set(), allDates: false, location: null, viewer: { authenticated: false, homeChapterOrgId: null }, pendingDelete: null, deleteTrigger: null };
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const countryLabels = { DE: 'Deutschland', AT: 'Österreich', CH: 'Schweiz' };
-    const typeLabels = { CHAPTER: 'Chapter', CORE_GROUP: 'Im Aufbau', PLANNED_GROUP: 'Geplant' };
     const elements = {
         date: document.querySelector('#representation-date'), addDate: document.querySelector('#add-representation-date'),
         allDates: document.querySelector('#representation-all-dates'), dateMessage: document.querySelector('#representation-date-message'),
         dateChips: document.querySelector('#representation-date-chips'), country: document.querySelector('#representation-country'),
-        type: document.querySelector('#representation-type'), text: document.querySelector('#representation-text'),
+        text: document.querySelector('#representation-text'),
         location: document.querySelector('#representation-location'), radius: document.querySelector('#representation-radius'),
         applyRadius: document.querySelector('#apply-representation-radius'), locationMessage: document.querySelector('#representation-location-message'),
         selectVisible: document.querySelector('#select-visible-representations'), clear: document.querySelector('#clear-representations'),
@@ -26,9 +25,7 @@
     const sortState = window.CrossChappSort.bind(document.querySelector('#representation-table'), render);
     const sortFields = {
         chapterName: { type: 'string', value: item => item.chapterName },
-        orgId: { type: 'number', value: item => item.orgId },
         country: { type: 'string', value: item => countryLabels[item.countryCode] || item.countryCode },
-        type: { type: 'string', value: item => typeLabels[item.orgType] || item.orgType },
         city: { type: 'string', value: item => item.city },
         meetingDay: { type: 'weekday', value: item => item.meetingDay },
         meetingTime: { type: 'time', value: item => item.meetingTime },
@@ -39,7 +36,7 @@
     elements.date.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); addDate(); } });
     elements.allDates.addEventListener('change', () => { state.allDates = elements.allDates.checked; renderDates(); render(); });
     elements.dateChips.addEventListener('click', removeDate);
-    [elements.country, elements.type, elements.text].forEach(element => element.addEventListener('input', render));
+    [elements.country, elements.text].forEach(element => element.addEventListener('input', render));
     elements.location.addEventListener('input', () => { state.location = null; elements.locationMessage.textContent = ''; render(); });
     elements.radius.addEventListener('input', () => { if (state.location) render(); });
     elements.applyRadius.addEventListener('click', applyRadius);
@@ -126,10 +123,9 @@
         const days = activeWeekdays(); const query = elements.text.value.trim().toLocaleLowerCase('de');
         const radius = Number(elements.radius.value);
         const filtered = state.organizations.map(item => ({ ...item, distanceKm: distanceFor(item) })).filter(item => {
-            const haystack = [item.chapterName, item.orgId, item.city, item.postalCode, item.region].filter(value => value !== null && value !== undefined).join(' ').toLocaleLowerCase('de');
+            const haystack = [item.chapterName, item.city, item.postalCode, item.region].filter(value => value !== null && value !== undefined).join(' ').toLocaleLowerCase('de');
             return (!days.size || (item.meetingDay && days.has(item.meetingDay)))
                 && (!elements.country.value || item.countryCode === elements.country.value)
-                && (!elements.type.value || item.orgType === elements.type.value)
                 && (!query || haystack.includes(query))
                 && (!state.location || (item.distanceKm !== null && item.distanceKm <= radius));
         });
@@ -156,8 +152,8 @@
         const isHomeChapter = item.orgId === state.viewer.homeChapterOrgId;
         checkbox.checked = state.selectedOrganizations.has(item.orgId); checkbox.disabled = isHomeChapter;
         checkbox.title = isHomeChapter ? 'Für dein eigenes Chapter kannst du kein Vertretungsangebot anlegen.' : '';
-        checkbox.setAttribute('aria-label', isHomeChapter ? `Organisation ${item.orgId}: eigenes Chapter, nicht auswählbar` : `Organisation ${item.orgId} auswählen`); select.append(checkbox); row.append(select);
-        [item.chapterName || '—', item.orgId, countryLabels[item.countryCode] || item.countryCode || '—', typeLabels[item.orgType] || item.orgType || '—', locationLabel(item), item.meetingDay || '—', item.meetingTime || '—'].forEach(value => {
+        checkbox.setAttribute('aria-label', isHomeChapter ? `${item.chapterName || 'Chapter'}: eigenes Chapter, nicht auswählbar` : `${item.chapterName || 'Chapter'} auswählen`); select.append(checkbox); row.append(select);
+        [item.chapterName || '—', countryLabels[item.countryCode] || item.countryCode || '—', locationLabel(item), item.meetingDay || '—', item.meetingTime || '—'].forEach(value => {
             const cell = document.createElement('td'); cell.textContent = String(value); row.append(cell);
         });
         if (isHomeChapter) { row.classList.add('home-chapter-row'); const badge = document.createElement('span'); badge.className = 'home-chapter-badge'; badge.textContent = 'Heimatchapter'; row.children[1].append(' ', badge); }
@@ -176,7 +172,7 @@
     function formatDate(date) { return new Intl.DateTimeFormat('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Berlin' }).format(new Date(`${date}T12:00:00+02:00`)); }
     function locationLabel(item) { return [item.postalCode, item.city].filter(Boolean).join(' ') || '—'; }
     function renderCounts(visible) { elements.counts.textContent = `${visible} sichtbar · ${state.selectedOrganizations.size} Chapter ausgewählt`; }
-    function messageRow(text) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 9; cell.textContent = text; row.append(cell); return row; }
+    function messageRow(text) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 7; cell.textContent = text; row.append(cell); return row; }
     function setDateMessage(text, type = '') { elements.dateMessage.textContent = text; elements.dateMessage.className = `message ${type}`.trim(); }
     function setLocationMessage(text, type = '') { elements.locationMessage.textContent = text; elements.locationMessage.className = `message ${type}`.trim(); }
 

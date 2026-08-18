@@ -64,6 +64,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                             <label class="switch-label"><input id="automatic-refresh-enabled" type="checkbox" role="switch"><span>Veraltete Chapter automatisch aktualisieren</span></label>
                             <label>Älter als <span class="days-input"><input id="automatic-refresh-days" type="number" min="1" max="365" value="30" required> Tage</span></label>
                             <p class="automation-hint">Maximal 10 Chapter pro automatischem Lauf. BNI-Abfragen erfolgen sequenziell mit mindestens 1,5 Sekunden Abstand.</p>
+                            <p class="automation-hint">Die automatische Detailaktualisierung berücksichtigt bestehende Chapter, Gruppen im Aufbau und geplante Gruppen.</p>
                         </section>
                         <section class="automation-setting">
                             <div>
@@ -166,7 +167,9 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <section><p class="section-kicker">Inhalte</p><h2>E-Mail-Vorlagen</h2><form id="email-templates-form">
                 <fieldset><legend>E-Mail-Adresse bestätigen</legend><label>Betreff<input name="verify_subject"></label><label>Text<textarea name="verify_body" rows="10"></textarea></label><p>{{first_name}}, {{last_name}}, {{email}}, {{verification_link}}, {{app_name}}</p></fieldset>
                 <fieldset><legend>Passwort zurücksetzen</legend><label>Betreff<input name="reset_subject"></label><label>Text<textarea name="reset_body" rows="10"></textarea></label><p>{{first_name}}, {{last_name}}, {{reset_link}}, {{app_name}}</p></fieldset>
-                <button type="submit">E-Mail-Vorlagen speichern</button>
+                <fieldset><legend>Vertretungsangebot anfragen</legend><label>Hinweis bei Vertretungsanfrage<textarea name="contact_hint" rows="5"></textarea></label><label>Standardnachricht – Vertretungsangebot anfragen<textarea name="offer_custom_message" rows="7"></textarea></label><label>E-Mail-Betreff<input name="contact_subject"></label><label>E-Mail-Text<textarea name="contact_body" rows="12"></textarea></label><p>{{provider_first_name}}, {{requester_first_name}}, {{requester_last_name}}, {{requester_full_name}}, {{requester_email}}, {{requester_chapter}}, {{requested_date}}, {{custom_message}}, {{app_name}}</p></fieldset>
+                <fieldset><legend>Vertretungsgesuch beantworten</legend><label>Hinweis Vertretungsgesuch annehmen<textarea name="request_contact_hint" rows="5"></textarea></label><label>Standardnachricht – Vertretungsgesuch beantworten<textarea name="request_custom_message" rows="7"></textarea></label><label>E-Mail-Betreff<input name="request_contact_subject"></label><label>E-Mail-Text<textarea name="request_contact_body" rows="12"></textarea></label><p>{{request_owner_first_name}}, {{contact_first_name}}, {{contact_last_name}}, {{contact_full_name}}, {{contact_email}}, {{contact_chapter}}, {{requested_chapter}}, {{requested_date}}, {{custom_message}}, {{app_name}}</p></fieldset>
+                <div class="email-template-actions"><button type="submit">E-Mail-Vorlagen speichern</button></div>
             </form><div id="email-templates-message" class="message" role="status"></div></section>
         </div>
     </details>

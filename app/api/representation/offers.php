@@ -7,9 +7,11 @@ require_once dirname(__DIR__, 2) . '/src/Database.php';
 require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 require_once dirname(__DIR__, 2) . '/src/UserRepository.php';
 require_once dirname(__DIR__, 2) . '/src/RepresentationOfferRepository.php';
+require_once dirname(__DIR__, 2) . '/src/RepresentationCleanupService.php';
 
 $identity = Auth::requireUserJson();
 $database = (new Database())->connection();
+(new RepresentationCleanupService($database))->runCleanup();
 $users = new UserRepository($database);
 $user = $users->findById((int) $identity['user_id']);
 if ($user === null || $user['status'] !== 'active') JsonResponse::send(['error' => 'Anmeldung erforderlich.'], 401);

@@ -9,6 +9,9 @@ require_once dirname(__DIR__) . '/src/Database.php';
 require_once dirname(__DIR__) . '/src/Geocoder.php';
 require_once dirname(__DIR__) . '/src/JsonResponse.php';
 require_once dirname(__DIR__) . '/src/OrganizationRepository.php';
+require_once dirname(__DIR__) . '/src/Auth.php';
+require_once dirname(__DIR__) . '/src/RepresentationRequestRepository.php';
+require_once dirname(__DIR__) . '/src/RepresentationCleanupService.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405);
@@ -44,6 +47,7 @@ if (!array_key_exists($limitInput, $allowedLimits)) {
 try {
     $location = (new Geocoder())->geocode($locationInput);
     $database = (new Database())->connection();
+    (new RepresentationCleanupService($database))->runCleanup();
     $repository = new OrganizationRepository($database);
     $automationSettings = (new AutomationRepository($database))->settings();
     $service = new ChapterSearchService($repository);
@@ -55,6 +59,10 @@ try {
         $sort,
         $allowedLimits[$limitInput],
     );
+    Auth::start(); $identity = Auth::user(); $viewerId = $identity !== null && ($identity['role'] ?? null) === 'user' ? (int) $identity['user_id'] : null;
+    $requestMap = (new RepresentationRequestRepository($database))->activeForOrganizations(array_column($search['results'], 'orgId'), $viewerId, (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->format('Y-m-d'));
+    foreach ($search['results'] as &$resultItem) $resultItem['representationRequests'] = $requestMap[(int) $resultItem['orgId']] ?? [];
+    unset($resultItem);
     $searchLocation = [
         'display_name' => $location['label'],
         'latitude' => $location['latitude'],

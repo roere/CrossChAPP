@@ -55,28 +55,88 @@ final class RepresentationOfferRepository
         $statement->execute([':id' => $offerId, ':user_id' => $userId]); return $statement->rowCount() === 1;
     }
 
-    /** @return list<array<string,mixed>> */
-    public function findForHomeChapter(int $orgId, int $currentUserId, string $today): array
+    /** @return array{datedOffers:list<array<string,mixed>>,allDatesOffers:list<array<string,mixed>>} */
+    public function findForHomeChapter(int $orgId, int $currentUserId, string $today, array $requestDates = []): array
     {
         $statement = $this->database->prepare(<<<'SQL'
-            SELECT offers.id, offers.all_dates, offers.created_at, users.first_name, users.last_name,
-                   home.chapter_name AS provider_home_chapter,
-                   GROUP_CONCAT(DISTINCT CASE WHEN dates.offer_date >= :today THEN dates.offer_date END) AS offer_dates,
+            SELECT offers.id, offers.user_id, offers.all_dates, users.first_name, users.last_name,
+                   users.home_chapter_org_id, dates.offer_date
+            FROM representation_offers offers
+            JOIN users ON users.id = offers.user_id AND users.status = 'active' AND users.email_verified_at IS NOT NULL
+            LEFT JOIN representation_offer_dates dates ON dates.offer_id = offers.id
+            WHERE offers.org_id = :org_id AND offers.user_id != :user_id
+              AND (offers.all_dates = 1 OR dates.offer_date >= :today)
+            ORDER BY dates.offer_date, users.first_name COLLATE NOCASE, offers.id
+            SQL);
+        $statement->execute([':today' => $today, ':org_id' => $orgId, ':user_id' => $currentUserId]);
+        $dated = []; $always = [];
+        foreach ($requestDates as $requestDate) if (is_string($requestDate) && $requestDate >= $today) $dated[$requestDate] = [];
+        foreach ($statement->fetchAll() as $row) {
+            $provider = self::publicProvider($row);
+            if ((bool) $row['all_dates']) $always[(int) $row['user_id']] = $provider;
+            elseif (is_string($row['offer_date'])) $dated[$row['offer_date']][(int) $row['user_id']] = $provider;
+        }
+        ksort($dated);
+        $datedOffers = [];
+        foreach ($dated as $date => $providers) {
+            foreach ($always as $userId => $provider) if (!isset($providers[$userId])) $providers[$userId] = $provider;
+            uasort($providers, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
+            $datedOffers[] = ['date' => $date, 'providers' => array_values($providers)];
+        }
+        uasort($always, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
+        return ['datedOffers' => $datedOffers, 'allDatesOffers' => array_values($always)];
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function overviewForHomeChapter(int $orgId, int $currentUserId, string $today): array
+    {
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT offers.id, offers.all_dates, users.id AS user_id, users.first_name, users.last_name,
+                   users.home_chapter_org_id,
+                   GROUP_CONCAT(CASE WHEN dates.offer_date >= :today THEN dates.offer_date END) AS offer_dates,
                    MIN(CASE WHEN dates.offer_date >= :today THEN dates.offer_date END) AS next_date
             FROM representation_offers offers
-            JOIN users ON users.id = offers.user_id AND users.status = 'active'
+            JOIN users ON users.id = offers.user_id AND users.status = 'active' AND users.email_verified_at IS NOT NULL
             LEFT JOIN representation_offer_dates dates ON dates.offer_id = offers.id
-            LEFT JOIN organizations home ON home.org_id = users.home_chapter_org_id
             WHERE offers.org_id = :org_id AND offers.user_id != :user_id
             GROUP BY offers.id HAVING offers.all_dates = 1 OR next_date IS NOT NULL
-            ORDER BY offers.all_dates ASC, next_date ASC, users.first_name COLLATE NOCASE, offers.id
+            ORDER BY offers.all_dates, next_date, users.first_name COLLATE NOCASE, offers.id
             SQL);
         $statement->execute([':today' => $today, ':org_id' => $orgId, ':user_id' => $currentUserId]);
         return array_map(static function (array $row): array {
-            $initial = function_exists('mb_substr') ? mb_substr((string) $row['last_name'], 0, 1) : substr((string) $row['last_name'], 0, 1);
-            return ['providerName' => trim((string) $row['first_name'] . ' ' . $initial . '.'), 'providerHomeChapter' => $row['provider_home_chapter'],
-                'allDates' => (bool) $row['all_dates'], 'dates' => self::splitValues($row['offer_dates'])];
+            $provider = self::publicProvider($row); $dates = self::splitValues($row['offer_dates']);
+            return $provider + ['allDates' => (bool) $row['all_dates'], 'dates' => $dates];
         }, $statement->fetchAll());
+    }
+
+    /** @return array<string,mixed>|null */
+    public function contactContext(int $offerId, int $requesterId): ?array
+    {
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT offers.id, offers.user_id AS recipient_id, offers.org_id, offers.all_dates,
+                   provider.first_name AS provider_first_name, provider.last_name AS provider_last_name, provider.email AS provider_email,
+                   requester.first_name AS requester_first_name, requester.last_name AS requester_last_name, requester.email AS requester_email,
+                   requester.home_chapter_org_id, chapter.chapter_name AS requester_chapter, chapter.meeting_day
+            FROM representation_offers offers
+            JOIN users provider ON provider.id = offers.user_id AND provider.status = 'active' AND provider.email_verified_at IS NOT NULL
+            JOIN users requester ON requester.id = :requester_id AND requester.status = 'active'
+            JOIN organizations chapter ON chapter.org_id = requester.home_chapter_org_id AND chapter.org_id = offers.org_id
+            WHERE offers.id = :offer_id AND offers.user_id != requester.id
+            SQL);
+        $statement->execute([':requester_id' => $requesterId, ':offer_id' => $offerId]); $row = $statement->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    public function offerHasDate(int $offerId, string $date): bool
+    {
+        $statement = $this->database->prepare('SELECT COUNT(*) FROM representation_offer_dates WHERE offer_id = :id AND offer_date = :date');
+        $statement->execute([':id' => $offerId, ':date' => $date]); return (int) $statement->fetchColumn() === 1;
+    }
+
+    private static function publicProvider(array $row): array
+    {
+        $initial = function_exists('mb_substr') ? mb_substr((string) $row['last_name'], 0, 1) : substr((string) $row['last_name'], 0, 1);
+        return ['offerId' => (int) $row['id'], 'displayName' => trim((string) $row['first_name'] . ' ' . $initial . '.'), 'isBniMember' => $row['home_chapter_org_id'] !== null];
     }
 
     /** @return list<string> */

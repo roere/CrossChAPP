@@ -272,6 +272,9 @@ final class AutomationRepository
             'automaticNeverLoaded' => $automaticDue['neverLoaded'],
             'automaticRetryableErrors' => $automaticDue['errors'],
             'automaticDueTotal' => $automaticDue['total'],
+            'automaticDueChapter' => $automaticDue['chapter'],
+            'automaticDueCoreGroup' => $automaticDue['coreGroup'],
+            'automaticDuePlannedGroup' => $automaticDue['plannedGroup'],
             'chaptersWithDetails' => $this->loadedCount(),
             'workerLastSeenAt' => $runtime['worker_last_seen_at'] ?? null,
             'nextAutomaticCheckAt' => $runtime['next_check_at'] ?? null,
@@ -291,7 +294,7 @@ final class AutomationRepository
     {
         $statement = $this->database->prepare(<<<'SQL'
             SELECT COUNT(*) FROM organizations
-            WHERE org_type = 'CHAPTER' AND detail_status = 'loaded'
+            WHERE detail_status = 'loaded'
               AND details_loaded_at IS NOT NULL
               AND datetime(details_loaded_at) < datetime('now', :age)
             SQL);
@@ -301,26 +304,29 @@ final class AutomationRepository
 
     private function loadedCount(): int
     {
-        return (int) $this->database->query("SELECT COUNT(*) FROM organizations WHERE org_type = 'CHAPTER' AND detail_status = 'loaded'")->fetchColumn();
+        return (int) $this->database->query("SELECT COUNT(*) FROM organizations WHERE detail_status = 'loaded'")->fetchColumn();
     }
 
-    /** @return array{neverLoaded:int,errors:int,staleLoaded:int,total:int} */
+    /** @return array{neverLoaded:int,errors:int,staleLoaded:int,total:int,chapter:int,coreGroup:int,plannedGroup:int} */
     private function automaticDueCounts(int $days): array
     {
         $statement = $this->database->prepare(<<<'SQL'
             SELECT
               SUM(CASE WHEN detail_status = 'not_loaded' OR (details_loaded_at IS NULL AND detail_status != 'error') THEN 1 ELSE 0 END) AS never_loaded,
               SUM(CASE WHEN detail_status = 'error' THEN 1 ELSE 0 END) AS errors,
-              SUM(CASE WHEN detail_status = 'loaded' AND details_loaded_at IS NOT NULL AND datetime(details_loaded_at) < datetime('now', :age) THEN 1 ELSE 0 END) AS stale_loaded
+              SUM(CASE WHEN detail_status = 'loaded' AND details_loaded_at IS NOT NULL AND datetime(details_loaded_at) < datetime('now', :age) THEN 1 ELSE 0 END) AS stale_loaded,
+              SUM(CASE WHEN org_type = 'CHAPTER' AND (detail_status IN ('not_loaded','error') OR details_loaded_at IS NULL OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))) THEN 1 ELSE 0 END) AS chapter_due,
+              SUM(CASE WHEN org_type = 'CORE_GROUP' AND (detail_status IN ('not_loaded','error') OR details_loaded_at IS NULL OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))) THEN 1 ELSE 0 END) AS core_due,
+              SUM(CASE WHEN org_type = 'PLANNED_GROUP' AND (detail_status IN ('not_loaded','error') OR details_loaded_at IS NULL OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))) THEN 1 ELSE 0 END) AS planned_due
             FROM organizations
-            WHERE org_type = 'CHAPTER'
             SQL);
         $statement->execute([':age' => '-' . $days . ' days']);
         $row = $statement->fetch();
         $neverLoaded = (int) ($row['never_loaded'] ?? 0);
         $errors = (int) ($row['errors'] ?? 0);
         $staleLoaded = (int) ($row['stale_loaded'] ?? 0);
-        return ['neverLoaded' => $neverLoaded, 'errors' => $errors, 'staleLoaded' => $staleLoaded, 'total' => $neverLoaded + $errors + $staleLoaded];
+        return ['neverLoaded' => $neverLoaded, 'errors' => $errors, 'staleLoaded' => $staleLoaded, 'total' => $neverLoaded + $errors + $staleLoaded,
+            'chapter' => (int) ($row['chapter_due'] ?? 0), 'coreGroup' => (int) ($row['core_due'] ?? 0), 'plannedGroup' => (int) ($row['planned_due'] ?? 0)];
     }
 
     private static function now(): string

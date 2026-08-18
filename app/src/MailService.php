@@ -6,9 +6,9 @@ final class MailService
 {
     public function __construct(private readonly MailSettingsRepository $repository, private readonly ?Closure $transport = null) {}
 
-    public function send(string $email, string $name, string $subject, string $body): void
+    public function send(string $email, string $name, string $subject, string $body, ?string $replyToEmail = null, ?string $replyToName = null): void
     {
-        if ($this->transport !== null) { ($this->transport)($email, $name, $subject, $body); return; }
+        if ($this->transport !== null) { ($this->transport)($email, $name, $subject, $body, $replyToEmail, $replyToName); return; }
         $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
         if (!is_file($autoload)) throw new RuntimeException('Der Mailversand ist nicht verfügbar.');
         require_once $autoload;
@@ -23,7 +23,9 @@ final class MailService
             elseif ($settings['encryption'] === 'tls') $mailer->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
             else { $mailer->SMTPSecure = ''; $mailer->SMTPAutoTLS = false; }
             $mailer->CharSet = 'UTF-8'; $mailer->setFrom((string) $settings['senderEmail'], (string) $settings['senderName']);
-            $mailer->addAddress($email, $name); $mailer->Subject = $subject; $mailer->Body = $body; $mailer->send();
+            $mailer->addAddress($email, $name);
+            if ($replyToEmail !== null && filter_var($replyToEmail, FILTER_VALIDATE_EMAIL)) $mailer->addReplyTo($replyToEmail, $replyToName ?? '');
+            $mailer->Subject = $subject; $mailer->Body = $body; $mailer->send();
         } catch (Throwable) { throw new RuntimeException('Die E-Mail konnte nicht versendet werden.'); }
     }
 }
