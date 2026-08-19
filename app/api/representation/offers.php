@@ -35,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
 $orgIds = array_values(array_unique(array_filter(array_map(static fn ($value): int => (int) $value, is_array($payload['orgIds'] ?? null) ? $payload['orgIds'] : []), static fn (int $id): bool => $id > 0)));
 $allDates = ($payload['allDates'] ?? false) === true;
 $dates = array_values(array_unique(is_array($payload['dates'] ?? null) ? $payload['dates'] : []));
+if ($allDates) $dates = [];
 if ($orgIds === []) JsonResponse::send(['error' => 'Bitte wähle mindestens ein Chapter aus.'], 400);
 if (!$allDates && $dates === []) JsonResponse::send(['error' => 'Bitte wähle mindestens einen Termin oder Alle Daten aus.'], 400);
 if ($user['home_chapter_org_id'] !== null && in_array((int) $user['home_chapter_org_id'], $orgIds, true)) JsonResponse::send(['error' => 'Für dein eigenes Chapter kannst du kein Vertretungsangebot anlegen.'], 400);
@@ -46,7 +47,7 @@ foreach ($dates as $date) {
     if (!$parsed || $parsed->format('Y-m-d') !== $date || $parsed < $today) JsonResponse::send(['error' => 'Vergangene oder ungültige Termine sind nicht erlaubt.'], 400);
 }
 $placeholders = implode(',', array_fill(0, count($orgIds), '?'));
-$statement = $database->prepare("SELECT org_id FROM organizations WHERE org_id IN ($placeholders)");
+$statement = $database->prepare("SELECT org_id FROM organizations WHERE org_type = 'CHAPTER' AND org_id IN ($placeholders)");
 $statement->execute($orgIds);
 $validIds = array_map('intval', $statement->fetchAll(PDO::FETCH_COLUMN));
 sort($validIds); $requestedIds = $orgIds; sort($requestedIds);
@@ -54,6 +55,8 @@ if ($validIds !== $requestedIds) JsonResponse::send(['error' => 'Mindestens eine
 
 try {
     $offerIds = $repository->createMany((int) $user['id'], $orgIds, $allDates, $dates);
+} catch (InvalidArgumentException $exception) {
+    JsonResponse::send(['error' => $exception->getMessage()], 400);
 } catch (DomainException $exception) {
     if ($exception->getMessage() === 'duplicate_offer') JsonResponse::send(['error' => 'Für dieses Chapter besteht bereits ein identisches Vertretungsangebot.'], 409);
     throw $exception;

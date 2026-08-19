@@ -79,6 +79,11 @@
         if (state.selectedDates.has(value)) {
             setDateMessage('Dieser Termin wurde bereits ausgewählt.', 'error'); return false;
         }
+        const incompatible = selectedOrganizationsIncompatibleWith(value);
+        if (incompatible.length) {
+            setDateMessage(`Der ${formatDate(value)} passt nicht zum Meetingtag von ${incompatible.map(item => item.chapterName).join(', ')}.`, 'error');
+            return false;
+        }
         state.selectedDates.add(value); setDateMessage(''); renderDates(); render(); return true;
     }
 
@@ -137,6 +142,20 @@
         return new Set([...state.selectedDates].map(date => new Intl.DateTimeFormat('de-DE', { weekday: 'long', timeZone: 'Europe/Berlin' }).format(new Date(`${date}T12:00:00+02:00`))));
     }
 
+    function weekdayForDate(date) {
+        return new Intl.DateTimeFormat('de-DE', { weekday: 'long', timeZone: 'Europe/Berlin' }).format(new Date(`${date}T12:00:00+02:00`)).toLocaleLowerCase('de');
+    }
+
+    function selectedOrganizationsIncompatibleWith(date) {
+        const weekday = weekdayForDate(date);
+        return state.organizations.filter(item => state.selectedOrganizations.has(item.orgId) && String(item.meetingDay || '').trim().toLocaleLowerCase('de') !== weekday);
+    }
+
+    function validateSelection() {
+        if (state.allDates) return [];
+        return state.organizations.filter(item => state.selectedOrganizations.has(item.orgId) && [...state.selectedDates].some(date => String(item.meetingDay || '').trim().toLocaleLowerCase('de') !== weekdayForDate(date)));
+    }
+
     function render() {
         const visible = visibleOrganizations(); const fragment = document.createDocumentFragment();
         visible.forEach(item => fragment.append(organizationRow(item)));
@@ -181,6 +200,11 @@
         if (!state.viewer.authenticated) { window.location.href = '/?view=login'; return; }
         if (!state.selectedOrganizations.size) { setSaveMessage('Bitte wähle mindestens ein Chapter aus.', 'error'); return; }
         if (!state.allDates && !state.selectedDates.size) { setSaveMessage('Bitte wähle mindestens einen Termin oder Alle Daten aus.', 'error'); return; }
+        const incompatible = validateSelection();
+        if (incompatible.length) {
+            incompatible.forEach(item => state.selectedOrganizations.delete(item.orgId)); render();
+            setSaveMessage(`Nicht passende Chapter wurden abgewählt: ${incompatible.map(item => item.chapterName).join(', ')}.`, 'error'); return;
+        }
         elements.save.disabled = true; setSaveMessage('Vertretungsangebot wird gespeichert …');
         try {
             const response = await fetch('/api/representation/offers.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken }, body: JSON.stringify({ orgIds: [...state.selectedOrganizations], allDates: state.allDates, dates: [...state.selectedDates] }) });

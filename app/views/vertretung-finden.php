@@ -1,5 +1,5 @@
 <?php if ($currentUser === null): ?>
-<main class="shell content no-hero-content"><h1 class="page-intro-title">Vertretung für Dein Chapter finden</h1><section class="panel representation-access-hint"><p>Um Vertretungsangebote für dein Heimatchapter zu sehen, musst du angemeldet sein.</p><a class="button-link" href="/?view=login">Anmelden</a></section></main>
+<main class="shell content no-hero-content"><h1 class="page-intro-title">Vertretung für Dein Chapter finden</h1><section class="panel representation-access-hint"><p>Um Vertretungsangebote für dein Heimatchapter zu sehen, musst du angemeldet sein.</p><a class="button-link" href="/?view=login&amp;return_view=vertretung-finden">Anmelden</a></section></main>
 <?php elseif (!$hasRepresentationHomeChapter): ?>
 <main class="shell content no-hero-content"><h1 class="page-intro-title">Vertretung für Dein Chapter finden</h1><section class="panel representation-access-hint"><p>Für dein Benutzerkonto ist noch kein Heimatchapter hinterlegt.</p><p>Ein Heimatchapter ist erforderlich, um passende Vertretungsangebote anzuzeigen.</p></section></main>
 <?php else: ?>

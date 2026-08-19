@@ -34,6 +34,8 @@ $accountDisplayName = $currentUser === null ? '' : ((string) ($currentUser['user
     ? (string) $currentUser['username']
     : trim((string) $currentUser['first_name'] . ' ' . (string) $currentUser['last_name']));
 $viewParameter = (string) ($_GET['view'] ?? '');
+$returnViewParameter = (string) ($_GET['return_view'] ?? '');
+$returnView = in_array($returnViewParameter, ['crosschaptern', 'vertretung', 'vertretung-finden'], true) ? $returnViewParameter : '';
 $requestedView = isset($_GET['invite']) || isset($_GET['reset']) ? 'auth' : match ($viewParameter) {
     'admin' => 'admin',
     'login', 'register', 'forgot', 'reset', 'verified', 'invite' => 'auth',
@@ -100,7 +102,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <div class="account-actions">
                         <?php if ($currentUser !== null): ?>
                             <div id="account-menu" class="account-menu">
-                                <button id="account-menu-trigger" type="button" class="account-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="account-dropdown"><?= htmlspecialchars($accountDisplayName, ENT_QUOTES, 'UTF-8') ?> <span aria-hidden="true">▼</span></button>
+                                <button id="account-menu-trigger" type="button" class="account-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="account-dropdown"><span class="account-menu-name"><?= htmlspecialchars($accountDisplayName, ENT_QUOTES, 'UTF-8') ?></span><?php if (($currentDatabaseUser['bni_verification_status'] ?? '') === 'manual_verified'): ?><span class="verification-badge" role="img" aria-label="Verifiziert" title="Verifiziert"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 1.7 12.2 4l3-.3.4 3 2.6 1.5-1.5 2.6.8 2.9-2.9.8-1.5 2.6-2.6-1.5-2.6 1.5-1.5-2.6-2.9-.8.8-2.9-1.5-2.6 2.6-1.5.4-3 3 .3z"/><path class="verification-badge-check" d="m6.5 10 2.2 2.1 4.5-4.5"/></svg></span><?php endif; ?><span aria-hidden="true">▼</span></button>
                                 <div id="account-dropdown" class="account-dropdown" role="menu" hidden>
                                     <button id="open-my-account" type="button" role="menuitem">Mein Konto</button>
                                     <button id="open-change-password" type="button" role="menuitem">Passwort ändern</button>
@@ -126,6 +128,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <div><dt>Nachname</dt><dd data-account-field="lastName">Wird geladen …</dd></div>
                     <div><dt>E-Mail-Adresse</dt><dd data-account-field="email">Wird geladen …</dd></div>
                     <div><dt>Heimatchapter</dt><dd data-account-field="homeChapterName">Wird geladen …</dd></div>
+                    <div><dt>Verifikation</dt><dd data-account-field="verificationStatus">Wird geladen …</dd></div>
                 </dl>
                 <div id="my-account-message" class="message" role="alert" aria-live="polite"></div>
                 <div class="registration-actions">

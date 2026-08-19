@@ -3,7 +3,7 @@
 <?php if ($currentUser === null): ?>
     <section class="panel representation-access-hint">
         <p>Um Vertretungsangebote zu machen musst du angemeldet sein.</p>
-        <a class="button-link" href="/?view=login">Anmelden</a>
+        <a class="button-link" href="/?view=login&amp;return_view=vertretung">Anmelden</a>
     </section>
 <?php else: ?>
     <div class="representation-content">

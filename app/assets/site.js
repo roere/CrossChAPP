@@ -53,7 +53,9 @@
             });
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Anmeldung fehlgeschlagen.');
-            window.location.assign(payload.role === 'admin' ? '/?view=admin' : '/');
+            const allowedReturnViews = new Set(['crosschaptern', 'vertretung', 'vertretung-finden']);
+            const returnView = allowedReturnViews.has(form.return_view?.value) ? form.return_view.value : 'crosschaptern';
+            window.location.assign(payload.role === 'admin' ? '/?view=admin' : `/?view=${encodeURIComponent(returnView)}`);
         } catch (error) {
             message.textContent = error.message; message.className = 'message error';
             form.password.value = ''; form.password.focus();
@@ -128,9 +130,18 @@
             try {
                 const response = await fetch('/api/auth/account.php'); const payload = await response.json();
                 if (!response.ok) throw new Error(payload.error || 'Die Kontodaten konnten nicht geladen werden.');
+                const verificationLabels = { manual_verified: 'Verifiziert', directory_match: 'BNI-Datensatz gefunden', unverified: 'Nicht verifiziert' };
                 for (const [key, value] of Object.entries(payload.account)) {
                     const output = dialog.querySelector(`[data-account-field="${key}"]`);
-                    if (output) output.textContent = value === null || String(value).trim() === '' ? '—' : String(value);
+                    if (!output) continue;
+                    if (key === 'verificationStatus') {
+                        output.replaceChildren();
+                        if (value === 'manual_verified') {
+                            const badge = document.createElement('span'); badge.className = 'verification-badge'; badge.setAttribute('role', 'img'); badge.setAttribute('aria-label', 'Verifiziert'); badge.title = 'Verifiziert';
+                            badge.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 1.7 12.2 4l3-.3.4 3 2.6 1.5-1.5 2.6.8 2.9-2.9.8-1.5 2.6-2.6-1.5-2.6 1.5-1.5-2.6-2.9-.8.8-2.9-1.5-2.6 2.6-1.5.4-3 3 .3z"/><path class="verification-badge-check" d="m6.5 10 2.2 2.1 4.5-4.5"/></svg>';
+                            output.append(document.createTextNode(`${verificationLabels[value]} `), badge);
+                        } else output.textContent = verificationLabels[value] || 'Nicht verifiziert';
+                    } else output.textContent = value === null || String(value).trim() === '' ? '—' : String(value);
                 }
                 closeButton.focus();
             } catch (error) { message.textContent = error.message; message.className = 'message error'; }

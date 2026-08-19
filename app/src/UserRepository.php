@@ -63,6 +63,7 @@ final class UserRepository
     {
         $statement = $this->database->prepare(<<<'SQL'
             SELECT users.id, users.first_name, users.last_name, users.email, users.role,
+                   users.bni_verification_status,
                    organizations.chapter_name AS home_chapter_name
             FROM users
             LEFT JOIN organizations ON organizations.org_id = users.home_chapter_org_id

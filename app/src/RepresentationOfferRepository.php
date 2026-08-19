@@ -12,6 +12,7 @@ final class RepresentationOfferRepository
         sort($dates); $signature = $allDates ? '' : implode('|', $dates); $now = gmdate('Y-m-d\TH:i:s\Z');
         $this->database->exec('BEGIN IMMEDIATE TRANSACTION');
         try {
+            $this->assertMeetingDates($orgIds, $allDates, $dates);
             $duplicate = $this->database->prepare('SELECT COUNT(*) FROM representation_offers WHERE user_id = :user_id AND org_id = :org_id AND all_dates = :all_dates AND date_signature = :signature');
             foreach ($orgIds as $orgId) {
                 $duplicate->execute([':user_id' => $userId, ':org_id' => $orgId, ':all_dates' => $allDates ? 1 : 0, ':signature' => $signature]);
@@ -30,6 +31,55 @@ final class RepresentationOfferRepository
             try { $this->database->exec('ROLLBACK'); } catch (Throwable) {}
             throw $exception;
         }
+    }
+
+    /** @param list<int> $orgIds @param list<string> $dates */
+    private function assertMeetingDates(array $orgIds, bool $allDates, array $dates): void
+    {
+        if ($allDates) return;
+        $placeholders = implode(',', array_fill(0, count($orgIds), '?'));
+        $statement = $this->database->prepare("SELECT org_id, chapter_name, meeting_day, timezone FROM organizations WHERE org_type = 'CHAPTER' AND org_id IN ($placeholders)");
+        $statement->execute($orgIds);
+        $chapters = [];
+        foreach ($statement->fetchAll() as $chapter) $chapters[(int) $chapter['org_id']] = $chapter;
+        if (count($chapters) !== count(array_unique($orgIds))) throw new InvalidArgumentException('Mindestens ein ausgewähltes Chapter ist nicht vorhanden.');
+
+        $errors = [];
+        foreach ($orgIds as $orgId) {
+            $chapter = $chapters[$orgId];
+            $expectedWeekday = self::normalizeWeekday((string) ($chapter['meeting_day'] ?? ''));
+            if ($expectedWeekday === null) throw new InvalidArgumentException('Für ' . (string) $chapter['chapter_name'] . ' ist kein regelmäßiger Meetingtag hinterlegt.');
+            $timezone = self::timezone((string) ($chapter['timezone'] ?? ''));
+            foreach ($dates as $date) {
+                $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date, $timezone);
+                if (!$parsed || $parsed->format('Y-m-d') !== $date || (int) $parsed->format('N') !== $expectedWeekday) {
+                    $label = $parsed && $parsed->format('Y-m-d') === $date ? $parsed->format('d.m.Y') : $date;
+                    $errors[] = 'Der ' . $label . ' passt nicht zum Meetingtag von ' . (string) $chapter['chapter_name'] . '.';
+                }
+            }
+        }
+        if ($errors !== []) throw new InvalidArgumentException(implode(' ', array_unique($errors)));
+    }
+
+    private static function normalizeWeekday(string $weekday): ?int
+    {
+        $normalized = function_exists('mb_strtolower') ? mb_strtolower(trim($weekday), 'UTF-8') : strtolower(trim($weekday));
+        return match ($normalized) {
+            'montag', 'monday' => 1,
+            'dienstag', 'tuesday' => 2,
+            'mittwoch', 'wednesday' => 3,
+            'donnerstag', 'thursday' => 4,
+            'freitag', 'friday' => 5,
+            'samstag', 'saturday' => 6,
+            'sonntag', 'sunday' => 7,
+            default => null,
+        };
+    }
+
+    private static function timezone(string $timezone): DateTimeZone
+    {
+        try { return new DateTimeZone($timezone !== '' ? $timezone : 'Europe/Berlin'); }
+        catch (Throwable) { return new DateTimeZone('Europe/Berlin'); }
     }
 
     /** @return list<array<string,mixed>> */

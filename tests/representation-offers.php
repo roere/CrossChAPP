@@ -10,8 +10,8 @@ require_once $app . '/src/RepresentationOfferRepository.php';
 $path = sys_get_temp_dir() . '/crosschapp-representation-' . bin2hex(random_bytes(5)) . '.sqlite';
 try {
     $database = (new Database($path))->connection(); $now = gmdate('Y-m-d\TH:i:s\Z');
-    $organization = $database->prepare("INSERT INTO organizations (org_id, org_type, chapter_name, created_at, updated_at) VALUES (?, 'CHAPTER', ?, ?, ?)");
-    foreach ([101 => 'Chapter X', 202 => 'Chapter Y', 303 => 'Chapter Z'] as $id => $name) $organization->execute([$id, $name, $now, $now]);
+    $organization = $database->prepare("INSERT INTO organizations (org_id, org_type, chapter_name, meeting_day, timezone, created_at, updated_at) VALUES (?, 'CHAPTER', ?, ?, 'Europe/Berlin', ?, ?)");
+    foreach ([101 => ['Chapter X','Freitag'], 202 => ['Chapter Y','Freitag'], 303 => ['Chapter Z','Freitag'], 404 => ['Chapter Mittwoch','Mittwoch']] as $id => [$name,$day]) $organization->execute([$id, $name, $day, $now, $now]);
     $users = new UserRepository($database);
     $a = $users->create('Anna', 'Alpha', 'anna@example.invalid', password_hash('password1', PASSWORD_DEFAULT), 101);
     $b = $users->create('Bernd', 'Beta', 'bernd@example.invalid', password_hash('password2', PASSWORD_DEFAULT), 202);
@@ -34,13 +34,19 @@ try {
     try { $offers->createMany((int) $b['id'], [101, 202], true, []); assert(false); } catch (DomainException) {}
     assert(count($offers->forUser((int) $b['id'])) === $beforeDuplicate); // Kein Teil-Insert für 202.
 
+    $beforeMismatch = [(int) $database->query('SELECT COUNT(*) FROM representation_offers')->fetchColumn(), (int) $database->query('SELECT COUNT(*) FROM representation_offer_dates')->fetchColumn()];
+    try { $offers->createMany((int) $b['id'], [202], false, ['2099-08-26']); assert(false); } catch (InvalidArgumentException $exception) { assert(str_contains($exception->getMessage(), 'Chapter Y')); }
+    assert([(int) $database->query('SELECT COUNT(*) FROM representation_offers')->fetchColumn(), (int) $database->query('SELECT COUNT(*) FROM representation_offer_dates')->fetchColumn()] === $beforeMismatch);
+    try { $offers->createMany((int) $b['id'], [101, 404], false, ['2099-08-28']); assert(false); } catch (InvalidArgumentException $exception) { assert(str_contains($exception->getMessage(), 'Chapter Mittwoch')); }
+    assert([(int) $database->query('SELECT COUNT(*) FROM representation_offers')->fetchColumn(), (int) $database->query('SELECT COUNT(*) FROM representation_offer_dates')->fetchColumn()] === $beforeMismatch);
+
     $matches = $offers->findForHomeChapter(101, (int) $a['id'], '2099-08-20');
     assert(count($matches['allDatesOffers']) === 1 && $matches['allDatesOffers'][0]['displayName'] === 'Bernd B.' && !array_key_exists('email', $matches['allDatesOffers'][0]));
     assert($offers->findForHomeChapter(101, (int) $b['id'], '2099-08-20') === ['datedOffers' => [], 'allDatesOffers' => []]);
     assert(!$offers->deleteForUser($alwaysIds[0], (int) $a['id']));
     assert($offers->deleteForUser($alwaysIds[0], (int) $b['id']));
 
-    echo "PASS representation offers: Einzelangebote, Transaktion, Dubletten, Ownership und Suche\n";
+    echo "PASS representation offers: Meetingtage, Multi-Chapter-Rollback, Dubletten, Ownership und Suche\n";
 } finally { if (is_file($path)) unlink($path); }
 
 $migrationPath = sys_get_temp_dir() . '/crosschapp-representation-migration-' . bin2hex(random_bytes(5)) . '.sqlite';

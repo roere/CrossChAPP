@@ -110,7 +110,7 @@ final class AccountService
         return $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
     }
 
-    /** @return array{firstName:string,lastName:string,email:string,homeChapterName:?string,canDelete:bool} */
+    /** @return array{firstName:string,lastName:string,email:string,homeChapterName:?string,verificationStatus:string,canDelete:bool} */
     public function account(int $userId): array
     {
         $account = $this->users->accountDetails($userId);
@@ -120,6 +120,7 @@ final class AccountService
             'lastName' => (string) $account['last_name'],
             'email' => (string) $account['email'],
             'homeChapterName' => $account['home_chapter_name'] === null ? null : (string) $account['home_chapter_name'],
+            'verificationStatus' => (string) $account['bni_verification_status'],
             'canDelete' => $account['role'] !== 'admin',
         ];
     }
