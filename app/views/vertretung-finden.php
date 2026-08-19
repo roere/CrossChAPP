@@ -4,10 +4,11 @@
 <main class="shell content no-hero-content"><h1 class="page-intro-title">Vertretung für Dein Chapter finden</h1><section class="panel representation-access-hint"><p>Für dein Benutzerkonto ist noch kein Heimatchapter hinterlegt.</p><p>Ein Heimatchapter ist erforderlich, um passende Vertretungsangebote anzuzeigen.</p></section></main>
 <?php else: ?>
 <main class="shell content no-hero-content"><h1 class="page-intro-title">Vertretung für Dein Chapter finden</h1>
+    <p id="representation-home-chapter" class="page-meta" hidden></p>
     <section class="panel representation-requests" aria-labelledby="representation-requests-heading">
         <h2 id="representation-requests-heading">Meine Vertretungsgesuche</h2>
         <p>Termine auswählen</p>
-        <div id="representation-request-picker" class="date-add-row"><label>Datum auswählen<input id="representation-request-date" type="date"></label><button id="add-representation-request" type="button">Hinzufügen</button></div>
+        <?php $datePickerPrefix = 'representation-request'; require __DIR__ . '/partials/date-picker.php'; ?>
         <p id="representation-request-day-hint" class="automation-hint"></p><div id="representation-request-message" class="message" role="status" aria-live="polite"></div>
         <div id="representation-request-chips" class="date-chips" aria-label="Meine Vertretungsgesuche"><p>Vertretungsgesuche werden geladen …</p></div>
     </section>

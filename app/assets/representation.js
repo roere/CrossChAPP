@@ -8,7 +8,7 @@
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const countryLabels = { DE: 'Deutschland', AT: 'Österreich', CH: 'Schweiz' };
     const elements = {
-        date: document.querySelector('#representation-date'), addDate: document.querySelector('#add-representation-date'),
+        date: document.querySelector('#representation-date'), datePicker: document.querySelector('#representation-picker'),
         allDates: document.querySelector('#representation-all-dates'), dateMessage: document.querySelector('#representation-date-message'),
         dateChips: document.querySelector('#representation-date-chips'), country: document.querySelector('#representation-country'),
         text: document.querySelector('#representation-text'),
@@ -32,8 +32,13 @@
         distance: { type: 'number', value: item => item.distanceKm },
     };
 
-    elements.addDate.addEventListener('click', addDate);
-    elements.date.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); addDate(); } });
+    const datePicker = window.CrossChappDatePicker.create({
+        root: elements.datePicker,
+        minDate: document.documentElement.dataset.today || localToday(),
+        onSelect: addDate,
+        invalidMessage: 'Bitte gib ein gültiges Datum im Format TT.MM.JJJJ ein.',
+        pastMessage: 'Bitte ein heutiges oder zukünftiges Datum auswählen.',
+    });
     elements.allDates.addEventListener('change', () => { state.allDates = elements.allDates.checked; renderDates(); render(); });
     elements.dateChips.addEventListener('click', removeDate);
     [elements.country, elements.text].forEach(element => element.addEventListener('input', render));
@@ -70,15 +75,11 @@
         }
     }
 
-    function addDate() {
-        const value = elements.date.value;
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < elements.date.min) {
-            setDateMessage('Bitte ein heutiges oder zukünftiges Datum auswählen.', 'error'); return;
-        }
+    function addDate(value) {
         if (state.selectedDates.has(value)) {
-            setDateMessage('Dieser Termin wurde bereits ausgewählt.', 'error'); return;
+            setDateMessage('Dieser Termin wurde bereits ausgewählt.', 'error'); return false;
         }
-        state.selectedDates.add(value); elements.date.value = ''; setDateMessage(''); renderDates(); render();
+        state.selectedDates.add(value); setDateMessage(''); renderDates(); render(); return true;
     }
 
     function removeDate(event) {
@@ -173,6 +174,7 @@
     function renderCounts(visible) { elements.counts.textContent = `${visible} sichtbar · ${state.selectedOrganizations.size} Chapter ausgewählt`; }
     function messageRow(text) { const row = document.createElement('tr'); const cell = document.createElement('td'); cell.colSpan = 7; cell.textContent = text; row.append(cell); return row; }
     function setDateMessage(text, type = '') { elements.dateMessage.textContent = text; elements.dateMessage.className = `message ${type}`.trim(); }
+    function localToday() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; }
     function setLocationMessage(text, type = '') { elements.locationMessage.textContent = text; elements.locationMessage.className = `message ${type}`.trim(); }
 
     async function saveOffer() {

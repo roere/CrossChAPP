@@ -1,0 +1,8 @@
+<?php
+declare(strict_types=1);
+foreach(['Auth','Database','JsonResponse','UserRepository','MailSettingsRepository','MailService','InvitationRepository','InvitationService','InvitationFactory']as$file)require_once dirname(__DIR__,2).'/src/'.$file.'.php';
+Auth::requireAdminJson();$factory=InvitationFactory::create();$identity=Auth::user();
+if($_SERVER['REQUEST_METHOD']==='GET')JsonResponse::send(['invitations'=>$factory['repository']->open(),'template'=>$factory['mailSettings']->templates()['user_invitation']]);
+Auth::requireCsrfJson();
+try{$payload=json_decode(file_get_contents('php://input')?:'',true,32,JSON_THROW_ON_ERROR);if($_SERVER['REQUEST_METHOD']==='POST'){$result=$factory['service']->invite(is_array($payload)?$payload:[],(int)$identity['user_id']);JsonResponse::send(['invited'=>true,'invitation'=>$result],201);}if($_SERVER['REQUEST_METHOD']==='PUT'){$factory['mailSettings']->saveTemplate('user_invitation',(string)($payload['subject']??''),(string)($payload['body']??''));JsonResponse::send(['saved'=>true]);}if($_SERVER['REQUEST_METHOD']==='DELETE'){$id=filter_var($payload['id']??null,FILTER_VALIDATE_INT);if($id===false||!$factory['repository']->cancel((int)$id))JsonResponse::send(['error'=>'Die Einladung wurde nicht gefunden.'],404);JsonResponse::send(['cancelled'=>true]);}JsonResponse::send(['error'=>'Methode nicht erlaubt.'],405);}
+catch(JsonException|InvalidArgumentException $e){JsonResponse::send(['error'=>$e->getMessage()],400);}catch(DomainException $e){JsonResponse::send(['error'=>$e->getMessage()],409);}catch(Throwable $e){JsonResponse::send(['error'=>$e->getMessage()==='Die Einladung konnte nicht versendet werden.'?$e->getMessage():'Die Einladung konnte nicht verarbeitet werden.'],500);}

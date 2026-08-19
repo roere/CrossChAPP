@@ -1,4 +1,3 @@
-<?php $today = (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->format('Y-m-d'); ?>
 <main class="shell content no-hero-content">
     <p class="page-intro-title">Vertretung anbieten</p>
 <?php if ($currentUser === null): ?>
@@ -28,8 +27,7 @@
     <section class="panel representation-dates" aria-labelledby="representation-date-heading">
         <div><p class="section-kicker">Termine</p><h2 id="representation-date-heading">Termine auswählen</h2></div>
         <div class="date-add-row">
-            <label>Datum auswählen<input id="representation-date" type="date" min="<?= htmlspecialchars($today, ENT_QUOTES, 'UTF-8') ?>"></label>
-            <button id="add-representation-date" type="button">Hinzufügen</button>
+            <?php require __DIR__ . '/partials/date-picker.php'; ?>
             <label class="all-dates-option"><input id="representation-all-dates" type="checkbox"> Alle Daten</label>
         </div>
         <div id="representation-date-message" class="message" role="status" aria-live="polite"></div>

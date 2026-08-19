@@ -69,11 +69,11 @@ final class RepresentationRequestRepository
         $orgIds = array_values(array_unique(array_filter($orgIds, static fn ($id): bool => is_int($id) && $id > 0)));
         if ($orgIds === []) return [];
         $placeholders = implode(',', array_fill(0, count($orgIds), '?'));
-        $statement = $this->database->prepare("SELECT requests.id,requests.user_id,requests.org_id,requests.request_date,users.first_name,users.last_name FROM representation_requests requests JOIN users ON users.id=requests.user_id AND users.status='active' AND users.email_verified_at IS NOT NULL WHERE requests.org_id IN ({$placeholders}) AND requests.request_date >= ? ORDER BY requests.org_id,requests.request_date,requests.id");
+        $statement = $this->database->prepare("SELECT requests.id,requests.user_id,requests.org_id,requests.request_date,users.first_name,users.last_name,users.bni_verification_status FROM representation_requests requests JOIN users ON users.id=requests.user_id AND users.status='active' AND users.email_verified_at IS NOT NULL WHERE requests.org_id IN ({$placeholders}) AND requests.request_date >= ? ORDER BY requests.org_id,requests.request_date,requests.id");
         $statement->execute([...$orgIds, $today]); $result = [];
         foreach ($statement->fetchAll() as $row) {
             $own = $viewerUserId !== null && (int) $row['user_id'] === $viewerUserId;
-            $item = ['requestDate' => (string) $row['request_date'], 'isOwn' => $own, 'canContact' => !$own];
+            $item = ['requestDate' => (string) $row['request_date'], 'isOwn' => $own, 'canContact' => !$own, 'isVerified' => ($row['bni_verification_status']??'') === 'manual_verified'];
             if ($viewerUserId !== null) { $initial = function_exists('mb_substr') ? mb_substr((string) $row['last_name'], 0, 1) : substr((string) $row['last_name'], 0, 1); $item['displayName'] = trim((string) $row['first_name'] . ' ' . $initial . '.'); }
             if (!$own) $item['requestId'] = (int) $row['id'];
             $result[(int) $row['org_id']][] = $item;

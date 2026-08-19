@@ -1,0 +1,14 @@
+# Sichere lokale PHP-Tests. Fixtures und Live-BNI-Tests stehen bewusst nicht hier.
+account-auth.php
+admin-users-overview.php
+login-rate-limit.php
+bni-verification-invitations.php
+chapter-search.php
+representation-offers.php
+representation-requests.php
+representation-cleanup.php
+representation-contact.php
+representation-request-contact.php
+automation-refresh.php
+bni-request-policy.php
+pending-chapters.php

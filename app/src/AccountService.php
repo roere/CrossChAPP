@@ -2,12 +2,20 @@
 
 declare(strict_types=1);
 
+final class AccountResetException extends DomainException
+{
+    public function __construct(public readonly string $reason, string $message)
+    {
+        parent::__construct($message);
+    }
+}
+
 final class AccountService
 {
-    public function __construct(private readonly UserRepository $users, private readonly MailSettingsRepository $mailSettings, private readonly MailService $mailer) {}
+    public function __construct(private readonly UserRepository $users, private readonly MailSettingsRepository $mailSettings, private readonly MailService $mailer, private readonly ?BniMemberDirectoryService $directory = null) {}
 
     /** @param array<string, mixed> $input @return array{user:array<string,mixed>,mailSent:bool} */
-    public function register(array $input): array
+    public function register(array $input, string $ip = ''): array
     {
         $first = trim((string) ($input['first_name'] ?? '')); $last = trim((string) ($input['last_name'] ?? ''));
         $email = strtolower(trim((string) ($input['email'] ?? ''))); $password = (string) ($input['password'] ?? '');
@@ -20,7 +28,20 @@ final class AccountService
         $homeId = $home === null || $home === '' ? null : filter_var($home, FILTER_VALIDATE_INT);
         if ($homeId === false || ($homeId !== null && !$this->users->isValidHomeChapter((int) $homeId))) throw new InvalidArgumentException('Das gewählte Heimatchapter ist ungültig.');
         if ($this->users->findByLogin($email) !== null) throw new DomainException('Für diese E-Mail-Adresse existiert bereits ein Konto.');
-        try { $user = $this->users->create($first, $last, $email, password_hash($password, PASSWORD_DEFAULT), $homeId === null ? null : (int) $homeId); }
+        $bniStatus = 'unverified'; $externalRef = null;
+        if ($homeId !== null) {
+            if ($this->directory === null) throw new RuntimeException('Die BNI-Mitgliederprüfung ist nicht verfügbar.');
+            if ($this->users->memberCheckRateLimited($ip)) throw new DomainException('Zu viele BNI-Mitgliederprüfungen. Bitte versuche es später erneut.');
+            $this->users->recordMemberCheck($ip); $match = $this->directory->match($first, $last, (int) $homeId);
+            if ($match['status'] === 'ambiguous') throw new InvalidArgumentException('Der BNI-Eintrag konnte nicht eindeutig zugeordnet werden.');
+            if ($match['status'] === 'not_found') throw new InvalidArgumentException('Der angegebene Name konnte in diesem BNI-Chapter nicht gefunden werden. Du kannst das Konto ohne Heimatchapter anlegen.');
+            if ($match['status'] === 'unavailable') throw new InvalidArgumentException('Für dieses Chapter ist die automatische BNI-Prüfung derzeit noch nicht verfügbar.');
+            if ($match['status'] === 'rate_limited') throw new RuntimeException('Die BNI-Mitgliederprüfung ist vorübergehend rate-limitiert. Bitte versuche es später erneut.');
+            if (in_array($match['status'], ['forbidden','upstream_error'], true)) throw new RuntimeException('Die BNI-Mitgliederprüfung ist derzeit nicht verfügbar. Bitte versuche es später erneut.');
+            if ($match['status'] !== 'match') throw new RuntimeException('Die BNI-Mitgliederprüfung ist derzeit nicht verfügbar.');
+            $bniStatus = 'directory_match'; $externalRef = $match['externalRef'];
+        }
+        try { $user = $this->users->create($first, $last, $email, password_hash($password, PASSWORD_DEFAULT), $homeId === null ? null : (int) $homeId, $bniStatus, $externalRef); }
         catch (PDOException $exception) { if ($exception->getCode() === '23000') throw new DomainException('Für diese E-Mail-Adresse existiert bereits ein Konto.'); throw $exception; }
         return ['user' => $user, 'mailSent' => $this->sendVerification($user)];
     }
@@ -51,10 +72,28 @@ final class AccountService
     public function requestPasswordReset(string $email): void
     {
         $user = $this->users->findByLogin($email); if ($user === null || $user['status'] !== 'active' || $user['email_verified_at'] === null) return;
+        $this->sendPasswordReset($user);
+    }
+
+    public function requestPasswordResetForUser(int $userId): bool
+    {
+        $user = $this->users->findById($userId);
+        if ($user === null) throw new AccountResetException('user_not_found', 'Der ausgewählte Anwender wurde nicht gefunden.');
+        if ($user['role'] !== 'user') throw new AccountResetException('invalid_role', 'Administratorkonten können hier nicht zurückgesetzt werden.');
+        if (trim((string) ($user['email'] ?? '')) === '') throw new AccountResetException('email_missing', 'Für dieses Konto kann kein Passwortreset versendet werden, weil keine E-Mail-Adresse hinterlegt ist.');
+        if ($user['email_verified_at'] === null) throw new AccountResetException('email_not_verified', 'Für dieses Konto kann kein Passwortreset versendet werden, weil die E-Mail-Adresse noch nicht bestätigt wurde.');
+        if ($user['status'] !== 'active') throw new AccountResetException('account_inactive', 'Für dieses Konto kann kein Passwortreset versendet werden, weil das Konto nicht aktiv ist.');
+        return $this->sendPasswordReset($user);
+    }
+
+    /** @param array<string,mixed> $user */
+    private function sendPasswordReset(array $user): bool
+    {
         $token = $this->users->issueToken('password_reset_tokens', (int) $user['id'], 3600);
         $settings = $this->mailSettings->settings(); $link = $settings['baseUrl'] . '/?reset=' . rawurlencode($token);
         $message = $this->mailSettings->render('reset_password', ['first_name' => $user['first_name'], 'last_name' => $user['last_name'], 'reset_link' => $link, 'app_name' => 'CrossChAPP']);
-        try { $this->mailer->send($user['email'], trim($user['first_name'] . ' ' . $user['last_name']), $message['subject'], $message['body']); } catch (RuntimeException) {}
+        try { $this->mailer->send($user['email'], trim($user['first_name'] . ' ' . $user['last_name']), $message['subject'], $message['body']); return true; }
+        catch (RuntimeException) { return false; }
     }
 
     public function resetPassword(string $token, string $password, string $confirmation): bool
@@ -69,5 +108,24 @@ final class AccountService
         if (strlen($password) < 8) throw new InvalidArgumentException('Das Passwort muss mindestens 8 Zeichen lang sein.');
         if (!hash_equals($password, $confirmation)) throw new InvalidArgumentException('Die Passwörter stimmen nicht überein.');
         return $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
+    }
+
+    /** @return array{firstName:string,lastName:string,email:string,homeChapterName:?string,canDelete:bool} */
+    public function account(int $userId): array
+    {
+        $account = $this->users->accountDetails($userId);
+        if ($account === null) throw new DomainException('Das Benutzerkonto wurde nicht gefunden.');
+        return [
+            'firstName' => (string) $account['first_name'],
+            'lastName' => (string) $account['last_name'],
+            'email' => (string) $account['email'],
+            'homeChapterName' => $account['home_chapter_name'] === null ? null : (string) $account['home_chapter_name'],
+            'canDelete' => $account['role'] !== 'admin',
+        ];
+    }
+
+    public function deleteAccount(int $userId): bool
+    {
+        return $this->users->deleteAccount($userId);
     }
 }

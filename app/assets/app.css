@@ -67,6 +67,7 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .content { position: relative; z-index: 2; margin-top: -2rem; padding-bottom: 4rem; }
 .no-hero-content { margin-top: 0; padding-top: 1.5rem; }
 .page-intro-title { margin: 0 0 .75rem; color: var(--anthracite); font-family: inherit; font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 700; line-height: 1.25; letter-spacing: 0; }
+.page-meta { margin: -.15rem 0 .9rem; color: var(--muted); font-family: inherit; font-size: .82rem; line-height: 1.45; overflow-wrap: anywhere; }
 .panel, .table-panel { border: 1px solid var(--border); border-radius: 4px; background: var(--paper); box-shadow: var(--shadow); }
 .panel { padding: 1.5rem; }
 .source-panel { display: grid; grid-template-columns: minmax(250px, .65fr) minmax(420px, 1.35fr); gap: 1.5rem 3rem; align-items: end; border-top: 5px solid var(--bni-red); }
@@ -76,7 +77,7 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .representation-content { display: grid; gap: 1rem; }
 .representation-dates, .representation-filters { border-top: 5px solid var(--bni-red); }
 .date-add-row { display: flex; flex-wrap: wrap; align-items: end; gap: .8rem; margin-top: 1rem; }
-.date-add-row label:first-child { min-width: 220px; }
+.date-add-row .cross-date-picker { flex: 0 1 360px; }
 .all-dates-option { display: flex; grid-auto-flow: column; align-items: center; min-height: 42px; padding: .55rem .8rem; border: 1px solid var(--border); border-radius: 3px; background: var(--soft); }
 .all-dates-option input { width: 18px; height: 18px; }
 .date-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
@@ -84,6 +85,24 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .date-chip.disabled { color: #888; border-color: #ccc; background: #eee; opacity: .72; }
 .date-chip button { min-width: 28px; min-height: 28px; padding: 0; border-radius: 50%; }
 .date-chip button:disabled { color: #888; border-color: #bbb; background: #ddd; }
+.cross-date-picker { position: relative; display: grid; gap: .4rem; width: min(100%, 360px); margin-top: 1rem; }
+.cross-date-picker > label { font-weight: 700; }
+.cross-date-picker-input { display: grid; grid-template-columns: minmax(0, 1fr) 44px; }
+.cross-date-picker-input input { min-width: 0; height: 44px; border-radius: 3px 0 0 3px; }
+.cross-date-picker-trigger { width: 44px; min-width: 44px; height: 44px; padding: 0; border-left: 0; border-radius: 0 3px 3px 0; font-size: 1.15rem; }
+.cross-date-picker input[aria-invalid="true"] { border-color: #b00020; box-shadow: 0 0 0 1px #b00020; }
+.cross-date-picker .field-error { margin: 0; color: #b00020; font-size: .78rem; font-weight: 700; }
+.cross-date-picker-calendar { box-sizing: border-box; position: absolute; z-index: 30; top: 100%; left: 0; width: min(360px, 100%); padding: .75rem; border: 1px solid #d4d4d4; border-top: 3px solid var(--bni-red); border-radius: 4px; background: #fff; box-shadow: 0 12px 32px rgb(0 0 0 / 20%); }
+.cross-date-picker-nav { display: grid; grid-template-columns: 42px 1fr 42px; align-items: center; gap: .5rem; margin-bottom: .5rem; text-align: center; }
+.cross-date-picker-nav button { min-width: 42px; min-height: 42px; padding: .35rem; }
+.cross-date-picker-calendar table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: .2rem; }
+.cross-date-picker-calendar th { padding: .35rem .1rem; border: 0; color: #666; font-size: .72rem; text-align: center; }
+.cross-date-picker-calendar td { height: 40px; padding: 0; border: 0; text-align: center; }
+.cross-date-picker-calendar td button { width: 100%; min-width: 36px; min-height: 38px; padding: .3rem; border-radius: 3px; }
+.cross-date-picker-calendar td button:disabled { cursor: not-allowed; color: #aaa; border-color: transparent; background: #f2f2f2; opacity: .75; }
+.cross-date-picker-calendar td button:not(:disabled) { background: var(--bni-red); color: #fff; }
+.cross-date-picker-calendar td button:not(:disabled):hover { background: var(--bni-red-dark); }
+.cross-date-picker-calendar td button:focus-visible, .cross-date-picker-nav button:focus-visible, .cross-date-picker-trigger:focus-visible { outline: 3px solid #111; outline-offset: 2px; }
 .representation-filter-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)) auto; gap: .8rem; align-items: end; margin-top: 1rem; }
 .radius-input { display: flex; align-items: center; gap: .4rem; }
 .radius-input input { min-width: 0; }
@@ -100,6 +119,7 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .offer-meta { margin: 0; color: var(--muted); font-size: .75rem; }
 .home-chapter-row { background: #f4f4f4; }
 .home-chapter-badge { display: inline-block; padding: .15rem .35rem; border-radius: 2px; color: white; background: var(--anthracite); font-size: .6rem; white-space: nowrap; }
+.verified-badge { display: inline-block; width: fit-content; padding: .15rem .4rem; border-radius: 2px; color: #fff; background: #247a43; font-size: .68rem; font-weight: 800; white-space: nowrap; }
 .delete-representation-summary { display: grid; gap: .65rem; margin: 1rem 0; padding: .8rem; background: var(--surface); border-left: 3px solid var(--bni-red); }
 .representation-list-panel { overflow: hidden; }
 .representation-list-panel td:nth-child(2) { min-width: 180px; font-weight: 800; }
@@ -315,6 +335,12 @@ tr.organization:hover { background: #faf7f7; }
 .password-change-fields label { min-width: 0; align-content: start; }
 .password-change-fields input { width: 100%; height: 42px; min-height: 42px; box-sizing: border-box; }
 .password-change-success { margin: .25rem 2.5rem .25rem 0; color: var(--success); font-size: 1.05rem; font-weight: 800; }
+.account-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 0 0 1.25rem; }
+.account-details div { min-width: 0; padding: .8rem; border: 1px solid var(--border); background: #fafafa; }
+.account-details dt { margin-bottom: .25rem; color: var(--muted); font-size: .7rem; font-weight: 800; }
+.account-details dd { overflow-wrap: anywhere; margin: 0; font-weight: 800; }
+button.danger { border-color: var(--bni-red-dark); color: white; background: var(--bni-red-dark); }
+button.danger:hover { border-color: #8f101d; background: #8f101d; }
 .registration-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
 .registration-confirmation { color: var(--anthracite) !important; font-size: 1.05rem; font-weight: 800; }
 .verification-panel { display: grid; justify-items: start; gap: 1rem; }
@@ -323,14 +349,18 @@ tr.organization:hover { background: #faf7f7; }
 .registration-panel input.field-invalid { border-color: var(--bni-red); box-shadow: 0 0 0 1px var(--bni-red); }
 .field-error { color: var(--bni-red-dark); font-size: .7rem; font-weight: 700; }
 .field-error[hidden] { display: none; }
-.home-chapter-picker { display: grid; gap: .8rem; padding: 1rem; border: 1px solid var(--border); }
-.home-chapter-picker legend span { color: var(--muted); font-size: .7rem; }
-.home-chapter-filters { display: grid; grid-template-columns: .7fr 1.3fr 1fr; gap: .65rem; }
-.home-chapter-results { display: grid; max-height: 330px; overflow: auto; border: 1px solid var(--border); }
-.home-chapter-result { display: grid; grid-template-columns: auto 1fr; align-items: center; padding: .65rem; border-bottom: 1px solid #eee; cursor: pointer; }
-.home-chapter-result input { width: 18px; height: 18px; }
-.home-chapter-result span { display: grid; gap: .2rem; }
-.home-chapter-result small { color: var(--muted); font-weight: 400; }
+.chapter-picker { display: grid; gap: .8rem; padding: 1rem; border: 1px solid var(--border); }
+.chapter-picker legend span { color: var(--muted); font-size: .7rem; }
+.chapter-picker-filters { display: grid; grid-template-columns: .7fr 1.3fr 1fr; gap: .65rem; }
+.chapter-picker-selected { margin: 0; }
+.chapter-picker-guidance { margin: 0; color: var(--muted); font-size: .75rem; }
+.chapter-picker-list { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-flow: row; max-height: 330px; overflow: auto; border: 1px solid var(--border); }
+.chapter-picker-list[hidden] { display: none; }
+.chapter-picker-item { box-sizing: border-box; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; width: 100%; min-width: 0; padding: .65rem; border-bottom: 1px solid #eee; cursor: pointer; }
+.chapter-picker-item input { width: 18px; height: 18px; }
+.chapter-picker-copy { display: grid; min-width: 0; gap: .2rem; }
+.chapter-picker-copy strong, .chapter-picker-meta { display: block; overflow-wrap: anywhere; }
+.chapter-picker-meta { color: var(--muted); font-weight: 400; }
 .misc-panel { margin-top: 1.5rem; }
 .misc-panel > summary { color: var(--bni-red-dark); font-weight: 800; cursor: pointer; }
 .misc-content { display: grid; gap: 2rem; margin-top: 1.2rem; }
@@ -344,9 +374,23 @@ tr.organization:hover { background: #faf7f7; }
 #email-templates-form p { font-size: .7rem; overflow-wrap: anywhere; }
 #email-templates-form .email-template-actions { grid-column: 1 / -1; display: flex; justify-content: flex-start; }
 #email-templates-form .email-template-actions button { width: auto; justify-self: start; }
+.invitation-form { display: grid; gap: 1rem; max-width: 920px; }
+.invitation-form > button { width: fit-content; }
+.invitation-account-data { display: grid; grid-template-columns: max-content 1fr; gap: .45rem 1rem; }
+.invitation-account-data dt { font-weight: 800; }
+.invitation-account-data dd { margin: 0; }
+.users-filter-grid { display: grid; grid-template-columns: 2fr repeat(3, minmax(130px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+#admin-users-table td:nth-child(2) { font-weight: 800; }
+#admin-users-table .users-number { text-align: center; }
+.users-select-column, .users-select-cell { width: 42px; text-align: center; }
+.users-select-cell input { width: 18px; height: 18px; }
+#admin-users-table tr.is-selected { background: #fff1f2; }
+.users-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .65rem; margin-top: 1rem; }
+.users-actions p { flex-basis: 100%; margin: 0; color: var(--muted); text-align: center; font-size: .72rem; }
 .mail-preview-fixed { white-space: pre-wrap; padding: .85rem; background: #f6f6f6; border-left: 3px solid var(--bni-red); margin: .75rem 0; line-height: 1.5; }
 .mail-preview-subject { font-weight: 700; }
 .request-contact-identity { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .35rem 1rem; margin-bottom: 1rem; }
+.request-contact-identity[hidden] { display: none; }
 .request-contact-identity label:last-of-type { grid-column: 1 / -1; }
 .request-contact-identity .field-error { min-height: 1.1em; }
 .result-representation-requests { margin: .9rem 0; padding: .8rem; background: #fff6f7; border-left: 4px solid var(--bni-red); }
@@ -383,9 +427,12 @@ tr.organization:hover { background: #faf7f7; }
     .result-list { grid-template-columns: 1fr; }
     .representation-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .representation-offer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .users-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .users-column-contacts, .users-column-created { display: none; }
 }
 
 @media (max-width: 640px) {
+    .account-details { grid-template-columns: 1fr; }
     .request-contact-identity { grid-template-columns: 1fr; }
     .request-contact-identity label:last-of-type { grid-column: auto; }
     .shell { width: min(100% - 1rem, 1480px); }
@@ -432,12 +479,15 @@ tr.organization:hover { background: #faf7f7; }
     .result-detail-panel .detail-groups { grid-template-columns: 1fr; }
     #results-map { height: 320px; }
     .representation-filter-grid { grid-template-columns: 1fr; }
-    .auth-name-row, .home-chapter-filters, .mail-settings-grid, #email-templates-form { grid-template-columns: 1fr; }
+    .auth-name-row, .chapter-picker-filters, .mail-settings-grid, #email-templates-form, .users-filter-grid { grid-template-columns: 1fr; }
+    .users-column-verified, .users-column-number { display: none; }
+    .users-actions button { flex: 1 1 180px; }
     .registration-actions { display: grid; grid-template-columns: 1fr; }
     .registration-actions button { width: 100%; }
     .auth-links, .test-mail-row { flex-direction: column; align-items: stretch; }
     .date-add-row { align-items: stretch; }
     .date-add-row > * { width: 100%; }
+    .cross-date-picker-calendar { position: fixed; top: 50%; left: 50%; width: min(360px, calc(100vw - 2rem)); transform: translate(-50%, -50%); }
     .representation-actions > button { width: 100%; }
     .representation-actions strong { width: 100%; margin-left: 0; }
     .representation-offer-grid { grid-template-columns: 1fr; }

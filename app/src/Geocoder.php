@@ -13,6 +13,9 @@ final class Geocoder
         if ($query === '' || strlen($query) > 320) {
             throw new InvalidArgumentException('Bitte eine gültige PLZ oder einen Ort eingeben.');
         }
+        if (getenv('CROSSCHAPP_TEST_MODE') === '1') {
+            return ['latitude' => 50.95, 'longitude' => 7.30, 'label' => $query];
+        }
 
         $url = self::ENDPOINT . '?' . http_build_query([
             'q' => $query,

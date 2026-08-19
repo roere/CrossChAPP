@@ -103,6 +103,9 @@ final class Auth
 
     private static function isHttps(): bool
     {
-        return isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off';
+        if (getenv('APP_ENV') === 'production') return true;
+        if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off') return true;
+        require_once __DIR__ . '/ClientIp.php';
+        return ClientIp::isTrustedProxy() && strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
     }
 }

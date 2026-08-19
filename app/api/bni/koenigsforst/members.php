@@ -1,42 +1,11 @@
 <?php
-
+declare(strict_types=1);
+require_once dirname(__DIR__,3).'/src/Database.php';
+require_once dirname(__DIR__,3).'/src/BniMemberListClient.php';
 header('Content-Type: application/json; charset=utf-8');
-
-$url = 'https://bni-rheinruhr.de/bnicms/v3/frontend/memberlist/display';
-
-$data = [
-    'parameters' => 'chapterName=44628&regionIds=11805,5843,9614,5925,5921,5939,11553&chapterWebsite=1',
-    'languages' => '{"availableLanguages":[{"type":"published","url":"http://bni-rheinruhr.de/koenigsforst/de/memberlist","descriptionKey":"Deutsch","id":18,"localeCode":"de"}],"activeLanguage":{"id":18,"localeCode":"de","descriptionKey":"Deutsch","cookieBotCode":"de"}}',
-    'cmsv3' => 'true',
-    'website_type' => '3',
-    'website_id' => '27966',
-    'mappedWidgetSettings' => '[{"key":113,"name":"Member Names","value":"Namen der Mitglieder"},{"key":117,"name":"Profession/Specialty","value":"Wirtschaftszweig/Fachgebiet"},{"key":118,"name":"Company","value":"Unternehmen"},{"key":119,"name":"Showing","value":"Zeige"},{"key":120,"name":"to","value":"bis"},{"key":121,"name":"of","value":"von"},{"key":122,"name":"entries","value":"Einträgen"},{"key":304,"name":"Zero Records","value":"Keine Einträge gefunden"},{"key":343,"name":"Phone","value":"Telefon"},{"key":344,"name":"Send Mail","value":"Nachricht senden"}]',
-    'pageMode' => 'Live_Site'
-];
-
-$options = [
-    'http' => [
-        'method' => 'POST',
-        'header' =>
-            "Content-Type: application/x-www-form-urlencoded; charset=UTF-8\r\n" .
-            "X-Requested-With: XMLHttpRequest\r\n" .
-            "Referer: https://bni-rheinruhr.de/koenigsforst/de/memberlist\r\n" .
-            "User-Agent: Mozilla/5.0\r\n",
-        'content' => http_build_query($data),
-        'timeout' => 20
-    ]
-];
-
-$context = stream_context_create($options);
-$html = @file_get_contents($url, false, $context);
-
-if ($html === false) {
-    http_response_code(502);
-    echo json_encode([
-        'error' => 'BNI request failed'
-    ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-    exit;
-}
+$response=(new BniMemberListClient((new Database())->connection()))->fetch(44628);
+if($response['status']!=='ok'){http_response_code($response['status']==='rate_limited'?429:($response['status']==='forbidden'?403:502));echo json_encode(['error'=>'BNI request failed','status'=>$response['status']],JSON_UNESCAPED_UNICODE);exit;}
+$html=$response['body'];
 
 libxml_use_internal_errors(true);
 

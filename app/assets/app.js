@@ -8,10 +8,26 @@
 
     const state = {
         organizations: [], selected: new Set(), expanded: new Set(), details: new Map(), statuses: new Map(),
-        batchRunning: false, batchStopRequested: false,
+        batchRunning: false, batchStopRequested: false, users: [], selectedAdminUserId: null,
     };
     const typeLabels = { CHAPTER: 'Chapter', CORE_GROUP: 'Im Aufbau', PLANNED_GROUP: 'Geplant' };
     const countryLabels = { DE: 'Deutschland', AT: 'Österreich' };
+    const invitationChapterPicker = window.CrossChappChapterPicker.create({
+        list: document.querySelector('#invitation-chapter-results'),
+        countryInput: document.querySelector('#invitation-country'),
+        searchInput: document.querySelector('#invitation-search'),
+        locationInput: document.querySelector('#invitation-location'),
+        selectedInput: document.querySelector('#invitation-form').elements.home_chapter_org_id,
+        selectedOutput: document.querySelector('#invitation-selected-chapter'),
+        clearButton: document.querySelector('#clear-invitation-chapter'),
+        radioName: 'invitation_chapter_choice',
+        selectedLabelPrefix: 'Ausgewähltes Chapter:',
+        emptyLabel: 'Kein Chapter ausgewählt.',
+        showAllByDefault: true,
+        maxResults: null,
+        collapseAfterSelect: false,
+        resetFiltersOnClear: true,
+    });
     const elements = {
         form: document.querySelector('#source-form'), url: document.querySelector('#source-url'), read: document.querySelector('#read-button'),
         message: document.querySelector('#message'), results: document.querySelector('#results'), stats: document.querySelector('#stats'),
@@ -31,8 +47,11 @@
         miscPanel: document.querySelector('#misc-panel'), mailSettingsForm: document.querySelector('#mail-settings-form'),
         mailSettingsMessage: document.querySelector('#mail-settings-message'), templatesForm: document.querySelector('#email-templates-form'), templatesMessage: document.querySelector('#email-templates-message'),
         testMailAddress: document.querySelector('#test-mail-address'), sendTestMail: document.querySelector('#send-test-mail'), testMailMessage: document.querySelector('#test-mail-message'),
+        usersPanel: document.querySelector('#users-panel'), usersStats: document.querySelector('#users-stats'), usersSearch: document.querySelector('#users-search'), usersStatus: document.querySelector('#users-status-filter'), usersVerification: document.querySelector('#users-verification-filter'), usersChapter: document.querySelector('#users-chapter-filter'), usersMessage: document.querySelector('#users-message'), usersTableWrap: document.querySelector('#users-table-wrap'), usersList: document.querySelector('#users-list'), usersActions: document.querySelector('#users-actions'), usersSelectionHint: document.querySelector('#users-selection-hint'), resetSelectedUser: document.querySelector('#reset-selected-user'), deleteSelectedUser: document.querySelector('#delete-selected-user'), resetUserDialog: document.querySelector('#admin-reset-password-dialog'), resetUserConfirmation: document.querySelector('#admin-reset-password-confirmation'), resetUserMessage: document.querySelector('#admin-reset-password-message'), confirmResetUser: document.querySelector('#confirm-admin-reset-password'), cancelResetUser: document.querySelector('#cancel-admin-reset-password'), deleteUserDialog: document.querySelector('#admin-delete-user-dialog'), deleteUserConfirmation: document.querySelector('#admin-delete-user-confirmation'), deleteUserMessage: document.querySelector('#admin-delete-user-message'), confirmDeleteUser: document.querySelector('#confirm-admin-delete-user'), cancelDeleteUser: document.querySelector('#cancel-admin-delete-user'),
+        invitationsPanel: document.querySelector('#invitations-panel'), invitationForm: document.querySelector('#invitation-form'), invitationMessage: document.querySelector('#invitation-message'), invitationList: document.querySelector('#invitation-list'), invitationResults: document.querySelector('#invitation-chapter-results'), invitationTemplateForm: document.querySelector('#invitation-template-form'), invitationTemplateMessage: document.querySelector('#invitation-template-message'), cancelInvitationDialog: document.querySelector('#cancel-invitation-dialog'), confirmCancelInvitation: document.querySelector('#confirm-cancel-invitation'), cancelInvitationMessage: document.querySelector('#cancel-invitation-message'),
     };
     const sortState = window.CrossChappSort.bind(document.querySelector('#admin-organization-table'), render);
+    const usersSortState = window.CrossChappSort.bind(document.querySelector('#admin-users-table'), renderUsers);
     const sortFields = {
         chapterName: { type: 'string', value: item => state.details.get(item.orgId)?.chapterName },
         orgId: { type: 'number', value: item => item.orgId },
@@ -43,6 +62,14 @@
         meetingTime: { type: 'time', value: item => state.details.get(item.orgId)?.meetingTime },
         detailStatus: { type: 'string', value: item => statusLabel(state.statuses.get(item.orgId) || 'not_loaded') },
         detailsLoadedAt: { type: 'date', value: item => item.detailsLoadedAt },
+    };
+    const userStatusLabels = { active: 'Aktiv', pending: 'Ausstehend', disabled: 'Deaktiviert' };
+    const verificationLabels = { unverified: 'Nicht verifiziert', directory_match: 'BNI-Datensatz gefunden', manual_verified: 'Verifiziert' };
+    const usersSortFields = {
+        name: { type: 'string', value: user => `${user.lastName} ${user.firstName}` }, email: { type: 'string', value: user => user.email },
+        chapter: { type: 'string', value: user => user.homeChapterName }, status: { type: 'string', value: user => userStatusLabels[user.status] || user.status },
+        verification: { type: 'string', value: user => verificationLabels[user.verificationStatus] || user.verificationStatus },
+        offers: { type: 'number', value: user => user.currentOffers }, requests: { type: 'number', value: user => user.currentRequests }, contacts: { type: 'number', value: user => user.contacts30Days }, created: { type: 'date', value: user => user.createdAt },
     };
 
     elements.form.addEventListener('submit', loadMap);
@@ -65,8 +92,21 @@
     elements.mailSettingsForm.addEventListener('submit', saveMailSettings);
     elements.templatesForm.addEventListener('submit', saveEmailTemplates);
     elements.sendTestMail.addEventListener('click', sendTestMail);
+    elements.usersPanel.addEventListener('toggle', () => { if (elements.usersPanel.open && !elements.usersPanel.dataset.loaded) loadUsers(); });
+    [elements.usersSearch, elements.usersStatus, elements.usersVerification, elements.usersChapter].forEach(input => input.addEventListener('input', renderUsers));
+    elements.usersList.addEventListener('change', selectAdminUser);
+    elements.resetSelectedUser.addEventListener('click', event => openResetUserDialog(event.currentTarget));
+    elements.deleteSelectedUser.addEventListener('click', event => openDeleteUserDialog(event.currentTarget));
+    elements.confirmResetUser.addEventListener('click', sendAdminPasswordReset); elements.cancelResetUser.addEventListener('click', closeResetUserDialog); document.querySelector('#close-admin-reset-password-icon').addEventListener('click', closeResetUserDialog); elements.resetUserDialog.addEventListener('cancel',event=>{event.preventDefault();closeResetUserDialog();});
+    elements.confirmDeleteUser.addEventListener('click', deleteAdminUser); elements.cancelDeleteUser.addEventListener('click', closeDeleteUserDialog); document.querySelector('#close-admin-delete-user-icon').addEventListener('click', closeDeleteUserDialog); elements.deleteUserDialog.addEventListener('cancel',event=>{event.preventDefault();closeDeleteUserDialog();});
+    elements.invitationsPanel.addEventListener('toggle', () => { if (elements.invitationsPanel.open && !elements.invitationsPanel.dataset.loaded) loadInvitations(); });
+    elements.invitationForm.addEventListener('submit', sendInvitation);
+    elements.invitationTemplateForm.addEventListener('submit', saveInvitationTemplate);
+    elements.invitationList.addEventListener('click',cancelInvitation);
+    elements.confirmCancelInvitation.addEventListener('click', confirmCancelInvitation);
     loadLocal();
     loadAutomationSettings();
+    loadInvitations();
 
     async function loadLocal() {
         try {
@@ -322,6 +362,27 @@
         catch (error) { elements.testMailMessage.textContent = error.message; elements.testMailMessage.className = 'message error'; }
         finally { elements.sendTestMail.disabled = false; }
     }
+
+    async function loadInvitations(){if(elements.invitationsPanel.dataset.loading)return;elements.invitationsPanel.dataset.loading='true';try{const [response,chaptersResponse]=await Promise.all([fetch('/api/admin/invitations.php'),fetch('/api/auth/chapters.php')]),payload=await response.json(),chaptersPayload=await chaptersResponse.json();if(!response.ok||!chaptersResponse.ok)throw new Error(payload.error||chaptersPayload.error);invitationChapterPicker.setChapters(chaptersPayload.chapters||[]);elements.invitationTemplateForm.elements.subject.value=payload.template?.subject||'';elements.invitationTemplateForm.elements.body.value=payload.template?.body||'';renderInvitations(payload.invitations||[]);elements.invitationsPanel.dataset.loaded='true';}catch(error){setInvitationMessage(error.message,'error');}finally{delete elements.invitationsPanel.dataset.loading;}}
+    async function loadUsers(){if(elements.usersPanel.dataset.loading)return;elements.usersPanel.dataset.loading='true';elements.usersMessage.textContent='Anwender werden geladen …';try{const response=await fetch('/api/admin/users.php'),payload=await response.json();if(!response.ok)throw new Error(payload.error);state.users=payload.users||[];if(!state.users.some(user=>user.userId===state.selectedAdminUserId))state.selectedAdminUserId=null;renderUserStats(payload.stats||{});renderUsers();elements.usersPanel.dataset.loaded='true';}catch(error){elements.usersMessage.textContent=error.message;elements.usersMessage.className='message error';}finally{delete elements.usersPanel.dataset.loading;}}
+    function renderUserStats(stats){const values=[['Anwender gesamt',stats.total||0],['Aktive Anwender',stats.active||0],['Verifiziert',stats.verified||0],['Mit Heimatchapter',stats.withHomeChapter||0]];elements.usersStats.replaceChildren(...values.map(([label,value])=>{const box=document.createElement('div'),strong=document.createElement('strong'),span=document.createElement('span');strong.textContent=value;span.textContent=label;box.append(strong,span);return box;}));}
+    function visibleUsers(){const query=elements.usersSearch.value.trim().toLocaleLowerCase('de');const filtered=state.users.filter(user=>{const text=`${user.firstName} ${user.lastName} ${user.email} ${user.homeChapterName||''}`.toLocaleLowerCase('de');return(!query||text.includes(query))&&(!elements.usersStatus.value||user.status===elements.usersStatus.value)&&(!elements.usersVerification.value||user.verificationStatus===elements.usersVerification.value)&&(!elements.usersChapter.value||(elements.usersChapter.value==='yes')===(user.homeChapterName!==null));});return window.CrossChappSort.sort(filtered,usersSortState,usersSortFields);}
+    function selectedAdminUser(){return state.users.find(user=>user.userId===state.selectedAdminUserId)||null;}
+    function updateUserActions(){const selected=selectedAdminUser();elements.resetSelectedUser.disabled=!selected;elements.deleteSelectedUser.disabled=!selected;elements.usersSelectionHint.hidden=!!selected;}
+    function renderUsers(){const users=visibleUsers();elements.usersList.replaceChildren(...users.map(user=>{const row=document.createElement('tr'),selected=user.userId===state.selectedAdminUserId,selectCell=document.createElement('td'),radio=document.createElement('input');row.classList.toggle('is-selected',selected);selectCell.className='users-select-cell';radio.type='radio';radio.name='selected_admin_user';radio.value=user.userId;radio.checked=selected;radio.setAttribute('aria-label',`${user.firstName} ${user.lastName} auswählen`);selectCell.append(radio);row.append(selectCell);appendCell(row,`${user.firstName} ${user.lastName}`);appendCell(row,user.email);appendCell(row,user.homeChapterName);appendCell(row,userStatusLabels[user.status]||user.status);appendCell(row,verificationLabels[user.verificationStatus]||user.verificationStatus);appendCell(row,user.currentOffers,'users-column-number users-number');appendCell(row,user.currentRequests,'users-column-number users-number');appendCell(row,user.contacts30Days,'users-column-contacts users-number');appendCell(row,user.emailVerified?'Ja':'Nein','users-column-verified');appendCell(row,formatTimestamp(user.createdAt),'users-column-created');return row;}));elements.usersTableWrap.hidden=users.length===0;elements.usersActions.hidden=state.users.length===0;elements.usersMessage.textContent=users.length===0?'Noch keine Anwender vorhanden.':`${users.length} von ${state.users.length} Anwendern sichtbar.`;elements.usersMessage.className='message';updateUserActions();}
+    function selectAdminUser(event){const radio=event.target.closest('input[name=selected_admin_user]');if(!radio)return;state.selectedAdminUserId=Number(radio.value);renderUsers();}
+    function openResetUserDialog(trigger){const user=selectedAdminUser();if(!user)return;elements.resetUserDialog.dataset.triggerId=user.userId;elements.resetUserConfirmation.hidden=false;elements.resetUserConfirmation.querySelector('[data-admin-user-name]').textContent=`${user.firstName} ${user.lastName}`;elements.resetUserConfirmation.querySelector('[data-admin-user-email]').textContent=user.email;elements.resetUserMessage.textContent='';elements.confirmResetUser.hidden=false;elements.cancelResetUser.textContent='Abbrechen';elements.resetUserDialog.showModal();elements.confirmResetUser.focus();elements.resetUserDialog._trigger=trigger;}
+    function closeResetUserDialog(){elements.resetUserDialog.close();elements.resetUserDialog._trigger?.focus();}
+    async function sendAdminPasswordReset(){const user=selectedAdminUser();if(!user)return;elements.confirmResetUser.disabled=true;try{const response=await fetch('/api/admin/user-password-reset.php',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF_TOKEN},body:JSON.stringify({userId:user.userId})}),payload=await response.json();if(!response.ok)throw new Error(payload.message||payload.error);elements.resetUserConfirmation.hidden=true;elements.resetUserMessage.textContent=payload.message;elements.resetUserMessage.className='message success';elements.confirmResetUser.hidden=true;elements.cancelResetUser.textContent='Schließen';}catch(error){elements.resetUserMessage.textContent=error.message;elements.resetUserMessage.className='message error';}finally{elements.confirmResetUser.disabled=false;}}
+    function openDeleteUserDialog(trigger){const user=selectedAdminUser();if(!user)return;elements.deleteUserConfirmation.hidden=false;elements.deleteUserConfirmation.querySelector('[data-admin-user-name]').textContent=`${user.firstName} ${user.lastName}`;elements.deleteUserMessage.textContent='';elements.confirmDeleteUser.hidden=false;elements.cancelDeleteUser.textContent='Abbrechen';elements.deleteUserDialog.showModal();elements.confirmDeleteUser.focus();elements.deleteUserDialog._trigger=trigger;}
+    function closeDeleteUserDialog(){elements.deleteUserDialog.close();elements.deleteUserDialog._trigger?.focus();}
+    async function deleteAdminUser(){const user=selectedAdminUser();if(!user)return;elements.confirmDeleteUser.disabled=true;try{const response=await fetch('/api/admin/users.php',{method:'DELETE',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF_TOKEN},body:JSON.stringify({userId:user.userId})}),payload=await response.json();if(!response.ok)throw new Error(payload.error);state.selectedAdminUserId=null;elements.deleteUserConfirmation.hidden=true;elements.deleteUserMessage.textContent=payload.message;elements.deleteUserMessage.className='message success';elements.confirmDeleteUser.hidden=true;elements.cancelDeleteUser.textContent='Schließen';delete elements.usersPanel.dataset.loaded;await loadUsers();}catch(error){elements.deleteUserMessage.textContent=error.message;elements.deleteUserMessage.className='message error';}finally{elements.confirmDeleteUser.disabled=false;}}
+    async function saveInvitationTemplate(event){event.preventDefault();const body=Object.fromEntries(new FormData(event.currentTarget));try{const response=await fetch('/api/admin/invitations.php',{method:'PUT',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF_TOKEN},body:JSON.stringify(body)}),payload=await response.json();if(!response.ok)throw new Error(payload.error);elements.invitationTemplateMessage.textContent='Einladungstext wurde gespeichert.';elements.invitationTemplateMessage.className='message success';}catch(error){elements.invitationTemplateMessage.textContent=error.message;elements.invitationTemplateMessage.className='message error';}}
+    async function sendInvitation(event){event.preventDefault();const form=event.currentTarget,values=Object.fromEntries(new FormData(form));if(!values.home_chapter_org_id){setInvitationMessage('Bitte wähle ein Chapter.','error');return;}try{const response=await fetch('/api/admin/invitations.php',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF_TOKEN},body:JSON.stringify(values)}),payload=await response.json();if(!response.ok)throw new Error(payload.error);form.reset();invitationChapterPicker.clear();setInvitationMessage('Einladung wurde versendet.','success');loadInvitations();}catch(error){setInvitationMessage(error.message,'error');}}
+    function cancelInvitation(event){const button=event.target.closest('button[data-invitation-id]');if(!button)return;elements.cancelInvitationDialog.dataset.invitationId=button.dataset.invitationId;elements.cancelInvitationMessage.textContent='';elements.cancelInvitationDialog.showModal();}
+    async function confirmCancelInvitation(){const id=Number(elements.cancelInvitationDialog.dataset.invitationId);elements.confirmCancelInvitation.disabled=true;try{const response=await fetch('/api/admin/invitations.php',{method:'DELETE',headers:{'Content-Type':'application/json','X-CSRF-Token':CSRF_TOKEN},body:JSON.stringify({id})}),payload=await response.json();if(!response.ok)throw new Error(payload.error);elements.cancelInvitationDialog.close();loadInvitations();}catch(error){elements.cancelInvitationMessage.textContent=error.message;elements.cancelInvitationMessage.className='message error';}finally{elements.confirmCancelInvitation.disabled=false;}}
+    function renderInvitations(items){elements.invitationList.replaceChildren(...items.map(item=>{const row=document.createElement('tr');[`${item.firstName} ${item.lastName}`,item.email,item.chapterName,formatTimestamp(item.sentAt),formatTimestamp(item.expiresAt),item.status].forEach(value=>appendCell(row,value));const cell=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='secondary';button.dataset.invitationId=item.id;button.textContent='Widerrufen';cell.append(button);row.append(cell);return row;}));}
+    function setInvitationMessage(text,type=''){elements.invitationMessage.textContent=text;elements.invitationMessage.className=`message ${type}`;}
 
     function setBatchControls(running) {
         elements.startBatch.disabled = running;

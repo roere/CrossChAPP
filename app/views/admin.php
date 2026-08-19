@@ -2,7 +2,7 @@
 require_once __DIR__ . '/../src/BniRequestPolicy.php';
 ?>
 <main class="shell content no-hero-content" data-detail-delay-ms="<?= BniRequestPolicy::DETAIL_DELAY_MS ?>">
-    <p class="compact-view-context">Administration</p>
+    <p class="page-intro-title">Administration</p>
     <section class="panel admin-local-heading" aria-labelledby="local-heading">
         <div>
             <p class="section-kicker">Gespeicherter Bestand</p>
@@ -144,6 +144,86 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
         </form>
         <div id="message" class="message" role="status" aria-live="polite"></div>
     </section>
+    <details id="users-panel" class="panel misc-panel">
+        <summary>Anwender</summary>
+        <div class="misc-content">
+            <div id="users-stats" class="stats" aria-label="Anwenderstatistik"></div>
+            <section aria-labelledby="users-heading">
+                <div class="section-heading"><div><p class="section-kicker">Benutzerkonten</p><h2 id="users-heading">Anwenderübersicht</h2></div></div>
+                <div class="users-filter-grid">
+                    <label>Suche<input id="users-search" type="search" placeholder="Name, E-Mail oder Chapter"></label>
+                    <label>Status<select id="users-status-filter"><option value="">Alle</option><option value="active">Aktiv</option><option value="pending">Ausstehend</option><option value="disabled">Deaktiviert</option></select></label>
+                    <label>Verifikation<select id="users-verification-filter"><option value="">Alle</option><option value="unverified">Nicht verifiziert</option><option value="directory_match">BNI-Datensatz gefunden</option><option value="manual_verified">Verifiziert</option></select></label>
+                    <label>Heimatchapter<select id="users-chapter-filter"><option value="">Alle</option><option value="yes">Ja</option><option value="no">Nein</option></select></label>
+                </div>
+                <div id="users-message" class="message" role="status" aria-live="polite"></div>
+                <div id="users-table-wrap" class="table-scroll" hidden>
+                    <table id="admin-users-table">
+                        <thead><tr>
+                            <th class="users-select-column"><span class="sr-only">Auswahl</span></th>
+                            <th data-sort-key="name"><button type="button" class="sort-button">Name <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th data-sort-key="email"><button type="button" class="sort-button">E-Mail <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th data-sort-key="chapter"><button type="button" class="sort-button">Heimatchapter <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th data-sort-key="status"><button type="button" class="sort-button">Status <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th data-sort-key="verification"><button type="button" class="sort-button">Verifikation <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th class="users-column-number" data-sort-key="offers"><button type="button" class="sort-button">Angebote <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th class="users-column-number" data-sort-key="requests"><button type="button" class="sort-button">Gesuche <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th class="users-column-contacts" data-sort-key="contacts"><button type="button" class="sort-button">Kontakte 30 Tage <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                            <th class="users-column-verified">E-Mail bestätigt</th>
+                            <th class="users-column-created" data-sort-key="created"><button type="button" class="sort-button">Registriert <span class="sort-indicator" aria-hidden="true"></span></button></th>
+                        </tr></thead>
+                        <tbody id="users-list"></tbody>
+                    </table>
+                </div>
+                <div id="users-actions" class="users-actions" aria-describedby="users-selection-hint">
+                    <button id="reset-selected-user" type="button" disabled>Passwort zurücksetzen</button>
+                    <button id="delete-selected-user" type="button" class="danger" disabled>Konto löschen</button>
+                    <p id="users-selection-hint">Bitte wähle zuerst einen Anwender aus.</p>
+                </div>
+            </section>
+        </div>
+    </details>
+    <dialog id="admin-reset-password-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-reset-password-heading">
+        <div class="account-dialog-card">
+            <button id="close-admin-reset-password-icon" type="button" class="dialog-close" aria-label="Passwortreset schließen">×</button>
+            <h2 id="admin-reset-password-heading">Passwort zurücksetzen</h2>
+            <div id="admin-reset-password-confirmation"><p>Möchtest du eine E-Mail zum Zurücksetzen des Passworts an <strong data-admin-user-name></strong> senden?</p><p data-admin-user-email></p></div>
+            <div id="admin-reset-password-message" class="message" role="status" aria-live="polite"></div>
+            <div class="registration-actions"><button id="confirm-admin-reset-password" type="button">Reset-Link senden</button><button id="cancel-admin-reset-password" type="button" class="secondary">Abbrechen</button></div>
+        </div>
+    </dialog>
+    <dialog id="admin-delete-user-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-delete-user-heading">
+        <div class="account-dialog-card">
+            <button id="close-admin-delete-user-icon" type="button" class="dialog-close" aria-label="Anwenderlöschung schließen">×</button>
+            <h2 id="admin-delete-user-heading">Anwender löschen</h2>
+            <div id="admin-delete-user-confirmation"><p>Möchtest du das Benutzerkonto von <strong data-admin-user-name></strong> wirklich löschen?</p><p>Das Benutzerkonto und die zugehörigen aktuellen Vertretungsdaten werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.</p></div>
+            <div id="admin-delete-user-message" class="message" role="status" aria-live="polite"></div>
+            <div class="registration-actions"><button id="confirm-admin-delete-user" type="button" class="danger">Anwender endgültig löschen</button><button id="cancel-admin-delete-user" type="button" class="secondary">Abbrechen</button></div>
+        </div>
+    </dialog>
+    <details id="invitations-panel" class="panel misc-panel">
+        <summary>Einladungen</summary>
+        <div class="misc-content">
+            <section><p class="section-kicker">Manuell geprüft</p><h2>Person einladen</h2>
+                <form id="invitation-form" class="invitation-form">
+                    <div class="auth-name-row"><label>Vorname *<input name="first_name" required maxlength="120"></label><label>Nachname *<input name="last_name" required maxlength="120"></label></div>
+                    <label>E-Mail-Adresse *<input name="email" type="email" required maxlength="254"></label>
+                    <?php $chapterPicker = ['legend'=>'Chapter *','required'=>true,'showAllByDefault'=>true,'inputId'=>'invitation-chapter-id','inputName'=>'home_chapter_org_id','countryId'=>'invitation-country','searchId'=>'invitation-search','locationId'=>'invitation-location','clearId'=>'clear-invitation-chapter','clearLabel'=>'Chapterauswahl zurücksetzen','selectedId'=>'invitation-selected-chapter','resultsId'=>'invitation-chapter-results','emptyLabel'=>'Kein Chapter ausgewählt.','ariaLabel'=>'Chapter auswählen']; require __DIR__ . '/partials/chapter-picker.php'; ?>
+                    <button type="submit">Einladung senden</button>
+                </form><div id="invitation-message" class="message" role="status"></div>
+            </section>
+            <section><h2>Einladungstext</h2><form id="invitation-template-form" class="invitation-form"><label>Betreff<input name="subject" required></label><label>Einladungstext<textarea name="body" rows="10" required></textarea></label><p>Erlaubte Platzhalter: {{first_name}}, {{last_name}}, {{email}}, {{chapter}}, {{invitation_link}}, {{app_name}}</p><button type="submit">Einladungstext speichern</button></form><div id="invitation-template-message" class="message" role="status"></div></section>
+            <section><h2>Offene Einladungen</h2><div class="table-scroll"><table><thead><tr><th>Name</th><th>E-Mail</th><th>Chapter</th><th>Gesendet</th><th>Gültig bis</th><th>Status</th><th>Aktion</th></tr></thead><tbody id="invitation-list"></tbody></table></div></section>
+        </div>
+    </details>
+    <dialog id="cancel-invitation-dialog" aria-labelledby="cancel-invitation-title">
+        <form method="dialog" class="auth-card">
+            <h2 id="cancel-invitation-title">Einladung widerrufen</h2>
+            <p>Möchtest du diese Einladung wirklich widerrufen?</p>
+            <div id="cancel-invitation-message" class="message" role="status"></div>
+            <div class="auth-actions"><button id="confirm-cancel-invitation" type="button">Widerrufen</button><button type="submit" class="secondary">Abbrechen</button></div>
+        </form>
+    </dialog>
     <details id="misc-panel" class="panel misc-panel">
         <summary>Sonstiges</summary>
         <div class="misc-content">
@@ -152,7 +232,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                     <label>SMTP-Server<input name="smtpHost"></label><label>SMTP-Port<input name="smtpPort" type="number" min="1" max="65535" value="587"></label>
                     <label>SMTP-Benutzername<input name="smtpUsername" autocomplete="off"></label><label>SMTP-Passwort<input name="smtpPassword" type="password" autocomplete="new-password" placeholder="••••••••"></label>
                     <label>Verschlüsselung<select name="encryption"><option value="starttls">STARTTLS</option><option value="tls">SSL/TLS</option><option value="none">keine</option></select></label>
-                    <label>Absender-E-Mail<input name="senderEmail" type="email"></label><label>Absendername<input name="senderName" value="CrossChAPP"></label><label>Basis-URL für Links<input name="baseUrl" type="url" value="http://localhost:8082"></label>
+                    <label>Absender-E-Mail<input name="senderEmail" type="email"></label><label>Absendername<input name="senderName" value="CrossChAPP"></label><label>Basis-URL für Links<input name="baseUrl" type="url"></label>
                     <button type="submit">E-Mail-Einstellungen speichern</button>
                 </form><div id="mail-settings-message" class="message" role="status"></div>
                 <div class="test-mail-row"><label>Test-E-Mail-Adresse<input id="test-mail-address" type="email"></label><button id="send-test-mail" type="button" class="secondary">Test-E-Mail senden</button></div><div id="test-mail-message" class="message" role="status"></div>

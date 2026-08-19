@@ -11,7 +11,7 @@ def password_geometry():return script("const f=document.querySelector('#register
 def aligned(geometry):return abs(geometry['pw'][1]-geometry['confirmation'][1])<.1 and abs(geometry['pw'][2]-geometry['confirmation'][2])<.1 and abs(geometry['pw'][3]-geometry['confirmation'][3])<.1 and abs(geometry['labelTops'][0]-geometry['labelTops'][1])<.1
 try:
     request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=register'});time.sleep(1)
-    registration=script("return {title:document.querySelector('h1').textContent,count:document.querySelectorAll('.home-chapter-result').length,adminHint:document.body.textContent.includes('CrossChAPP Admin')};")
+    registration=script("return {title:document.querySelector('h1').textContent,count:document.querySelectorAll('.chapter-picker-item').length,adminHint:document.body.textContent.includes('CrossChAPP Admin')};")
     assert 'Neues Konto' in registration['title'] and registration['count']>0 and not registration['adminHint']
     validation=script("""
 const f=document.querySelector('#register-form'), email=f.email, password=f.password, confirmation=f.password_confirmation;
@@ -40,8 +40,8 @@ return {badEmail,goodEmail,shortPassword,goodPassword,mismatch,match,changedAgai
     fresh=script("const f=document.querySelector('#register-form');return {first:f.first_name.value,last:f.last_name.value,email:f.email.value};");assert fresh=={'first':'','last':'','email':''},fresh
     blocked=script("""const f=document.querySelector('#register-form');f.first_name.value='UI';f.last_name.value='Test';f.email.value='ungueltig';f.password.value='12345678';f.password_confirmation.value='12345678';f.requestSubmit();return {focus:document.activeElement===f.email,error:!document.querySelector('#register-email-error').hidden};""")
     assert blocked['focus'] and blocked['error'],blocked
-    selected=script("const s=document.querySelector('#home-chapter-search');s.value='Königsforst';s.dispatchEvent(new Event('input',{bubbles:true}));const r=document.querySelector('.home-chapter-result input');r.click();return {id:document.querySelector('#home-chapter-id').value,text:document.querySelector('#selected-home-chapter').textContent,visible:document.querySelectorAll('.home-chapter-result').length};")
-    assert selected['id'] and 'ausgewählt' in selected['text'] and selected['visible']>=1
+    selected=script("const s=document.querySelector('#home-chapter-search');s.value='Königsforst';s.dispatchEvent(new Event('input',{bubbles:true}));const r=document.querySelector('.chapter-picker-item input');r.click();return {id:document.querySelector('#home-chapter-id').value,text:document.querySelector('#selected-home-chapter').textContent,visible:document.querySelectorAll('.chapter-picker-item').length};")
+    assert selected['id'] and selected['text'].startswith('Heimatchapter:') and 'Königsforst' in selected['text'] and selected['visible']>=1
     cleared=script("document.querySelector('#clear-home-chapter').click();return document.querySelector('#home-chapter-id').value;");assert cleared==''
     script(f"const f=document.querySelector('#register-form');f.first_name.value='UI';f.last_name.value='Test';f.email.value='{test_email}';f.password.value='12345678';f.password_confirmation.value='12345678';document.querySelector('#home-chapter-id').value='999999999';f.requestSubmit();");time.sleep(.5)
     failed=script("return {form:!!document.querySelector('#register-form'),error:document.querySelector('#register-message').textContent.length>0};");assert failed['form'] and failed['error'],failed

@@ -1,0 +1,24 @@
+<?php
+declare(strict_types=1);
+$root=is_file(__DIR__.'/../app/src/Database.php')?__DIR__.'/../app':'/var/www/html';
+require_once $root.'/src/Database.php';require_once $root.'/src/UserRepository.php';
+$check=static function(bool $condition,string $message):void{if(!$condition)throw new RuntimeException($message);};
+$db=(new Database(':memory:'))->connection();$users=new UserRepository($db);$now=gmdate('Y-m-d\TH:i:s\Z');
+$db->exec("INSERT INTO organizations(org_id,country_code,org_type,chapter_name,created_at,updated_at)VALUES(701,'DE','CHAPTER','Testchapter Eins','$now','$now'),(702,'DE','CHAPTER','Testchapter Zwei','$now','$now')");
+$a=$users->create('Anna','Aktiv','anna@example.test',password_hash('password-123',PASSWORD_DEFAULT),701,'manual_verified');$b=$users->create('Berta','BNI','berta@example.test',password_hash('password-123',PASSWORD_DEFAULT),702,'directory_match');$c=$users->create('Carla','Ohne','carla@example.test',password_hash('password-123',PASSWORD_DEFAULT),null,'unverified');
+$db->exec("UPDATE users SET status='active',email_verified_at='$now' WHERE id IN (".(int)$a['id'].','.(int)$b['id'].")");
+$future='2099-02-01';$past='2000-02-01';
+$db->exec("INSERT INTO representation_offers(user_id,org_id,all_dates,date_signature,created_at,updated_at)VALUES(".(int)$a['id'].",702,1,'','$now','$now')");
+$db->exec("INSERT INTO representation_offers(user_id,org_id,all_dates,date_signature,created_at,updated_at)VALUES(".(int)$a['id'].",702,0,'$future|2099-02-08','$now','$now')");$multi=(int)$db->lastInsertId();$db->exec("INSERT INTO representation_offer_dates(offer_id,offer_date)VALUES($multi,'$future'),($multi,'2099-02-08')");
+$db->exec("INSERT INTO representation_offers(user_id,org_id,all_dates,date_signature,created_at,updated_at)VALUES(".(int)$a['id'].",702,0,'$past','$now','$now')");$expired=(int)$db->lastInsertId();$db->exec("INSERT INTO representation_offer_dates(offer_id,offer_date)VALUES($expired,'$past')");
+$db->exec("INSERT INTO representation_requests(user_id,org_id,request_date,created_at,updated_at)VALUES(".(int)$a['id'].",701,'$future','$now','$now'),(".(int)$a['id'].",701,'$past','$now','$now'),(".(int)$b['id'].",702,'2099-03-01','$now','$now'),(".(int)$b['id'].",702,'2099-03-08','$now','$now')");
+$request=(int)$db->query("SELECT id FROM representation_requests WHERE user_id=".(int)$b['id'].' ORDER BY id LIMIT 1')->fetchColumn();
+$offer=(int)$db->query("SELECT id FROM representation_offers WHERE user_id=".(int)$a['id'].' ORDER BY id LIMIT 1')->fetchColumn();
+$db->exec("INSERT INTO representation_contact_log(requester_user_id,offer_id,recipient_user_id,requested_date,sent_at,status)VALUES(".(int)$b['id'].",$offer,".(int)$a['id'].",'$future','$now','success')");
+$db->exec("INSERT INTO representation_request_contact_log(contact_user_id,request_id,recipient_user_id,sent_at,status)VALUES(".(int)$a['id'].",$request,".(int)$b['id'].",'$now','success')");
+$overview=$users->adminUsersOverview('2026-08-19',gmdate('Y-m-d\TH:i:s\Z',time()-2592000));$check(count($overview)===3,'Nur drei normale Benutzer, kein Admin.');$byMail=array_column($overview,null,'email');
+$check($byMail['anna@example.test']['currentOffers']===2,'Immer- und Multi-Date-Angebot zählen je einmal, vergangenes Angebot nicht.');
+$check($byMail['anna@example.test']['currentRequests']===1&&$byMail['berta@example.test']['currentRequests']===2,'Nur heutige und zukünftige Gesuche zählen.');
+$check($byMail['anna@example.test']['contacts30Days']===1&&$byMail['berta@example.test']['contacts30Days']===1,'Beide bestehenden Kontaktlogarten werden gebündelt gezählt.');
+$check($byMail['anna@example.test']['verificationStatus']==='manual_verified'&&is_int($byMail['anna@example.test']['userId'])&&$byMail['berta@example.test']['verificationStatus']==='directory_match'&&$byMail['carla@example.test']['homeChapterName']===null,'Stammdaten, interne Adminreferenz und Verifikationsstatus vollständig.');
+echo "PASS Admin-Anwenderübersicht: gebündelte Stammdaten, Angebote, Gesuche und Kontakte\n";

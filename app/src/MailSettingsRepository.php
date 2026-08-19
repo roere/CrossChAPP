@@ -11,11 +11,12 @@ final class MailSettingsRepository
     {
         $row = $this->database->query('SELECT * FROM mail_settings WHERE id = 1')->fetch();
         if (!is_array($row)) throw new RuntimeException('E-Mail-Einstellungen fehlen.');
+        $baseUrl = self::configuredBaseUrl() ?? (string) $row['base_url'];
         return [
             'smtpHost' => $row['smtp_host'], 'smtpPort' => (int) $row['smtp_port'], 'smtpUsername' => $row['smtp_username'],
             'smtpPassword' => $includePassword ? $row['smtp_password'] : null, 'hasSmtpPassword' => is_string($row['smtp_password']) && $row['smtp_password'] !== '',
             'encryption' => $row['encryption'], 'senderEmail' => $row['sender_email'], 'senderName' => $row['sender_name'],
-            'baseUrl' => $row['base_url'], 'updatedAt' => $row['updated_at'],
+            'baseUrl' => $baseUrl, 'updatedAt' => $row['updated_at'],
         ];
     }
 
@@ -25,7 +26,7 @@ final class MailSettingsRepository
         $port = filter_var($settings['smtpPort'] ?? null, FILTER_VALIDATE_INT);
         $encryption = (string) ($settings['encryption'] ?? '');
         $senderEmail = trim((string) ($settings['senderEmail'] ?? ''));
-        $baseUrl = rtrim(trim((string) ($settings['baseUrl'] ?? '')), '/');
+        $baseUrl = self::configuredBaseUrl() ?? rtrim(trim((string) ($settings['baseUrl'] ?? '')), '/');
         if ($port === false || $port < 1 || $port > 65535 || !in_array($encryption, ['starttls', 'tls', 'none'], true)
             || ($senderEmail !== '' && filter_var($senderEmail, FILTER_VALIDATE_EMAIL) === false)
             || filter_var($baseUrl, FILTER_VALIDATE_URL) === false || !in_array(parse_url($baseUrl, PHP_URL_SCHEME), ['http', 'https'], true)) {
@@ -41,6 +42,15 @@ final class MailSettingsRepository
         $statement->execute([':host' => trim((string) ($settings['smtpHost'] ?? '')), ':port' => $port, ':username' => trim((string) ($settings['smtpUsername'] ?? '')), ':password' => $password, ':encryption' => $encryption, ':sender_email' => $senderEmail, ':sender_name' => trim((string) ($settings['senderName'] ?? 'CrossChAPP')) ?: 'CrossChAPP', ':base_url' => $baseUrl, ':updated_at' => self::now()]);
     }
 
+    private static function configuredBaseUrl(): ?string
+    {
+        $value = getenv('APP_BASE_URL');
+        if (!is_string($value) || trim($value) === '') return null;
+        $url = rtrim(trim($value), '/');
+        if (filter_var($url, FILTER_VALIDATE_URL) === false || !in_array(parse_url($url, PHP_URL_SCHEME), ['http', 'https'], true)) throw new RuntimeException('APP_BASE_URL ist ungültig.');
+        return $url;
+    }
+
     /** @return array<string, array<string, string>> */
     public function templates(): array
     {
@@ -53,7 +63,7 @@ final class MailSettingsRepository
 
     public function saveTemplate(string $key, string $subject, string $body): void
     {
-        if (!in_array($key, ['verify_email', 'reset_password', 'representation_contact', 'representation_request_contact'], true) || trim($subject) === '' || trim($body) === '' || strlen($subject) > 250 || strlen($body) > 20000) throw new InvalidArgumentException('Die E-Mail-Vorlage ist ungültig.');
+        if (!in_array($key, ['verify_email', 'reset_password', 'representation_contact', 'representation_request_contact', 'user_invitation'], true) || trim($subject) === '' || trim($body) === '' || strlen($subject) > 250 || strlen($body) > 20000) throw new InvalidArgumentException('Die E-Mail-Vorlage ist ungültig.');
         $statement = $this->database->prepare('UPDATE email_templates SET subject = :subject, body = :body, updated_at = :updated_at WHERE template_key = :key');
         $statement->execute([':subject' => trim($subject), ':body' => trim($body), ':updated_at' => self::now(), ':key' => $key]);
     }
@@ -67,6 +77,7 @@ final class MailSettingsRepository
             'reset_password' => ['first_name', 'last_name', 'reset_link', 'app_name'],
             'representation_contact' => ['provider_first_name', 'requester_first_name', 'requester_last_name', 'requester_full_name', 'requester_email', 'requester_chapter', 'requested_date', 'custom_message', 'app_name'],
             'representation_request_contact' => ['request_owner_first_name', 'contact_first_name', 'contact_last_name', 'contact_full_name', 'contact_email', 'contact_chapter', 'requested_chapter', 'requested_date', 'custom_message', 'app_name'],
+            'user_invitation' => ['first_name', 'last_name', 'email', 'chapter', 'invitation_link', 'app_name'],
             default => throw new RuntimeException('E-Mail-Vorlage fehlt.'),
         };
         $replace = [];

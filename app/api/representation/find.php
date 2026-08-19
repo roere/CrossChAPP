@@ -19,7 +19,7 @@ $zone = new DateTimeZone('Europe/Berlin'); try { if (!empty($chapterRow['timezon
 $today = (new DateTimeImmutable('today', $zone))->format('Y-m-d');
 $requests = $requestRepository->forUser((int) $user['id'], $today);
 $offerRepository = new RepresentationOfferRepository($database);
-$offers = $offerRepository->findForHomeChapter((int) $user['home_chapter_org_id'], (int) $user['id'], $today, array_column($requests, 'requestDate'));
+$offers = $offerRepository->findForHomeChapter((int) $user['home_chapter_org_id'], (int) $user['id'], $today);
 $overview = $offerRepository->overviewForHomeChapter((int) $user['home_chapter_org_id'], (int) $user['id'], $today);
 JsonResponse::send(['chapter' => ['chapterName' => is_array($chapterRow) ? $chapterRow['chapter_name'] : '—', 'meetingDay' => is_array($chapterRow) ? $chapterRow['meeting_day'] : null],
     'requests' => $requests, 'today' => $today, 'datedOffers' => $offers['datedOffers'], 'allDatesOffers' => $offers['allDatesOffers'], 'offers' => $overview, 'contactHint' => (new MailSettingsRepository($database))->contactHint()]);

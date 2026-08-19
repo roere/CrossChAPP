@@ -1,0 +1,20 @@
+services:
+  test-web:
+    build: .
+    command: ["sh", "/usr/local/bin/bni-dach-entrypoint"]
+    ports:
+      - "127.0.0.1:${CROSSCHAPP_TEST_PORT:-18082}:80"
+    environment:
+      CROSSCHAPP_DB_PATH: /var/www/data/check.sqlite
+      CROSSCHAPP_TEST_MODE: "1"
+      CROSSCHAPP_DISABLE_EXTERNAL_HTTP: "1"
+      CROSSCHAPP_MAIL_CAPTURE_PATH: /var/www/data/mail-capture.jsonl
+    volumes:
+      - ./app:/var/www/html:ro
+      - ./tests:/var/www/tests:ro
+      - ${CROSSCHAPP_TEST_DATA_DIR:?CROSSCHAPP_TEST_DATA_DIR must be set}:/var/www/data
+    networks:
+      - check-internal
+
+networks:
+  check-internal: {}

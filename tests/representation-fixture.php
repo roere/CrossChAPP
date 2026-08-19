@@ -5,10 +5,10 @@ declare(strict_types=1);
 require_once '/var/www/html/src/Database.php';
 
 $database = (new Database())->connection();
-$emails = ['representation-a@example.invalid', 'representation-b@example.invalid', 'representation-c@example.invalid', 'representation-d@example.invalid'];
+$emails = ['representation-a@example.invalid', 'representation-b@example.invalid', 'representation-c@example.invalid', 'representation-d@example.invalid', 'representation-e@example.invalid'];
 $action = getenv('TEST_ACTION');
 if (!in_array($action, ['setup', 'cleanup'], true)) { echo "SKIP representation browser fixture (TEST_ACTION fehlt)\n"; exit; }
-$delete = $database->prepare('DELETE FROM users WHERE email IN (?, ?, ?, ?)');
+$delete = $database->prepare('DELETE FROM users WHERE email IN (?, ?, ?, ?, ?)');
 $delete->execute($emails);
 if ($action === 'cleanup') { echo "PASS fixture cleanup\n"; exit; }
 $home = $database->query("SELECT org_id, chapter_name, city, postal_code FROM organizations WHERE org_type = 'CHAPTER' AND chapter_name IS NOT NULL AND city IS NOT NULL AND meeting_day = 'Freitag' ORDER BY org_id LIMIT 1")->fetch();
@@ -22,4 +22,6 @@ $insert->execute(['Anna', 'Alpha', $emails[0], password_hash('representation-tes
 $insert->execute(['Bernd', 'Beta', $emails[1], password_hash('representation-test-123', PASSWORD_DEFAULT), $chapters[3]['org_id'], $now, $now, $now]);
 $insert->execute(['Carla', 'Chapterlos', $emails[2], password_hash('representation-test-123', PASSWORD_DEFAULT), null, $now, $now, $now]);
 $insert->execute(['Dora', 'Delta', $emails[3], password_hash('representation-test-123', PASSWORD_DEFAULT), $chapters[0]['org_id'], $now, $now, $now]);
+$withoutMeetingDay = $database->query("SELECT org_id FROM organizations WHERE org_type='CHAPTER' AND meeting_day IS NULL ORDER BY org_id LIMIT 1")->fetchColumn();
+if ($withoutMeetingDay !== false) $insert->execute(['Emil', 'Ohnetag', $emails[4], password_hash('representation-test-123', PASSWORD_DEFAULT), (int) $withoutMeetingDay, $now, $now, $now]);
 echo json_encode(['chapterIds' => array_map(static fn (array $chapter): int => (int) $chapter['org_id'], array_slice($chapters, 0, 3)), 'homeChapterB' => (int) $chapters[3]['org_id'], 'searchLocation' => trim((string) $home['postal_code'].' '.(string)$home['city'])], JSON_UNESCAPED_UNICODE);

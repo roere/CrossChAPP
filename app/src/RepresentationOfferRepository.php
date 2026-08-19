@@ -56,11 +56,11 @@ final class RepresentationOfferRepository
     }
 
     /** @return array{datedOffers:list<array<string,mixed>>,allDatesOffers:list<array<string,mixed>>} */
-    public function findForHomeChapter(int $orgId, int $currentUserId, string $today, array $requestDates = []): array
+    public function findForHomeChapter(int $orgId, int $currentUserId, string $today): array
     {
         $statement = $this->database->prepare(<<<'SQL'
             SELECT offers.id, offers.user_id, offers.all_dates, users.first_name, users.last_name,
-                   users.home_chapter_org_id, dates.offer_date
+                   users.home_chapter_org_id, users.bni_verification_status, dates.offer_date
             FROM representation_offers offers
             JOIN users ON users.id = offers.user_id AND users.status = 'active' AND users.email_verified_at IS NOT NULL
             LEFT JOIN representation_offer_dates dates ON dates.offer_id = offers.id
@@ -70,7 +70,6 @@ final class RepresentationOfferRepository
             SQL);
         $statement->execute([':today' => $today, ':org_id' => $orgId, ':user_id' => $currentUserId]);
         $dated = []; $always = [];
-        foreach ($requestDates as $requestDate) if (is_string($requestDate) && $requestDate >= $today) $dated[$requestDate] = [];
         foreach ($statement->fetchAll() as $row) {
             $provider = self::publicProvider($row);
             if ((bool) $row['all_dates']) $always[(int) $row['user_id']] = $provider;
@@ -92,7 +91,7 @@ final class RepresentationOfferRepository
     {
         $statement = $this->database->prepare(<<<'SQL'
             SELECT offers.id, offers.all_dates, users.id AS user_id, users.first_name, users.last_name,
-                   users.home_chapter_org_id,
+                   users.home_chapter_org_id, users.bni_verification_status,
                    GROUP_CONCAT(CASE WHEN dates.offer_date >= :today THEN dates.offer_date END) AS offer_dates,
                    MIN(CASE WHEN dates.offer_date >= :today THEN dates.offer_date END) AS next_date
             FROM representation_offers offers
@@ -136,7 +135,7 @@ final class RepresentationOfferRepository
     private static function publicProvider(array $row): array
     {
         $initial = function_exists('mb_substr') ? mb_substr((string) $row['last_name'], 0, 1) : substr((string) $row['last_name'], 0, 1);
-        return ['offerId' => (int) $row['id'], 'displayName' => trim((string) $row['first_name'] . ' ' . $initial . '.'), 'isBniMember' => $row['home_chapter_org_id'] !== null];
+        return ['offerId' => (int) $row['id'], 'displayName' => trim((string) $row['first_name'] . ' ' . $initial . '.'), 'isBniMember' => $row['home_chapter_org_id'] !== null, 'isVerified' => ($row['bni_verification_status'] ?? '') === 'manual_verified'];
     }
 
     /** @return list<string> */

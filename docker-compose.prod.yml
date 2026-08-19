@@ -1,0 +1,48 @@
+services:
+  web:
+    build:
+      context: .
+    command: ["sh", "/usr/local/bin/bni-dach-entrypoint"]
+    restart: unless-stopped
+    ports: !override
+      - "127.0.0.1:8082:80"
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
+      CROSSCHAPP_DB_PATH: ${CROSSCHAPP_DB_PATH:-/var/www/data/bni-dach.sqlite}
+      CROSSCHAPP_TRUSTED_PROXIES: ${CROSSCHAPP_TRUSTED_PROXIES:-172.30.0.1}
+    volumes: !override
+      - ./data:/var/www/data
+    networks:
+      - crosschapp-production
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(str_contains((string) @file_get_contents('http://127.0.0.1/api/health.php'),'\"ok\":true') ? 0 : 1);"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+    profiles: ["worker"]
+    restart: unless-stopped
+    command: ["sh", "/usr/local/bin/crosschapp-worker-entrypoint"]
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
+      CROSSCHAPP_DB_PATH: ${CROSSCHAPP_DB_PATH:-/var/www/data/bni-dach.sqlite}
+    volumes: !override
+      - ./data:/var/www/data
+    networks:
+      - crosschapp-production
+
+networks:
+  crosschapp-production:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1

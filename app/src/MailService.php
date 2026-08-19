@@ -9,6 +9,13 @@ final class MailService
     public function send(string $email, string $name, string $subject, string $body, ?string $replyToEmail = null, ?string $replyToName = null): void
     {
         if ($this->transport !== null) { ($this->transport)($email, $name, $subject, $body, $replyToEmail, $replyToName); return; }
+        if (getenv('CROSSCHAPP_TEST_MODE') === '1') {
+            $capturePath = getenv('CROSSCHAPP_MAIL_CAPTURE_PATH');
+            if (!is_string($capturePath) || trim($capturePath) === '') throw new RuntimeException('Mail-Capture ist im Testmodus nicht konfiguriert.');
+            $record = json_encode(['to'=>$email,'name'=>$name,'subject'=>$subject,'body'=>$body,'replyToEmail'=>$replyToEmail,'replyToName'=>$replyToName,'capturedAt'=>gmdate('c')], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+            if ($record === false || file_put_contents($capturePath, $record."\n", FILE_APPEND|LOCK_EX) === false) throw new RuntimeException('Test-Mail konnte nicht aufgezeichnet werden.');
+            return;
+        }
         $autoload = dirname(__DIR__, 2) . '/vendor/autoload.php';
         if (!is_file($autoload)) throw new RuntimeException('Der Mailversand ist nicht verfügbar.');
         require_once $autoload;

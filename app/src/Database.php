@@ -10,7 +10,10 @@ final class Database
 
     public function __construct(?string $path = null)
     {
-        $path ??= self::DEFAULT_PATH;
+        if ($path === null) {
+            $override = getenv('CROSSCHAPP_DB_PATH');
+            $path = is_string($override) && trim($override) !== '' ? trim($override) : self::DEFAULT_PATH;
+        }
         $directory = dirname($path);
 
         if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
@@ -24,6 +27,7 @@ final class Database
         ]);
         $this->connection->exec('PRAGMA foreign_keys = ON');
         $this->connection->exec('PRAGMA busy_timeout = 5000');
+        $this->connection->exec('PRAGMA journal_mode = WAL');
         $this->createSchema();
     }
 
@@ -174,6 +178,10 @@ final class Database
             )
             SQL);
         $this->addTableColumnIfMissing('users', 'username', 'TEXT COLLATE NOCASE');
+        $this->addTableColumnIfMissing('users', 'bni_verification_status', "TEXT NOT NULL DEFAULT 'unverified' CHECK (bni_verification_status IN ('unverified','directory_match','manual_verified'))");
+        $this->addTableColumnIfMissing('users', 'bni_verified_at', 'TEXT');
+        $this->addTableColumnIfMissing('users', 'bni_verified_by_user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
+        $this->addTableColumnIfMissing('users', 'bni_external_member_ref', 'TEXT');
         $this->connection->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_users_home_chapter ON users(home_chapter_org_id)');
         $now = gmdate('Y-m-d\TH:i:s\Z');
@@ -229,6 +237,8 @@ final class Database
         $statement = $this->connection->prepare('INSERT OR IGNORE INTO email_templates (template_key, subject, body, updated_at) VALUES (:key, :subject, :body, :updated_at)');
         $statement->execute([':key' => 'verify_email', ':subject' => 'Bitte bestätige deine E-Mail-Adresse bei CrossChAPP', ':body' => $verificationBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
         $statement->execute([':key' => 'reset_password', ':subject' => 'Neues Passwort für CrossChAPP festlegen', ':body' => $resetBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
+        $invitationBody = "Hallo {{first_name}},\n\ndu wurdest zu CrossChAPP eingeladen.\n\nÜber den folgenden Link kannst du dein Konto aktivieren und ein Passwort vergeben:\n\n{{invitation_link}}\n\nChapter: {{chapter}}\n\nViele Grüße\n{{app_name}}";
+        $statement->execute([':key' => 'user_invitation', ':subject' => 'Einladung zu CrossChAPP', ':body' => $invitationBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
         $contactBody = "Hallo {{provider_first_name}},\n\n{{custom_message}}\n\n---\nAnfrage von:\n{{requester_full_name}}\n{{requester_email}}\nChapter: {{requester_chapter}}\nTermin: {{requested_date}}\n\nViele Grüße\n{{app_name}}";
         $statement->execute([':key' => 'representation_contact', ':subject' => 'CrossChAPP – Vertretungsanfrage für {{requested_date}}', ':body' => $contactBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
         $requestContactBody = "Hallo {{request_owner_first_name}},\n\n{{custom_message}}\n\n---\nRückmeldung von:\n{{contact_full_name}}\n{{contact_email}}\nBNI-Chapter: {{contact_chapter}}\nVertretung für: {{requested_chapter}}\nTermin: {{requested_date}}\n\nViele Grüße\n{{app_name}}";
@@ -244,6 +254,58 @@ final class Database
             )
             SQL);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_auth_attempts_limit ON auth_attempts(attempt_type, identifier_hash, ip_hash, attempted_at)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS bni_member_check_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip_hash TEXT NOT NULL,
+                attempted_at TEXT NOT NULL
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_bni_member_check_rate ON bni_member_check_attempts(ip_hash, attempted_at)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS bni_member_directory_configs (
+                org_id INTEGER PRIMARY KEY,
+                endpoint TEXT NOT NULL,
+                parameters TEXT NOT NULL,
+                languages TEXT NOT NULL,
+                website_type TEXT NOT NULL,
+                website_id TEXT NOT NULL,
+                mapped_widget_settings TEXT NOT NULL,
+                referer TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE
+            )
+            SQL);
+        $memberLanguages = '{"availableLanguages":[{"type":"published","url":"http://bni-rheinruhr.de/koenigsforst/de/memberlist","descriptionKey":"Deutsch","id":18,"localeCode":"de"}],"activeLanguage":{"id":18,"localeCode":"de","descriptionKey":"Deutsch","cookieBotCode":"de"}}';
+        $memberSettings = '[{"key":113,"name":"Member Names","value":"Namen der Mitglieder"},{"key":117,"name":"Profession/Specialty","value":"Wirtschaftszweig/Fachgebiet"},{"key":118,"name":"Company","value":"Unternehmen"},{"key":119,"name":"Showing","value":"Zeige"},{"key":120,"name":"to","value":"bis"},{"key":121,"name":"of","value":"von"},{"key":122,"name":"entries","value":"Einträgen"},{"key":304,"name":"Zero Records","value":"Keine Einträge gefunden"},{"key":343,"name":"Phone","value":"Telefon"},{"key":344,"name":"Send Mail","value":"Nachricht senden"}]';
+        $memberConfig = $this->connection->prepare('INSERT OR IGNORE INTO bni_member_directory_configs (org_id,endpoint,parameters,languages,website_type,website_id,mapped_widget_settings,referer,updated_at) SELECT 44628,:endpoint,:parameters,:languages,\'3\',\'27966\',:settings,:referer,:updated WHERE EXISTS (SELECT 1 FROM organizations WHERE org_id=44628)');
+        $memberConfig->execute([':endpoint'=>'https://bni-rheinruhr.de/bnicms/v3/frontend/memberlist/display',':parameters'=>'chapterName=44628&regionIds=11805,5843,9614,5925,5921,5939,11553&chapterWebsite=1',':languages'=>$memberLanguages,':settings'=>$memberSettings,':referer'=>'https://bni-rheinruhr.de/koenigsforst/de/memberlist',':updated'=>gmdate('Y-m-d\TH:i:s\Z')]);
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS bni_member_check_lock (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                owner_token TEXT NOT NULL,
+                lock_until TEXT NOT NULL
+            )
+            SQL);
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS user_invitations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                email TEXT NOT NULL COLLATE NOCASE,
+                home_chapter_org_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                sent_at TEXT,
+                accepted_at TEXT,
+                created_by_user_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','expired','cancelled')),
+                FOREIGN KEY (home_chapter_org_id) REFERENCES organizations(org_id),
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_user_invitations_email_status ON user_invitations(email, status, expires_at)');
         $this->createRepresentationSchema();
     }
 

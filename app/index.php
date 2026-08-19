@@ -9,6 +9,9 @@ require_once __DIR__ . '/src/MailSettingsRepository.php';
 require_once __DIR__ . '/src/MailService.php';
 require_once __DIR__ . '/src/AccountService.php';
 require_once __DIR__ . '/src/AccountFactory.php';
+require_once __DIR__ . '/src/InvitationRepository.php';
+require_once __DIR__ . '/src/InvitationService.php';
+require_once __DIR__ . '/src/InvitationFactory.php';
 
 Auth::start();
 if (isset($_GET['verify'])) {
@@ -31,15 +34,17 @@ $accountDisplayName = $currentUser === null ? '' : ((string) ($currentUser['user
     ? (string) $currentUser['username']
     : trim((string) $currentUser['first_name'] . ' ' . (string) $currentUser['last_name']));
 $viewParameter = (string) ($_GET['view'] ?? '');
-$requestedView = match ($viewParameter) {
+$requestedView = isset($_GET['invite']) || isset($_GET['reset']) ? 'auth' : match ($viewParameter) {
     'admin' => 'admin',
-    'login', 'register', 'forgot', 'reset', 'verified' => 'auth',
+    'login', 'register', 'forgot', 'reset', 'verified', 'invite' => 'auth',
     'vertretung' => 'vertretung',
     'vertretung-finden' => 'vertretung-finden',
     default => 'crosschaptern',
 };
-$authMode = isset($_GET['reset']) ? 'reset' : (in_array($viewParameter, ['register', 'forgot', 'verified'], true) ? $viewParameter : 'login');
+$authMode = isset($_GET['invite']) ? 'invite' : (isset($_GET['reset']) ? 'reset' : (in_array($viewParameter, ['register', 'forgot', 'verified'], true) ? $viewParameter : 'login'));
 $authToken = (string) ($_GET['reset'] ?? '');
+$invitationToken = (string) ($_GET['invite'] ?? '');
+$invitationResult = $authMode === 'invite' ? InvitationFactory::create()['service']->inspect($invitationToken) : ['status' => 'invalid'];
 $verificationResult = $authMode === 'verified' ? (string) ($_SESSION['verification_result'] ?? 'invalid') : '';
 if ($authMode === 'verified') unset($_SESSION['verification_result']);
 $pageTitle = match ($requestedView) {
@@ -64,7 +69,9 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
     <?php endif; ?>
     <link rel="stylesheet" href="/assets/app.css?v=<?= $assetVersion('app.css') ?>">
+    <script src="/assets/chapter-picker.js?v=<?= $assetVersion('chapter-picker.js') ?>" defer></script>
     <script src="/assets/site.js?v=<?= $assetVersion('site.js') ?>" defer></script>
+    <?php if ($requestedView === 'vertretung' || $requestedView === 'vertretung-finden'): ?><script src="/assets/date-picker.js?v=<?= $assetVersion('date-picker.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $isAdmin)): ?><script src="/assets/sort-utils.js?v=<?= $assetVersion('sort-utils.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung'): ?><script src="/assets/representation.js?v=<?= $assetVersion('representation.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung-finden'): ?><script src="/assets/representation-find.js?v=<?= $assetVersion('representation-find.js') ?>" defer></script><?php endif; ?>
@@ -95,6 +102,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                             <div id="account-menu" class="account-menu">
                                 <button id="account-menu-trigger" type="button" class="account-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="account-dropdown"><?= htmlspecialchars($accountDisplayName, ENT_QUOTES, 'UTF-8') ?> <span aria-hidden="true">▼</span></button>
                                 <div id="account-dropdown" class="account-dropdown" role="menu" hidden>
+                                    <button id="open-my-account" type="button" role="menuitem">Mein Konto</button>
                                     <button id="open-change-password" type="button" role="menuitem">Passwort ändern</button>
                                 </div>
                             </div>
@@ -109,6 +117,37 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     </header>
 
     <?php if ($currentUser !== null): ?>
+        <dialog id="my-account-dialog" class="account-dialog" aria-modal="true" aria-labelledby="my-account-heading">
+            <div class="account-dialog-card">
+                <button id="close-my-account-icon" type="button" class="dialog-close" aria-label="Kontoansicht schließen">×</button>
+                <h2 id="my-account-heading">Mein Konto</h2>
+                <dl id="my-account-details" class="account-details" aria-live="polite">
+                    <div><dt>Vorname</dt><dd data-account-field="firstName">Wird geladen …</dd></div>
+                    <div><dt>Nachname</dt><dd data-account-field="lastName">Wird geladen …</dd></div>
+                    <div><dt>E-Mail-Adresse</dt><dd data-account-field="email">Wird geladen …</dd></div>
+                    <div><dt>Heimatchapter</dt><dd data-account-field="homeChapterName">Wird geladen …</dd></div>
+                </dl>
+                <div id="my-account-message" class="message" role="alert" aria-live="polite"></div>
+                <div class="registration-actions">
+                    <?php if (!$isAdmin): ?><button id="open-delete-account" type="button" class="danger">Konto löschen</button><?php endif; ?>
+                    <button id="close-my-account" type="button" class="secondary">Schließen</button>
+                </div>
+            </div>
+        </dialog>
+        <?php if (!$isAdmin): ?>
+            <dialog id="delete-account-dialog" class="account-dialog" aria-modal="true" aria-labelledby="delete-account-heading">
+                <div class="account-dialog-card">
+                    <button id="close-delete-account-icon" type="button" class="dialog-close" aria-label="Kontolöschung abbrechen">×</button>
+                    <h2 id="delete-account-heading">Konto wirklich löschen?</h2>
+                    <p>Dein Benutzerkonto wird dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.</p>
+                    <div id="delete-account-message" class="message" role="alert" aria-live="polite"></div>
+                    <div class="registration-actions">
+                        <button id="confirm-delete-account" type="button" class="danger">Konto endgültig löschen</button>
+                        <button id="cancel-delete-account" type="button" class="secondary">Abbrechen</button>
+                    </div>
+                </div>
+            </dialog>
+        <?php endif; ?>
         <dialog id="change-password-dialog" class="account-dialog" aria-labelledby="change-password-heading">
             <div class="account-dialog-card">
                 <button id="close-change-password" type="button" class="dialog-close" aria-label="Passwortdialog schließen">×</button>

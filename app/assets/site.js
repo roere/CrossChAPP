@@ -14,6 +14,7 @@
     document.querySelector('#reset-password-form')?.addEventListener('submit', resetPassword);
     document.querySelector('#logout-button')?.addEventListener('click', logout);
     initializeAccountMenu();
+    initializeMyAccount();
     initializePasswordChange();
     document.querySelector('#chapter-search-form')?.addEventListener('submit', searchChapters);
 
@@ -28,6 +29,8 @@
 
     if (document.querySelector('#data-basis')) loadDataBasis();
     if (document.querySelector('#home-chapter-results')) loadHomeChapters();
+    const invitationForm = document.querySelector('#invitation-activation-form');
+    if (invitationForm) setupInvitationActivation(invitationForm);
 
     function selectResultLimit(event) {
         const button = event.target.closest('button[data-limit]');
@@ -103,6 +106,51 @@
             if (confirmation.dataset.touched === 'true' || confirmation.value !== '') validateChangedConfirmation(password, confirmation);
         });
         form.addEventListener('submit', changePassword);
+    }
+
+    function initializeMyAccount() {
+        const trigger = document.querySelector('#open-my-account');
+        const dialog = document.querySelector('#my-account-dialog');
+        if (!trigger || !dialog) return;
+        const closeButton = document.querySelector('#close-my-account');
+        const closeIcon = document.querySelector('#close-my-account-icon');
+        const message = document.querySelector('#my-account-message');
+        const deleteDialog = document.querySelector('#delete-account-dialog');
+        const deleteButton = document.querySelector('#open-delete-account');
+        const confirmDelete = document.querySelector('#confirm-delete-account');
+        const cancelDelete = document.querySelector('#cancel-delete-account');
+        const closeDeleteIcon = document.querySelector('#close-delete-account-icon');
+        const deleteMessage = document.querySelector('#delete-account-message');
+        const closeAccount = () => { dialog.close(); trigger.focus(); };
+        const closeDelete = () => { deleteDialog?.close(); deleteButton?.focus(); };
+        trigger.addEventListener('click', async () => {
+            message.textContent = ''; message.className = 'message'; dialog.showModal();
+            try {
+                const response = await fetch('/api/auth/account.php'); const payload = await response.json();
+                if (!response.ok) throw new Error(payload.error || 'Die Kontodaten konnten nicht geladen werden.');
+                for (const [key, value] of Object.entries(payload.account)) {
+                    const output = dialog.querySelector(`[data-account-field="${key}"]`);
+                    if (output) output.textContent = value === null || String(value).trim() === '' ? '—' : String(value);
+                }
+                closeButton.focus();
+            } catch (error) { message.textContent = error.message; message.className = 'message error'; }
+        });
+        closeButton.addEventListener('click', closeAccount); closeIcon.addEventListener('click', closeAccount);
+        dialog.addEventListener('cancel', event => { event.preventDefault(); closeAccount(); });
+        if (!deleteDialog || !deleteButton || !confirmDelete || !cancelDelete || !closeDeleteIcon || !deleteMessage) return;
+        deleteButton.addEventListener('click', () => { deleteMessage.textContent = ''; deleteMessage.className = 'message'; deleteDialog.showModal(); confirmDelete.focus(); });
+        cancelDelete.addEventListener('click', closeDelete); closeDeleteIcon.addEventListener('click', closeDelete);
+        deleteDialog.addEventListener('cancel', event => { event.preventDefault(); closeDelete(); });
+        confirmDelete.addEventListener('click', async () => {
+            confirmDelete.disabled = true; deleteMessage.textContent = '';
+            try {
+                const response = await fetch('/api/auth/account.php', { method: 'DELETE', headers: jsonHeaders });
+                const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Das Konto konnte nicht gelöscht werden.');
+                window.location.assign('/?account_deleted=1');
+            } catch (error) {
+                deleteMessage.textContent = 'Das Konto konnte nicht gelöscht werden.'; deleteMessage.className = 'message error'; confirmDelete.disabled = false;
+            }
+        });
     }
 
     async function changePassword(event) {
@@ -213,22 +261,38 @@
 
     async function resetPassword(event) {
         event.preventDefault(); const form = event.currentTarget; const message = document.querySelector('#reset-message');
-        try { const response = await fetch('/api/auth/reset-password.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ token: form.dataset.token, password: form.password.value, password_confirmation: form.password_confirmation.value }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); message.textContent = payload.message; message.className = 'message success'; form.reset(); }
+        try { const response = await fetch('/api/auth/reset-password.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ token: form.dataset.token, password: form.password.value, password_confirmation: form.password_confirmation.value }) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); form.remove(); message.className = 'message success'; message.replaceChildren(document.createTextNode(`${payload.message} `)); const link=document.createElement('a');link.href='/?view=login';link.className='button-link';link.textContent='Anmelden';message.append(link); }
         catch (error) { message.textContent = error.message; message.className = 'message error'; }
     }
 
     async function loadHomeChapters() {
         const result = document.querySelector('#home-chapter-results');
-        try { const response = await fetch('/api/auth/chapters.php'); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); result._chapters = payload.chapters; ['#home-chapter-country', '#home-chapter-search', '#home-chapter-location'].forEach(selector => document.querySelector(selector).addEventListener('input', renderHomeChapters)); document.querySelector('#clear-home-chapter').addEventListener('click', clearHomeChapter); result.addEventListener('change', selectHomeChapter); renderHomeChapters(); }
+        const picker = window.CrossChappChapterPicker.create({
+            list: result,
+            countryInput: document.querySelector('#home-chapter-country'),
+            searchInput: document.querySelector('#home-chapter-search'),
+            locationInput: document.querySelector('#home-chapter-location'),
+            selectedInput: document.querySelector('#home-chapter-id'),
+            selectedOutput: document.querySelector('#selected-home-chapter'),
+            clearButton: document.querySelector('#clear-home-chapter'),
+            radioName: 'home_chapter_choice',
+            selectedLabelPrefix: 'Heimatchapter:',
+            emptyLabel: 'Kein Heimatchapter ausgewählt.',
+            showAllByDefault: false,
+            maxResults: 20,
+            collapseAfterSelect: true,
+        });
+        try { const response = await fetch('/api/auth/chapters.php'); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); picker.setChapters(payload.chapters); }
         catch { result.textContent = 'Die lokale Chapterliste konnte nicht geladen werden.'; }
     }
 
-    function renderHomeChapters() {
-        const result = document.querySelector('#home-chapter-results'); const country = document.querySelector('#home-chapter-country').value; const search = document.querySelector('#home-chapter-search').value.trim().toLocaleLowerCase('de'); const location = document.querySelector('#home-chapter-location').value.trim().toLocaleLowerCase('de');
-        const visible = (result._chapters || []).filter(item => { const full = [item.chapterName, item.city, item.postalCode, item.region].filter(Boolean).join(' ').toLocaleLowerCase('de'); const place = [item.city, item.postalCode].filter(Boolean).join(' ').toLocaleLowerCase('de'); return (!country || item.countryCode === country) && (!search || full.includes(search)) && (!location || place.includes(location)); }).slice(0, 80);
-        const fragment = document.createDocumentFragment(); visible.forEach(item => { const label = document.createElement('label'); label.className = 'home-chapter-result'; const radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'home_chapter_choice'; radio.value = item.orgId; radio.checked = document.querySelector('#home-chapter-id').value === String(item.orgId); const text = document.createElement('span'); const strong = document.createElement('strong'); strong.textContent = item.chapterName || 'Chapter'; const small = document.createElement('small'); small.textContent = [item.postalCode, item.city, item.region, item.countryCode].filter(Boolean).join(' · '); text.append(strong, small); label.append(radio, text); fragment.append(label); }); result.replaceChildren(fragment); }
-    function selectHomeChapter(event) { const radio = event.target.closest('input[type="radio"]'); if (!radio) return; document.querySelector('#home-chapter-id').value = radio.value; document.querySelector('#selected-home-chapter').textContent = `Heimatchapter ausgewählt: ${radio.closest('label').querySelector('strong').textContent}`; }
-    function clearHomeChapter() { const input = document.querySelector('#home-chapter-id'); if (!input) return; input.value = ''; document.querySelector('#selected-home-chapter').textContent = 'Kein Heimatchapter ausgewählt.'; renderHomeChapters(); }
+    function setupInvitationActivation(form) {
+        const password=form.elements.password,confirmation=form.elements.password_confirmation,passwordError=form.querySelector('[data-password-error]'),confirmationError=form.querySelector('[data-confirmation-error]');
+        const validatePassword=()=>{const valid=password.value.length>=8;password.setAttribute('aria-invalid',String(!valid));passwordError.hidden=valid;return valid;};
+        const validateConfirmation=()=>{const valid=confirmation.value!==''&&confirmation.value===password.value;confirmation.setAttribute('aria-invalid',String(!valid));confirmationError.hidden=valid;return valid;};
+        password.addEventListener('blur',validatePassword);password.addEventListener('input',()=>{if(confirmation.value!=='')validateConfirmation();});confirmation.addEventListener('blur',validateConfirmation);
+        form.addEventListener('submit',async event=>{event.preventDefault();const validPassword=validatePassword(),validConfirmation=validateConfirmation();if(!validPassword||!validConfirmation){(validPassword?confirmation:password).focus();return;}const message=document.querySelector('#invitation-activation-message');try{const response=await fetch('/api/auth/invitation.php',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({token:form.dataset.token,password:password.value,password_confirmation:confirmation.value})});const payload=await response.json();if(!response.ok)throw new Error(payload.error);form.remove();message.className='message success';message.replaceChildren(document.createTextNode('Dein Konto wurde aktiviert. '));const link=document.createElement('a');link.href='/?view=login';link.className='button-link';link.textContent='Anmelden';message.append(link);}catch(error){message.textContent=error.message;message.className='message error';}});
+    }
 
     async function loadDataBasis() {
         const element = document.querySelector('#data-basis');
@@ -332,7 +396,7 @@
         const anonymousNumbers = new Map();
         requests.forEach(item => { const row = document.createElement('div'); row.className = 'result-representation-request'; const text = document.createElement('span');
             const currentNumber = (anonymousNumbers.get(item.requestDate) || 0) + 1; anonymousNumbers.set(item.requestDate, currentNumber);
-            const person = authenticated ? item.displayName : `Person ${currentNumber}`; text.textContent = `${formatDateOnly(item.requestDate)} · ${person}`; row.append(text);
+            const person = authenticated ? item.displayName : `Person ${currentNumber}`; text.textContent = `${formatDateOnly(item.requestDate)} · ${person}`; row.append(text);if(item.isVerified){const verified=document.createElement('span');verified.className='verified-badge';verified.textContent='Verifiziert';row.append(verified);}
             if (item.canContact && item.requestId) { const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary request-contact-button'; button.textContent = 'Kontaktieren'; button.dataset.requestId = item.requestId; row.append(button); }
             else if (item.isOwn) { const own = document.createElement('span'); own.className = 'offer-meta'; own.textContent = 'Dein Gesuch'; row.append(own); }
             section.append(row);

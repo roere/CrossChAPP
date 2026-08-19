@@ -1,12 +1,15 @@
 <?php
 declare(strict_types=1);
 $root = is_file(__DIR__ . '/../app/src/Database.php') ? __DIR__ . '/../app' : '/var/www/html';
-foreach (['Database','UserRepository','MailSettingsRepository','MailService','AccountService'] as $class) require_once $root . '/src/' . $class . '.php';
+foreach (['Database','HttpException','BniRequestPolicy','BniMemberListClient','BniMemberDirectoryService','ClientIp','UserRepository','MailSettingsRepository','MailService','AccountService'] as $class) require_once $root . '/src/' . $class . '.php';
 $check = static function (bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); };
 $pdo = (new Database(':memory:'))->connection(); $users = new UserRepository($pdo); $settings = new MailSettingsRepository($pdo); $mails = [];
 $mailer = new MailService($settings, static function (string $to, string $name, string $subject, string $body) use (&$mails): void { $mails[] = compact('to','name','subject','body'); });
-$service = new AccountService($users, $settings, $mailer);
-$pdo->exec("INSERT INTO organizations (org_id,country_code,org_type,created_at,updated_at) VALUES (99,'DE','CHAPTER',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),(100,'DE','CORE_GROUP',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+$directoryList = '<a href="memberdetails?encryptedMemberId=test-ref">René Röderstein</a>';
+$directory = new BniMemberDirectoryService($pdo, static fn(string $method): array => ['status'=>200,'body'=>$directoryList,'headers'=>[]], static function(int $milliseconds): void {});
+$service = new AccountService($users, $settings, $mailer, $directory);
+$pdo->exec("INSERT INTO organizations (org_id,country_code,org_type,chapter_url,created_at,updated_at) VALUES (99,'DE','CHAPTER','https://bni-test.de/de/chapterdetail',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),(100,'DE','CORE_GROUP','https://bni-test.de/de/chapterdetail',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+$pdo->exec("INSERT INTO bni_member_directory_configs(org_id,endpoint,parameters,languages,website_type,website_id,mapped_widget_settings,referer,updated_at)VALUES(99,'https://bni-test.de/memberlist','chapterName=99','{}','3','1','[]','https://bni-test.de/memberlist',CURRENT_TIMESTAMP)");
 
 $registration = $service->register(['first_name'=>'René','last_name'=>'Röderstein','email'=>'rene@example.test','home_chapter_org_id'=>99,'password'=>'sicher123','password_confirmation'=>'sicher123']);
 $user = $registration['user']; $check($user['status']==='pending' && $user['email_verified_at']===null && (int)$user['home_chapter_org_id']===99, 'Registrierung pending mit Heimatchapter.');
@@ -28,6 +31,19 @@ $service->requestPasswordReset('rene@example.test'); preg_match('/reset=([A-Za-z
 $check($resetToken!=='' && $pdo->query('SELECT token_hash FROM password_reset_tokens ORDER BY id DESC LIMIT 1')->fetchColumn()===hash('sha256',$resetToken),'Reset-Token nur gehasht.');
 $check($service->resetPassword($resetToken,'neuersicher123','neuersicher123') && !$service->resetPassword($resetToken,'nochmal123','nochmal123'),'Reset-Token einmalig.');
 $check($service->authenticate('rene@example.test','sicher123')['status']==='invalid' && $service->authenticate('rene@example.test','neuersicher123')['status']==='success','Nur neues Passwort funktioniert.');
+$mailCount=count($mails);$check($service->requestPasswordResetForUser((int)$user['id'])&&count($mails)===$mailCount+1&&$mails[$mailCount]['to']==='rene@example.test','Adminreset verwendet Konto-E-Mail und gemeinsamen Mock-Mailtransport.');
+preg_match('/reset=([A-Za-z0-9_-]+)/',$mails[$mailCount]['body'],$adminResetMatch);$adminResetToken=$adminResetMatch[1]??'';
+$check($adminResetToken!==''&&$pdo->query('SELECT token_hash FROM password_reset_tokens ORDER BY id DESC LIMIT 1')->fetchColumn()===hash('sha256',$adminResetToken),'Adminreset-Token ausschließlich gehasht gespeichert.');
+$check($service->resetPassword($adminResetToken,'admin-reset-123','admin-reset-123')&&$service->authenticate('rene@example.test','neuersicher123')['status']==='invalid'&&$service->authenticate('rene@example.test','admin-reset-123')['status']==='success','Adminreset verwendet vollständigen bestehenden Einmaltoken-Flow.');
+
+$resetFailure=static function(int $userId,string $reason)use($service,$check):void{try{$service->requestPasswordResetForUser($userId);$check(false,"Adminreset $reason muss blockiert werden.");}catch(AccountResetException $exception){$check($exception->reason===$reason,"Adminreset unterscheidet $reason.");}};
+$blockedMailCount=count($mails);
+$unverified=$users->create('Nicht','Bestätigt','unverified-reset@example.test',password_hash('sicher123',PASSWORD_DEFAULT),null);$resetFailure((int)$unverified['id'],'email_not_verified');
+$inactive=$users->create('Nicht','Aktiv','inactive-reset@example.test',password_hash('sicher123',PASSWORD_DEFAULT),null);$inactiveId=(int)$inactive['id'];$pdo->exec("UPDATE users SET status='disabled',email_verified_at=CURRENT_TIMESTAMP WHERE id=$inactiveId");$resetFailure($inactiveId,'account_inactive');
+$missingEmail=$users->create('Ohne','Mail','missing-reset@example.test',password_hash('sicher123',PASSWORD_DEFAULT),null);$missingEmailId=(int)$missingEmail['id'];$pdo->exec("UPDATE users SET email='',status='active',email_verified_at=CURRENT_TIMESTAMP WHERE id=$missingEmailId");$resetFailure($missingEmailId,'email_missing');
+$resetFailure(999999,'user_not_found');
+$resetFailure((int)$admin['id'],'invalid_role');
+$check(count($mails)===$blockedMailCount,'Blockierte Adminresets erzeugen keinen Mailversuch.');
 
 $optional = $service->register(['first_name'=>'Ohne','last_name'=>'Chapter','email'=>'ohne@example.test','password'=>'sicher123','password_confirmation'=>'sicher123']);
 $check($optional['user']['home_chapter_org_id']===null,'Heimatchapter optional.');
@@ -51,4 +67,20 @@ for($i=0;$i<5;$i++)$users->recordAttempt('resend_verification','verify-a@example
 $check($users->rateLimited('resend_verification','verify-a@example.test','192.0.2.10',5,3600) && !$users->rateLimited('resend_verification','verify-b@example.test','192.0.2.10',5,3600),'Verifikations-Limit bleibt identifierbezogen aktiv.');
 $rendered=$settings->render('verify_email',['first_name'=>'René','last_name'=>'Röderstein','email'=>'rene@example.test','verification_link'=>'http://local/verify','app_name'=>'CrossChAPP']);
 $check(str_contains($rendered['body'],'http://local/verify')&&!str_contains($rendered['body'],'{{first_name}}'),'Erlaubte Template-Platzhalter ersetzt.');
+putenv('APP_BASE_URL=https://bni.crosschapp.de/');$check($settings->settings()['baseUrl']==='https://bni.crosschapp.de','APP_BASE_URL überschreibt die SQLite-Linkbasis zentral.');putenv('APP_BASE_URL');
+$oldServer=$_SERVER;putenv('CROSSCHAPP_TRUSTED_PROXIES=172.30.0.1');$_SERVER['REMOTE_ADDR']='198.51.100.20';$_SERVER['HTTP_X_FORWARDED_FOR']='203.0.113.7';$check(ClientIp::address()==='198.51.100.20','Unbekannte Clients können X-Forwarded-For nicht fälschen.');$_SERVER['REMOTE_ADDR']='172.30.0.1';$check(ClientIp::address()==='203.0.113.7','Konfigurierter Reverse Proxy liefert die Client-IP.');$_SERVER=$oldServer;putenv('CROSSCHAPP_TRUSTED_PROXIES');
+$deletable=$users->create('Lösch','Test','delete@example.test',password_hash('delete-password',PASSWORD_DEFAULT),99);$deleteId=(int)$deletable['id'];
+$pdo->exec("UPDATE users SET status='active',email_verified_at=CURRENT_TIMESTAMP WHERE id=$deleteId");
+$pdo->exec("INSERT INTO representation_requests(user_id,org_id,request_date,created_at,updated_at)VALUES($deleteId,99,'2099-01-01',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");$requestId=(int)$pdo->lastInsertId();
+$pdo->exec("INSERT INTO representation_offers(user_id,org_id,all_dates,date_signature,created_at,updated_at)VALUES($deleteId,99,0,'2099-01-01',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");$offerId=(int)$pdo->lastInsertId();
+$pdo->exec("INSERT INTO representation_offer_dates(offer_id,offer_date)VALUES($offerId,'2099-01-01')");
+$pdo->exec("INSERT INTO representation_contact_log(requester_user_id,offer_id,recipient_user_id,requested_date,sent_at,status)VALUES(".(int)$user['id'].",$offerId,$deleteId,'2099-01-01',CURRENT_TIMESTAMP,'success')");
+$pdo->exec("INSERT INTO representation_request_contact_log(contact_user_id,request_id,recipient_user_id,sent_at,status)VALUES(".(int)$user['id'].",$requestId,$deleteId,CURRENT_TIMESTAMP,'success')");
+$users->issueToken('password_reset_tokens',$deleteId,3600);$users->recordAttempt('login','delete@example.test','192.0.2.50',false);
+$details=$service->account($deleteId);$check($details['firstName']==='Lösch'&&$details['lastName']==='Test'&&$details['email']==='delete@example.test'&&$details['canDelete']&&!array_key_exists('id',$details),'Kontodaten enthalten nur erlaubte Felder.');
+$check($service->deleteAccount($deleteId)&&$users->findById($deleteId)===null,'Normales Konto wird gelöscht.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM representation_requests WHERE user_id=$deleteId")->fetchColumn()===0&&(int)$pdo->query("SELECT COUNT(*) FROM representation_offers WHERE user_id=$deleteId")->fetchColumn()===0&&(int)$pdo->query("SELECT COUNT(*) FROM representation_offer_dates WHERE offer_id=$offerId")->fetchColumn()===0,'Gesuche, Angebote und Angebotstermine werden ohne Waisen entfernt.');
+$check((int)$pdo->query("SELECT COUNT(*) FROM representation_contact_log WHERE recipient_user_id=$deleteId")->fetchColumn()===0&&(int)$pdo->query("SELECT COUNT(*) FROM representation_request_contact_log WHERE recipient_user_id=$deleteId")->fetchColumn()===0&&(int)$pdo->query("SELECT COUNT(*) FROM password_reset_tokens WHERE user_id=$deleteId")->fetchColumn()===0,'Kontaktlogs und Kontotokens folgen bestehenden FK-Regeln.');
+$check(!$users->rateLimited('login','delete@example.test','192.0.2.50',1,900),'Personenbezogene Auth-Versuche werden entfernt.');
+$adminDeleteBlocked=false;try{$service->deleteAccount((int)$admin['id']);}catch(DomainException){$adminDeleteBlocked=true;}$check($adminDeleteBlocked&&$users->findById((int)$admin['id'])!==null,'Administratorkonto ist serverseitig vor Selbstlöschung geschützt.');
 echo "PASS Accounts: Registrierung, Hashes, Verifikation, Login, Reset, Chapter, Rate-Limit, Templates\n";

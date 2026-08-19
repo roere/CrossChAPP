@@ -117,7 +117,11 @@ POST /api/auth/forgot-password.php
 POST /api/auth/reset-password.php
 ```
 
-Der Login ist universell: Normale Benutzer melden sich mit ihrer E-Mail-Adresse an, der lokale Entwicklungsadmin weiterhin mit `admin`. Registrierungen benötigen Vorname, Nachname, eine eindeutige E-Mail-Adresse und ein Passwort mit mindestens acht Zeichen. Ein Heimatchapter ist optional und wird ausschließlich aus lokalen `CHAPTER`-Datensätzen in SQLite gewählt; die filterbare Auswahl löst keinen BNI-Request aus.
+Der Login ist universell: Normale Benutzer melden sich mit ihrer E-Mail-Adresse an, der lokale Entwicklungsadmin weiterhin mit `admin`. Registrierungen benötigen Vorname, Nachname, eine eindeutige E-Mail-Adresse und ein Passwort mit mindestens acht Zeichen. Ein Heimatchapter ist optional. Wird eines gewählt, prüft CrossChAPP beim Absenden serverseitig und chaptergebunden, ob Vor- und Nachname im öffentlichen BNI-Mitgliederverzeichnis exakt vorkommen. Nur ein eindeutiger Treffer wird als `directory_match` („BNI-Datensatz gefunden“, keine Identitätsverifikation) gespeichert; ohne Treffer bleibt eine Registrierung ohne Heimatchapter möglich. Es wird dabei weder eine BNI-E-Mail gesucht noch gespeichert und es existiert keine öffentliche Mitgliedersuch-API. Die Prüfung läuft sequenziell mit mindestens 1,5 Sekunden Abstand, ohne automatischen Retry und maximal fünfmal je IP in 15 Minuten.
+
+Regionale Mitgliederlisten benötigen website-spezifische Metadaten. CrossChAPP verwaltet nachgewiesene Konfigurationen additiv in `bni_member_directory_configs`; der gemeinsame `BniMemberListClient` wird sowohl vom bestehenden Königsforst-Abruf als auch vom Registrierungscheck verwendet. Derzeit ist ausschließlich BNI Königsforst (`org_id=44628`) automatisch prüfbar. Für alle anderen Chapter wird ausdrücklich `unavailable` gemeldet, nicht fälschlich „Name nicht gefunden“. Technische Antworten werden als `rate_limited`, `forbidden` oder `upstream_error` von einem echten `not_found` unterschieden.
+
+Admins können im zugeklappten Bereich „Einladungen“ eine Person mit Name, E-Mail-Adresse und lokalem Chapter manuell einladen. Betreff und Einladungstext sind dort mit dokumentierten Platzhaltern editierbar. Der sieben Tage gültige Einmallink wird nur gehasht in SQLite gespeichert. Erst nach Aufruf des Links und erfolgreicher Passwortvergabe entsteht transaktional ein aktives, bereits E-Mail-bestätigtes Konto mit `manual_verified`; die einladende Admin-ID und der Zeitpunkt werden als Prüfnachweis gespeichert. `manual_verified` wird in Vertretungskontexten als „Verifiziert“ gekennzeichnet, während `directory_match` ausdrücklich kein solches Badge erhält. Offene Einladungen können über einen CrossChAPP-Dialog widerrufen werden. Mailversand und Testtransport verwenden die bestehende Mail-Infrastruktur.
 
 Neue Benutzer bleiben bis zur E-Mail-Bestätigung im Status `pending`. Bestätigungs- und Passwort-Reset-Tokens entstehen mit `random_bytes()`, werden ausschließlich als SHA-256-Hash gespeichert, laufen nach 24 Stunden beziehungsweise 60 Minuten ab und sind einmal verwendbar. Passwörter werden ausschließlich mit `password_hash()` gespeichert und mit `password_verify()` geprüft; Klartextpasswörter werden weder gespeichert noch versendet. Passwort-Reset-Anfragen antworten unabhängig von der Existenz des Kontos identisch.
 
@@ -240,6 +244,26 @@ GET /api/bni/local.php
 Liefert Anzahl, Anzahl mit gespeicherten Details und alle lokalen Organisationen, ohne BNI aufzurufen.
 
 ## Tests
+
+Die zentrale sichere Pre-Commit-Suite wird aus dem Projektroot gestartet:
+
+```bash
+./tests/check-all.sh
+# alternativ: make check
+```
+
+Sie startet einen eigenen Test-Webcontainer auf Port `18082`, erzeugt pro Lauf eine temporäre SQLite-Datei unter `/tmp` und verwendet ausschließlich synthetische Fixtures. `data/bni-dach.sqlite` wird nicht in den Testcontainer eingebunden, gelesen oder verändert. E-Mails landen in einem lokalen JSONL-Capture statt bei SMTP. Ein zwingender Anwendungstestmodus blockiert nicht injizierte externe HTTP-Aufrufe und ersetzt Geocoding durch lokale Fixturewerte; der Chromium-Networklog kontrolliert zusätzlich verbotene BNI-Hosts. Container, Testdatenbank und Capture werden auch bei Fehlern per `trap` entfernt.
+
+`check-all.sh` umfasst PHP-Syntax, die manifestierten Account-, Vertretungs-, Automatisierungs- und Suchtests, Datenbank-Invarianten, einen Chromium-Smoke-Test, Privacy-/Mail-/Network-Guards und `git diff --check`.
+
+Live-BNI-Prüfungen sind strikt getrennt und werden niemals von der normalen Suite ausgeführt:
+
+```bash
+./tests/check-live-bni.sh
+# alternativ: make check-live-bni
+```
+
+Die Live-Suite ist ausschließlich für den ausdrücklichen manuellen Aufruf vorgesehen. Sie zeigt vorab einen Warnhinweis und führt genau einen bekannten, chapterbegrenzten Membercheck sequenziell mit der zentralen 1.500-ms-Policy aus. Bei HTTP 403 oder 429 endet sie ohne Retry. Sie darf nicht automatisch aus CI oder einem Git-Hook gestartet werden.
 
 Container und PHP-Erweiterung prüfen:
 

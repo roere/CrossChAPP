@@ -19,6 +19,9 @@ final class HttpClient
             $headers = is_array($response['headers'] ?? null) ? $response['headers'] : [];
             $status = isset($response['status']) ? (int) $response['status'] : $this->statusCode($headers);
         } else {
+            if (getenv('CROSSCHAPP_DISABLE_EXTERNAL_HTTP') === '1') {
+                throw new RuntimeException('Externe HTTP-Requests sind im sicheren Testmodus deaktiviert.');
+            }
             $context = stream_context_create([
                 'http' => [
                     'method' => 'GET',

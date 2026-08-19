@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/src/Auth.php';
+require_once dirname(__DIR__, 2) . '/src/ClientIp.php';
 require_once dirname(__DIR__, 2) . '/src/AccountFactory.php';
 require_once dirname(__DIR__, 2) . '/src/AccountService.php';
 require_once dirname(__DIR__, 2) . '/src/Database.php';
@@ -24,7 +25,7 @@ try {
 
 $username = is_array($payload) ? trim((string) ($payload['login'] ?? $payload['username'] ?? '')) : '';
 $password = is_array($payload) ? (string) ($payload['password'] ?? '') : '';
-$account = AccountFactory::create(); $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown');
+$account = AccountFactory::create(); $ip = ClientIp::address();
 if ($account['users']->rateLimited('login', $username, $ip, 5, 900)) JsonResponse::send(['error' => 'Zu viele Anmeldeversuche. Bitte versuche es später erneut.'], 429);
 $result = $account['service']->authenticate($username, $password);
 if ($result['status'] === 'pending') {

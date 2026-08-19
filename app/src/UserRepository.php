@@ -7,14 +7,14 @@ final class UserRepository
     public function __construct(private readonly PDO $database) {}
 
     /** @return array<string, mixed> */
-    public function create(string $firstName, string $lastName, string $email, string $passwordHash, ?int $homeChapterOrgId): array
+    public function create(string $firstName, string $lastName, string $email, string $passwordHash, ?int $homeChapterOrgId, string $bniStatus = 'unverified', ?string $externalRef = null): array
     {
         $now = self::now();
         $statement = $this->database->prepare(<<<'SQL'
-            INSERT INTO users (first_name, last_name, email, password_hash, home_chapter_org_id, role, status, created_at, updated_at)
-            VALUES (:first_name, :last_name, :email, :password_hash, :home_chapter, 'user', 'pending', :created_at, :updated_at)
+            INSERT INTO users (first_name, last_name, email, password_hash, home_chapter_org_id, role, status, bni_verification_status, bni_external_member_ref, created_at, updated_at)
+            VALUES (:first_name, :last_name, :email, :password_hash, :home_chapter, 'user', 'pending', :bni_status, :external_ref, :created_at, :updated_at)
             SQL);
-        $statement->execute([':first_name' => $firstName, ':last_name' => $lastName, ':email' => strtolower($email), ':password_hash' => $passwordHash, ':home_chapter' => $homeChapterOrgId, ':created_at' => $now, ':updated_at' => $now]);
+        $statement->execute([':first_name' => $firstName, ':last_name' => $lastName, ':email' => strtolower($email), ':password_hash' => $passwordHash, ':home_chapter' => $homeChapterOrgId, ':bni_status' => $bniStatus, ':external_ref' => $externalRef, ':created_at' => $now, ':updated_at' => $now]);
         return $this->findById((int) $this->database->lastInsertId()) ?? throw new RuntimeException('Das Benutzerkonto konnte nicht gelesen werden.');
     }
 
@@ -45,8 +45,117 @@ final class UserRepository
         return $this->database->query(<<<'SQL'
             SELECT org_id AS orgId, chapter_name AS chapterName, city, postal_code AS postalCode,
                    region, country_code AS countryCode
-            FROM organizations WHERE org_type = 'CHAPTER' ORDER BY COALESCE(chapter_name, ''), org_id
+            FROM organizations
+            WHERE org_type = 'CHAPTER' AND NULLIF(TRIM(chapter_name), '') IS NOT NULL
+            ORDER BY chapter_name COLLATE NOCASE, org_id
             SQL)->fetchAll();
+    }
+
+    /** @return array<string,mixed>|null */
+    public function homeChapter(int $orgId): ?array
+    {
+        $statement = $this->database->prepare("SELECT org_id,chapter_name,chapter_url,country_code,region,city FROM organizations WHERE org_id=:id AND org_type='CHAPTER'");
+        $statement->execute([':id' => $orgId]); $row = $statement->fetch(); return is_array($row) ? $row : null;
+    }
+
+    /** @return array<string,mixed>|null */
+    public function accountDetails(int $userId): ?array
+    {
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT users.id, users.first_name, users.last_name, users.email, users.role,
+                   organizations.chapter_name AS home_chapter_name
+            FROM users
+            LEFT JOIN organizations ON organizations.org_id = users.home_chapter_org_id
+            WHERE users.id = :id
+            SQL);
+        $statement->execute([':id' => $userId]); $row = $statement->fetch();
+        return is_array($row) ? $row : null;
+    }
+
+    public function deleteAccount(int $userId): bool
+    {
+        $account = $this->accountDetails($userId);
+        if ($account === null) return false;
+        if ($account['role'] === 'admin') throw new DomainException('Administratorkonten können nicht gelöscht werden.');
+        $this->database->beginTransaction();
+        try {
+            $attempts = $this->database->prepare('DELETE FROM auth_attempts WHERE identifier_hash = :identifier');
+            $attempts->execute([':identifier' => self::identifierHash((string) $account['email'])]);
+            $delete = $this->database->prepare("DELETE FROM users WHERE id = :id AND role != 'admin'");
+            $delete->execute([':id' => $userId]);
+            if ($delete->rowCount() !== 1) throw new RuntimeException('Das Benutzerkonto konnte nicht gelöscht werden.');
+            $this->database->commit(); return true;
+        } catch (Throwable $exception) {
+            if ($this->database->inTransaction()) $this->database->rollBack();
+            throw $exception;
+        }
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function adminUsersOverview(string $today, string $contactsSince): array
+    {
+        $statement = $this->database->prepare(<<<'SQL'
+            SELECT users.id AS userId, users.first_name AS firstName, users.last_name AS lastName, users.email,
+                   organizations.chapter_name AS homeChapterName, users.status,
+                   users.bni_verification_status AS verificationStatus, users.created_at AS createdAt,
+                   users.email_verified_at AS emailVerifiedAt,
+                   COALESCE(offers.currentOffers, 0) AS currentOffers,
+                   COALESCE(requests.currentRequests, 0) AS currentRequests,
+                   COALESCE(contacts.contacts30Days, 0) AS contacts30Days
+            FROM users
+            LEFT JOIN organizations ON organizations.org_id = users.home_chapter_org_id
+            LEFT JOIN (
+                SELECT representation_offers.user_id, COUNT(*) AS currentOffers
+                FROM representation_offers
+                WHERE representation_offers.all_dates = 1 OR EXISTS (
+                    SELECT 1 FROM representation_offer_dates
+                    WHERE representation_offer_dates.offer_id = representation_offers.id
+                      AND representation_offer_dates.offer_date >= :offer_today
+                )
+                GROUP BY representation_offers.user_id
+            ) offers ON offers.user_id = users.id
+            LEFT JOIN (
+                SELECT user_id, COUNT(*) AS currentRequests
+                FROM representation_requests
+                WHERE request_date >= :request_today
+                GROUP BY user_id
+            ) requests ON requests.user_id = users.id
+            LEFT JOIN (
+                SELECT contact_user_id, COUNT(*) AS contacts30Days
+                FROM (
+                    SELECT requester_user_id AS contact_user_id, sent_at
+                    FROM representation_contact_log WHERE status = 'success' AND sent_at >= :offer_contact_since
+                    UNION ALL
+                    SELECT contact_user_id, sent_at
+                    FROM representation_request_contact_log WHERE status = 'success' AND sent_at >= :request_contact_since
+                ) contact_activity
+                GROUP BY contact_user_id
+            ) contacts ON contacts.contact_user_id = users.id
+            WHERE users.role = 'user'
+            ORDER BY users.last_name COLLATE NOCASE, users.first_name COLLATE NOCASE, users.email COLLATE NOCASE
+            SQL);
+        $statement->execute([':offer_today' => $today, ':request_today' => $today, ':offer_contact_since' => $contactsSince, ':request_contact_since' => $contactsSince]);
+        $rows = $statement->fetchAll();
+        return array_map(static function (array $row): array {
+            $row['currentOffers'] = (int) $row['currentOffers'];
+            $row['currentRequests'] = (int) $row['currentRequests'];
+            $row['contacts30Days'] = (int) $row['contacts30Days'];
+            $row['emailVerified'] = $row['emailVerifiedAt'] !== null;
+            return $row;
+        }, $rows);
+    }
+
+    public function memberCheckRateLimited(string $ip): bool
+    {
+        $hash = self::ipHash($ip); $since = gmdate('Y-m-d\TH:i:s\Z', time() - 900);
+        $query = $this->database->prepare('SELECT COUNT(*) FROM bni_member_check_attempts WHERE ip_hash=:ip AND attempted_at>=:since');
+        $query->execute([':ip' => $hash, ':since' => $since]); return (int) $query->fetchColumn() >= 5;
+    }
+
+    public function recordMemberCheck(string $ip): void
+    {
+        $statement = $this->database->prepare('INSERT INTO bni_member_check_attempts (ip_hash,attempted_at) VALUES (:ip,:at)');
+        $statement->execute([':ip' => self::ipHash($ip), ':at' => self::now()]);
     }
 
     public function issueToken(string $table, int $userId, int $ttlSeconds): string
