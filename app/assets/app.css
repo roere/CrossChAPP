@@ -60,6 +60,8 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .button-link:hover, .button-link:focus-visible { color: white; background: var(--bni-red-dark); }
 .representation-access-hint { display: grid; justify-items: start; gap: .8rem; }
 .representation-access-hint p { margin: 0; }
+.secondary-link { color: var(--bni-red-dark); background: white; }
+.secondary-link:hover, .secondary-link:focus-visible { color: white; }
 .account-admin { color: var(--bni-red-dark); border-color: transparent; background: transparent; }
 
 .page-hero { position: relative; overflow: hidden; padding: 3.4rem 0 5.2rem; color: white; background: linear-gradient(112deg, #27282b 0%, #35363a 65%, #4a252b 100%); }
@@ -71,6 +73,27 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .content { position: relative; z-index: 2; margin-top: -2rem; padding-bottom: 4rem; }
 .no-hero-content { margin-top: 0; padding-top: 1.5rem; }
 .page-intro-title { margin: 0 0 .75rem; color: var(--anthracite); font-family: inherit; font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 700; line-height: 1.25; letter-spacing: 0; }
+.guide-page { display: grid; gap: 2rem; }
+.guide-intro { max-width: 900px; }
+.guide-intro > p:not(.section-kicker) { margin: 0 0 1rem; color: var(--muted); font-size: 1.05rem; line-height: 1.65; }
+.guide-intro .section-kicker { color: var(--bni-red); }
+.guide-steps { display: grid; gap: 2rem; }
+.guide-step { display: grid; grid-template-columns: minmax(0, .35fr) minmax(0, .65fr); align-items: center; gap: clamp(1.5rem, 4vw, 4rem); padding: clamp(1.25rem, 3vw, 2.5rem); border: 1px solid var(--border); border-top: 4px solid var(--bni-red); border-radius: 3px; background: white; box-shadow: var(--shadow); }
+.guide-step:nth-child(even) { direction: rtl; }
+.guide-step > * { direction: ltr; }
+.guide-step-copy { position: relative; }
+.guide-step-copy h2 { margin: 0 0 .8rem; font-size: clamp(1.2rem, 2vw, 1.7rem); }
+.guide-step-copy p { margin: 0; color: var(--muted); line-height: 1.65; }
+.guide-image-button { display: block; width: 100%; min-width: 0; padding: 0; overflow: hidden; border: 1px solid #d4d4d4; border-radius: 3px; background: white; box-shadow: 0 12px 28px rgb(28 29 31 / 12%); cursor: zoom-in; }
+.guide-image-button:hover { border-color: var(--bni-red); background: white; }
+.guide-image-button:focus-visible { outline-offset: 4px; }
+.guide-image-button img { display: block; width: 100%; height: auto; }
+.guide-cta { display: grid; justify-items: start; gap: .8rem; margin: 0; }
+.guide-cta h2, .guide-cta p { margin: 0; }
+.guide-cta-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+.guide-image-dialog { width: min(1380px, calc(100% - 2rem)); }
+.guide-image-dialog-card { padding: 2.5rem 1rem 1rem; }
+.guide-image-dialog-card img { display: block; width: auto; max-width: 100%; max-height: calc(100vh - 5rem); margin: auto; object-fit: contain; }
 .page-meta { margin: -.15rem 0 .9rem; color: var(--muted); font-family: inherit; font-size: .82rem; line-height: 1.45; overflow-wrap: anywhere; }
 .panel, .table-panel { border: 1px solid var(--border); border-radius: 4px; background: var(--paper); box-shadow: var(--shadow); }
 .panel { padding: 1.5rem; }
@@ -409,6 +432,8 @@ button.danger:hover { border-color: #8f101d; background: #8f101d; }
 .representation-provider-card .contact-provider { margin-left: auto; }
 
 @media (max-width: 1180px) {
+    .header-navigation { gap: .35rem; }
+    nav a, .nav-disabled { padding-inline: .7rem; font-size: .78rem; }
     .stats { grid-template-columns: repeat(4, 1fr); }
     .column-orgid { display: none; }
     .detail-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -438,6 +463,9 @@ button.danger:hover { border-color: #8f101d; background: #8f101d; }
 }
 
 @media (max-width: 640px) {
+    .guide-step { grid-template-columns: 1fr; gap: 1.15rem; }
+    .guide-step:nth-child(even) { direction: ltr; }
+    .guide-cta-actions { display: grid; width: 100%; }
     .account-details { grid-template-columns: 1fr; }
     .request-contact-identity { grid-template-columns: 1fr; }
     .request-contact-identity label:last-of-type { grid-column: auto; }

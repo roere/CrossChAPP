@@ -16,6 +16,7 @@
     initializeAccountMenu();
     initializeMyAccount();
     initializePasswordChange();
+    initializeGuideImages();
     document.querySelector('#chapter-search-form')?.addEventListener('submit', searchChapters);
 
     const searchState = {
@@ -31,6 +32,19 @@
     if (document.querySelector('#home-chapter-results')) loadHomeChapters();
     const invitationForm = document.querySelector('#invitation-activation-form');
     if (invitationForm) setupInvitationActivation(invitationForm);
+
+    function initializeGuideImages() {
+        const dialog = document.querySelector('#guide-image-dialog');
+        if (!dialog) return;
+        const image = dialog.querySelector('img'); const close = dialog.querySelector('#close-guide-image'); let trigger = null;
+        const closeDialog = () => { if (dialog.open) dialog.close(); trigger?.focus(); };
+        document.querySelectorAll('[data-guide-image]').forEach(button => button.addEventListener('click', () => {
+            trigger = button; image.src = button.dataset.guideImage; image.alt = button.dataset.guideAlt || ''; dialog.showModal(); close.focus();
+        }));
+        close.addEventListener('click', closeDialog);
+        dialog.addEventListener('cancel', event => { event.preventDefault(); closeDialog(); });
+        dialog.addEventListener('click', event => { if (event.target === dialog) closeDialog(); });
+    }
 
     function selectResultLimit(event) {
         const button = event.target.closest('button[data-limit]');

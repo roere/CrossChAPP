@@ -19,6 +19,27 @@ def search(location='Testort'):
         if js("return !document.querySelector('#search-button').disabled"):return
     raise AssertionError('CrossChAPPtern-Suche blieb im Ladezustand')
 try:
+    wd('POST',f'/session/{session}/log',{'type':'performance'});go('/?view=about')
+    guide=js("const nav=[...document.querySelectorAll('nav a')],steps=[...document.querySelectorAll('.guide-step')],images=[...document.querySelectorAll('.guide-image-button img')],rects=steps.map(step=>({copy:step.querySelector('.guide-step-copy').getBoundingClientRect(),image:step.querySelector('.guide-image-button').getBoundingClientRect()}));return {nav:nav.map(x=>x.textContent.trim()),active:nav.filter(x=>x.classList.contains('active')).map(x=>x.textContent.trim()),title:document.querySelector('.page-intro-title').textContent.trim(),headings:steps.map(x=>x.querySelector('h2').textContent.trim()),text:document.querySelector('.guide-page').innerText,loaded:images.map(x=>({complete:x.complete,naturalWidth:x.naturalWidth,naturalHeight:x.naturalHeight,displayWidth:x.getBoundingClientRect().width,displayHeight:x.getBoundingClientRect().height})),alternating:rects.map(x=>x.copy.left<x.image.left),cta:[...document.querySelectorAll('.guide-cta-actions a')].map(x=>x.textContent.trim()),overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth}")
+    assert guide['nav'][:2]==['Was ist CrossChAPP?','CrossChAPPtern'] and guide['active']==['Was ist CrossChAPP?'] and guide['title']=='Was ist CrossChAPP?',guide
+    assert guide['headings']==['1. Passende Chapter finden','2. Vertretung anbieten','3. Vertretung für dein Chapter finden','4. Verifiziertes Benutzerkonto'],guide['headings']
+    widths=[x['displayWidth'] for x in guide['loaded']]
+    assert all(x['complete'] and x['naturalWidth']>0 and x['naturalHeight']>0 and abs((x['displayWidth']/x['displayHeight'])-(x['naturalWidth']/x['naturalHeight']))<.02 for x in guide['loaded']) and max(widths)-min(widths)<=2 and guide['alternating']==[True,False,True,False] and guide['cta']==['CrossChAPPtern öffnen','Anmelden'] and 'Geschäftsreise' in guide['text'] and 'Urlaub' in guide['text'] and not guide['overflow'],guide
+    image_status=js("return Promise.all([...document.querySelectorAll('.guide-image-button img')].map(x=>fetch(x.src).then(r=>r.status)))");assert image_status==[200,200,200,200],image_status
+    guide_network=wd('POST',f'/session/{session}/log',{'type':'performance'});guide_urls=[]
+    for entry in guide_network:
+        try:
+            message=json.loads(entry['message'])['message']
+            if message['method']=='Network.requestWillBeSent':guide_urls.append(message['params']['request']['url'])
+        except (KeyError,ValueError):pass
+    assert not [url for url in guide_urls if '/api/' in url or any(host in url for host in FORBIDDEN)],guide_urls
+    dialog=js("const b=document.querySelector('.guide-image-button');b.click();return {open:document.querySelector('#guide-image-dialog').open,focus:document.activeElement.id,src:document.querySelector('#guide-image-dialog img').getAttribute('src')}");assert dialog['open'] and dialog['focus']=='close-guide-image' and dialog['src'].endswith('crosschaptern-finden.png'),dialog
+    wd('POST',f'/session/{session}/actions',{'actions':[{'type':'key','id':'keyboard','actions':[{'type':'keyDown','value':'\ue00c'},{'type':'keyUp','value':'\ue00c'}]}]});time.sleep(.2)
+    assert js("return !document.querySelector('#guide-image-dialog').open&&document.activeElement===document.querySelector('.guide-image-button')")
+    wd('POST',f'/session/{session}/window/rect',{'width':390,'height':900});time.sleep(.3)
+    mobile_guide=js("const steps=[...document.querySelectorAll('.guide-step')];return {single:steps.every(x=>getComputedStyle(x).gridTemplateColumns.split(' ').length===1),ordered:steps.every(x=>x.querySelector('.guide-step-copy').getBoundingClientRect().top<x.querySelector('.guide-image-button').getBoundingClientRect().top),overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,navVisible:[...document.querySelectorAll('nav a')].every(x=>x.getBoundingClientRect().width>0)}")
+    assert mobile_guide=={'single':True,'ordered':True,'overflow':False,'navVisible':True},mobile_guide
+    wd('POST',f'/session/{session}/window/rect',{'width':1440,'height':1000});time.sleep(.3)
     go('/?view=crosschaptern')
     assert js("return document.querySelector('.page-intro-title').textContent.trim()")=='Finde passende BNI-Chaptertreffen in deiner Nähe.'
     search();anonymous=js("const c=document.querySelector('#result-910001');return {text:c?.textContent||'',buttons:c?.querySelectorAll('.request-contact-button').length||0,type:[...document.querySelectorAll('th,dt,label,legend')].some(x=>x.textContent.trim()==='Typ'),org:/orgId/i.test(document.body.innerText),error:document.querySelector('#search-message').textContent,ids:[...document.querySelectorAll('.result-card')].map(x=>x.id)}")
@@ -57,7 +78,9 @@ try:
     anonymous_user_actions=js("return Promise.all([fetch('/api/admin/user-password-reset.php',{method:'POST'}).then(r=>r.status),fetch('/api/admin/users.php',{method:'DELETE'}).then(r=>r.status)])");assert anonymous_user_actions==[401,401],anonymous_user_actions
     expected_auth_logs=wd('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in expected_auth_logs if entry.get('level')=='SEVERE' and not any(path in entry.get('message','') for path in ('/api/auth/login.php','/api/admin/invitations.php','/api/admin/users.php','/api/admin/user-password-reset.php'))],expected_auth_logs
 
-    login('check-b@example.test');assert js("return new URL(location.href).searchParams.get('view')")=='crosschaptern';go('/?view=crosschaptern');search()
+    login('check-b@example.test');assert js("return new URL(location.href).searchParams.get('view')")=='crosschaptern';go('/?view=about')
+    assert js("return [...document.querySelectorAll('.guide-cta-actions a')].map(x=>x.textContent.trim())")==['CrossChAPPtern','Vertretung anbieten','Vertretung finden']
+    go('/?view=crosschaptern');search()
     account_menu=js("const t=document.querySelector('#account-menu-trigger');t.click();const labels=[...document.querySelectorAll('#account-dropdown [role=menuitem]')].map(x=>x.textContent.trim());return {labels,open:!document.querySelector('#account-dropdown').hidden}")
     assert account_menu=={'labels':['Mein Konto','Passwort ändern'],'open':True},account_menu
     js("document.querySelector('#open-my-account').click()");time.sleep(.4)
@@ -172,6 +195,6 @@ try:
             if message['method']=='Network.requestWillBeSent':urls.append(message['params']['request']['url'])
         except (KeyError,ValueError):pass
     assert not [url for url in urls if any(host in url for host in FORBIDDEN)],urls
-    print('PASS Chromium Smoke: Suche, anonym/auth, Angebote, Gesuche, Kontakt, Admin und Network-Guard')
+    print(f'PASS Chromium Smoke: Guide-Bildbreiten {widths}, Suche, anonym/auth, Angebote, Gesuche, Kontakt, Admin und Network-Guard')
 finally:
     wd('DELETE',f'/session/{session}')

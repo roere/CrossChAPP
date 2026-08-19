@@ -37,6 +37,7 @@ $viewParameter = (string) ($_GET['view'] ?? '');
 $returnViewParameter = (string) ($_GET['return_view'] ?? '');
 $returnView = in_array($returnViewParameter, ['crosschaptern', 'vertretung', 'vertretung-finden'], true) ? $returnViewParameter : '';
 $requestedView = isset($_GET['invite']) || isset($_GET['reset']) ? 'auth' : match ($viewParameter) {
+    'about' => 'about',
     'admin' => 'admin',
     'login', 'register', 'forgot', 'reset', 'verified', 'invite' => 'auth',
     'vertretung' => 'vertretung',
@@ -50,6 +51,7 @@ $invitationResult = $authMode === 'invite' ? InvitationFactory::create()['servic
 $verificationResult = $authMode === 'verified' ? (string) ($_SESSION['verification_result'] ?? 'invalid') : '';
 if ($authMode === 'verified') unset($_SESSION['verification_result']);
 $pageTitle = match ($requestedView) {
+    'about' => 'Was ist CrossChAPP? | CrossChAPP',
     'admin' => 'Admin | CrossChAPP',
     'vertretung' => 'Vertretung anbieten | CrossChAPP',
     'vertretung-finden' => 'Vertretung finden | CrossChAPP',
@@ -92,6 +94,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                 </a>
                 <div class="header-navigation">
                     <nav aria-label="Hauptnavigation">
+                        <a class="<?= $requestedView === 'about' ? 'active' : '' ?>" href="/?view=about">Was ist CrossChAPP?</a>
                         <a class="<?= $requestedView === 'crosschaptern' ? 'active' : '' ?>" href="/?view=crosschaptern">CrossChAPPtern</a>
                         <a class="<?= $requestedView === 'vertretung' ? 'active' : '' ?>" href="/?view=vertretung">Vertretung anbieten</a>
                         <a class="<?= $requestedView === 'vertretung-finden' ? 'active' : '' ?>" href="/?view=vertretung-finden">Vertretung finden</a>
@@ -171,7 +174,9 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <?php endif; ?>
 
     <?php
-    if ($requestedView === 'admin') {
+    if ($requestedView === 'about') {
+        require __DIR__ . '/views/about.php';
+    } elseif ($requestedView === 'admin') {
         require $isAdmin ? __DIR__ . '/views/admin.php' : __DIR__ . '/views/login.php';
     } elseif ($requestedView === 'auth') {
         require __DIR__ . '/views/login.php';
