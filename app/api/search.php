@@ -28,6 +28,7 @@ $days = is_array($payload) && is_array($payload['days'] ?? null) ? array_values(
 $timeFilter = is_array($payload) ? (string) ($payload['time'] ?? 'any') : 'any';
 $sort = is_array($payload) ? (string) ($payload['sort'] ?? 'distance') : 'distance';
 $limitInput = is_array($payload) ? (string) ($payload['limit'] ?? '10') : '10';
+$hasRepresentationRequests = is_array($payload) ? ($payload['hasRepresentationRequests'] ?? false) : false;
 $allowedDays = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 $allowedLimits = ['5' => 5, '10' => 10, '20' => 20, '50' => 50, 'all' => null];
 
@@ -43,6 +44,9 @@ if (!in_array($timeFilter, ['any', 'early', 'late'], true) || !in_array($sort, [
 if (!array_key_exists($limitInput, $allowedLimits)) {
     JsonResponse::send(['error' => 'Die gewünschte Ergebnisanzahl ist ungültig.'], 400);
 }
+if (!is_bool($hasRepresentationRequests)) {
+    JsonResponse::send(['error' => 'Der Filter für Vertretungsgesuche ist ungültig.'], 400);
+}
 
 try {
     $location = (new Geocoder())->geocode($locationInput);
@@ -51,6 +55,7 @@ try {
     $repository = new OrganizationRepository($database);
     $automationSettings = (new AutomationRepository($database))->settings();
     $service = new ChapterSearchService($repository);
+    $today = (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
     $search = $service->search(
         $location['latitude'],
         $location['longitude'],
@@ -58,9 +63,11 @@ try {
         $timeFilter,
         $sort,
         $allowedLimits[$limitInput],
+        $hasRepresentationRequests,
+        $today,
     );
     Auth::start(); $identity = Auth::user(); $viewerId = $identity !== null && ($identity['role'] ?? null) === 'user' ? (int) $identity['user_id'] : null;
-    $requestMap = (new RepresentationRequestRepository($database))->activeForOrganizations(array_column($search['results'], 'orgId'), $viewerId, (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->format('Y-m-d'));
+    $requestMap = (new RepresentationRequestRepository($database))->activeForOrganizations(array_column($search['results'], 'orgId'), $viewerId, $today);
     foreach ($search['results'] as &$resultItem) $resultItem['representationRequests'] = $requestMap[(int) $resultItem['orgId']] ?? [];
     unset($resultItem);
     $searchLocation = [

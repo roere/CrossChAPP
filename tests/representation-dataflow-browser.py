@@ -34,8 +34,8 @@ try:
     assert chapter_meta['text']==f'Heimatchapter: {home_name}',(chapter_meta,home_name)
     assert len(find_payload['requests'])==1 and find_payload['requests'][0]['requestDate']==chosen
     assert find_payload['datedOffers']==[] and find_payload['allDatesOffers']==[] and find_payload['offers']==[],find_payload
-    display=script("return {chips:document.querySelectorAll('#representation-request-chips .date-chip').length,dateGroups:document.querySelectorAll('#dated-representations .representation-date-group').length,providers:document.querySelectorAll('#dated-representations .representation-provider-card').length,overview:document.querySelectorAll('#representation-offers-overview .representation-offer-card').length,empty:document.querySelector('#dated-representations').textContent.includes('keine Vertretungstermine oder konkreten Angebote')};")
-    assert display=={'chips':1,'dateGroups':0,'providers':0,'overview':0,'empty':True},display
+    display=script("const always=document.querySelector('#all-dates-representations-section');return {chips:document.querySelectorAll('#representation-request-chips .date-chip').length,dateGroups:document.querySelectorAll('#dated-representations .representation-date-group').length,providers:document.querySelectorAll('#dated-representations .representation-provider-card').length,overview:document.querySelectorAll('#representation-offers-overview .representation-offer-card').length,empty:document.querySelector('#dated-representations').textContent.includes('keine Vertretungstermine oder konkreten Angebote'),alwaysHidden:always.hidden,alwaysVisible:always.getClientRects().length>0,alwaysText:always.textContent.includes('Aktuell bietet sich niemand pauschal')};")
+    assert display=={'chips':1,'dateGroups':0,'providers':0,'overview':0,'empty':True,'alwaysHidden':True,'alwaysVisible':False,'alwaysText':False},display
 
     request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=vertretung'});time.sleep(.8);network()
     assert script("const ids=[...document.querySelectorAll('[id]')].map(x=>x.id);return new Set(ids).size===ids.length;")

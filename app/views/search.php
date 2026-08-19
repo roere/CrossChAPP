@@ -49,9 +49,9 @@
                 </div>
             </div>
 
+            <label class="representation-request-filter"><input type="checkbox" name="has_representation_requests"> <span>Nur Chapter mit Vertretungsgesuchen anzeigen</span></label>
             <button id="search-button" type="submit" class="search-submit">Treffen finden</button>
         </form>
-        <p id="data-basis" class="data-basis">Datengrundlage wird ermittelt …</p>
         <div id="search-message" class="message" role="status" aria-live="polite"></div>
     </section>
 

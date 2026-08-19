@@ -28,7 +28,6 @@
     document.querySelector('.result-limit-options')?.addEventListener('click', selectResultLimit);
     initializeRequestContact();
 
-    if (document.querySelector('#data-basis')) loadDataBasis();
     if (document.querySelector('#home-chapter-results')) loadHomeChapters();
     const invitationForm = document.querySelector('#invitation-activation-form');
     if (invitationForm) setupInvitationActivation(invitationForm);
@@ -319,18 +318,6 @@
         form.addEventListener('submit',async event=>{event.preventDefault();const validPassword=validatePassword(),validConfirmation=validateConfirmation();if(!validPassword||!validConfirmation){(validPassword?confirmation:password).focus();return;}const message=document.querySelector('#invitation-activation-message');try{const response=await fetch('/api/auth/invitation.php',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify({token:form.dataset.token,password:password.value,password_confirmation:confirmation.value})});const payload=await response.json();if(!response.ok)throw new Error(payload.error);form.remove();message.className='message success';message.replaceChildren(document.createTextNode('Dein Konto wurde aktiviert. '));const link=document.createElement('a');link.href='/?view=login';link.className='button-link';link.textContent='Anmelden';message.append(link);}catch(error){message.textContent=error.message;message.className='message error';}});
     }
 
-    async function loadDataBasis() {
-        const element = document.querySelector('#data-basis');
-        try {
-            const response = await fetch('/api/search-basis.php');
-            const payload = await response.json();
-            if (!response.ok) throw new Error();
-            element.textContent = `Datengrundlage: ${payload.data_basis} Chapter mit lokal gespeicherten Treffendaten.`;
-        } catch {
-            element.textContent = 'Die lokale Datengrundlage konnte nicht ermittelt werden.';
-        }
-    }
-
     async function searchChapters(event) {
         event.preventDefault();
         const form = event.currentTarget;
@@ -342,6 +329,7 @@
             time: form.querySelector('input[name="time"]:checked').value,
             sort: form.sort.value,
             limit: form.limit.value,
+            hasRepresentationRequests: form.elements.has_representation_requests.checked,
         };
         message.textContent = 'Ort wird gesucht und Entfernung berechnet …'; message.className = 'message'; button.disabled = true;
         try {
@@ -352,7 +340,6 @@
             if (!response.ok) throw new Error(result.error || 'Die Suche konnte nicht ausgeführt werden.');
             renderResults(result);
             queueSearchRefreshes(result);
-            document.querySelector('#data-basis').textContent = `Datengrundlage: ${result.data_basis} Chapter mit lokal gespeicherten Treffendaten.`;
             message.textContent = '';
         } catch (error) {
             document.querySelector('#search-results').hidden = true;
@@ -421,7 +408,7 @@
         const anonymousNumbers = new Map();
         requests.forEach(item => { const row = document.createElement('div'); row.className = 'result-representation-request'; const text = document.createElement('span');
             const currentNumber = (anonymousNumbers.get(item.requestDate) || 0) + 1; anonymousNumbers.set(item.requestDate, currentNumber);
-            const person = authenticated ? item.displayName : `Person ${currentNumber}`; text.textContent = `${formatDateOnly(item.requestDate)} · ${person}`; row.append(text);if(item.isVerified){const verified=document.createElement('span');verified.className='verified-badge';verified.textContent='Verifiziert';row.append(verified);}
+            const person = authenticated ? item.displayName : `Gesuch ${currentNumber}`; text.textContent = `${formatDateOnly(item.requestDate)} · ${person}`; row.append(text);if(item.isVerified){const verified=document.createElement('span');verified.className='verified-badge';verified.textContent='Verifiziert';row.append(verified);}
             if (item.canContact && item.requestId) { const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary request-contact-button'; button.textContent = 'Kontaktieren'; button.dataset.requestId = item.requestId; row.append(button); }
             else if (item.isOwn) { const own = document.createElement('span'); own.className = 'offer-meta'; own.textContent = 'Dein Gesuch'; row.append(own); }
             section.append(row);

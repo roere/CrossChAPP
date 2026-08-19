@@ -3,6 +3,7 @@
     const dated = document.querySelector('#dated-representations');
     if (!dated) return;
     const always = document.querySelector('#all-date-representations');
+    const alwaysSection = document.querySelector('#all-dates-representations-section');
     const requestChips = document.querySelector('#representation-request-chips');
     const requestMessage = document.querySelector('#representation-request-message');
     const requestDayHint = document.querySelector('#representation-request-day-hint');
@@ -44,7 +45,8 @@
             payload = null;
             requestChips.replaceChildren(paragraph('Die Vertretungsgesuche konnten nicht geladen werden.'));
             dated.replaceChildren(paragraph(cause instanceof Error ? cause.message : 'Die Vertretungsangebote konnten nicht geladen werden.'));
-            always.replaceChildren(paragraph('Die pauschalen Vertretungsangebote konnten nicht geladen werden.'));
+            always.replaceChildren();
+            alwaysSection.hidden = true;
             overview.replaceChildren(paragraph('Die Vertretungsangebote konnten nicht geladen werden.'));
         }
     }
@@ -57,7 +59,8 @@
         const groups = data.datedOffers || [];
         dated.replaceChildren(...(groups.length ? groups.map(dateGroup) : [paragraph('Aktuell sind keine Vertretungstermine oder konkreten Angebote hinterlegt.')]));
         const providers = data.allDatesOffers || [];
-        always.replaceChildren(...(providers.length ? providers.map(provider => providerCard(provider, null)) : [paragraph('Aktuell bietet sich niemand pauschal für alle Chaptertermine an.')]));
+        always.replaceChildren(...providers.map(provider => providerCard(provider, null)));
+        alwaysSection.hidden = providers.length === 0;
         const offers = data.offers || [];
         overview.replaceChildren(...(offers.length ? offers.map(overviewCard) : [paragraph('Aktuell sind keine Vertretungsangebote für dein Chapter hinterlegt.')]));
     }

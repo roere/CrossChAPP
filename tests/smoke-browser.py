@@ -12,8 +12,8 @@ def js(source):return wd('POST',f'/session/{session}/execute/sync',{'script':sou
 def go(path):wd('POST',f'/session/{session}/url',{'url':APP+path});time.sleep(.6)
 def login(email,password='check-password-123'):
     go('/?view=login');js(f"const f=document.querySelector('#login-form');f.login.value={json.dumps(email)};f.password.value={json.dumps(password)};f.requestSubmit();");time.sleep(.8)
-def search(location='Testort'):
-    js(f"const f=document.querySelector('#chapter-search-form');f.location.value={json.dumps(location)};f.querySelector('[data-limit=\"all\"]').click();f.requestSubmit();")
+def search(location='Testort', requests_only=False):
+    js(f"const f=document.querySelector('#chapter-search-form');f.location.value={json.dumps(location)};f.elements.has_representation_requests.checked={str(requests_only).lower()};f.querySelector('[data-limit=\"all\"]').click();f.requestSubmit();")
     for _ in range(40):
         time.sleep(.25)
         if js("return !document.querySelector('#search-button').disabled"):return
@@ -23,6 +23,7 @@ try:
     guide=js("const nav=[...document.querySelectorAll('nav a')],steps=[...document.querySelectorAll('.guide-step')],images=[...document.querySelectorAll('.guide-image-button img')],rects=steps.map(step=>({copy:step.querySelector('.guide-step-copy').getBoundingClientRect(),image:step.querySelector('.guide-image-button').getBoundingClientRect()}));return {nav:nav.map(x=>x.textContent.trim()),active:nav.filter(x=>x.classList.contains('active')).map(x=>x.textContent.trim()),title:document.querySelector('.page-intro-title').textContent.trim(),headings:steps.map(x=>x.querySelector('h2').textContent.trim()),text:document.querySelector('.guide-page').innerText,loaded:images.map(x=>({complete:x.complete,naturalWidth:x.naturalWidth,naturalHeight:x.naturalHeight,displayWidth:x.getBoundingClientRect().width,displayHeight:x.getBoundingClientRect().height})),alternating:rects.map(x=>x.copy.left<x.image.left),cta:[...document.querySelectorAll('.guide-cta-actions a')].map(x=>x.textContent.trim()),overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth}")
     assert guide['nav'][:2]==['Was ist CrossChAPP?','CrossChAPPtern'] and guide['active']==['Was ist CrossChAPP?'] and guide['title']=='Was ist CrossChAPP?',guide
     assert guide['headings']==['1. Passende Chapter finden','2. Vertretung anbieten','3. Vertretung für dein Chapter finden','4. Verifiziertes Benutzerkonto'],guide['headings']
+    assert 'Gib an, für welche Termine Du eine Vertretung suchst.' in guide['text'] and 'Lege für dein Heimatchapter ein Vertretungsgesuch an.' not in guide['text'],guide['text']
     widths=[x['displayWidth'] for x in guide['loaded']]
     assert all(x['complete'] and x['naturalWidth']>0 and x['naturalHeight']>0 and abs((x['displayWidth']/x['displayHeight'])-(x['naturalWidth']/x['naturalHeight']))<.02 for x in guide['loaded']) and max(widths)-min(widths)<=2 and guide['alternating']==[True,False,True,False] and guide['cta']==['CrossChAPPtern öffnen','Anmelden'] and 'Geschäftsreise' in guide['text'] and 'Urlaub' in guide['text'] and not guide['overflow'],guide
     image_status=js("return Promise.all([...document.querySelectorAll('.guide-image-button img')].map(x=>fetch(x.src).then(r=>r.status)))");assert image_status==[200,200,200,200],image_status
@@ -42,8 +43,18 @@ try:
     wd('POST',f'/session/{session}/window/rect',{'width':1440,'height':1000});time.sleep(.3)
     go('/?view=crosschaptern')
     assert js("return document.querySelector('.page-intro-title').textContent.trim()")=='Finde passende BNI-Chaptertreffen in deiner Nähe.'
+    search_filter=js("const f=document.querySelector('#chapter-search-form'),c=f.elements.has_representation_requests,b=document.querySelector('#search-button');return {unchecked:!c.checked,before:!!(c.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING),label:c.closest('label').textContent.trim(),basis:document.body.innerText.includes('Datengrundlage:')}")
+    assert search_filter=={'unchecked':True,'before':True,'label':'Nur Chapter mit Vertretungsgesuchen anzeigen','basis':False},search_filter
     search();anonymous=js("const c=document.querySelector('#result-910001');return {text:c?.textContent||'',buttons:c?.querySelectorAll('.request-contact-button').length||0,type:[...document.querySelectorAll('th,dt,label,legend')].some(x=>x.textContent.trim()==='Typ'),org:/orgId/i.test(document.body.innerText),error:document.querySelector('#search-message').textContent,ids:[...document.querySelectorAll('.result-card')].map(x=>x.id)}")
-    assert 'Person 1' in anonymous['text'] and anonymous['buttons']==1 and not anonymous['type'] and not anonymous['org'],anonymous
+    assert 'Gesuch 1' in anonymous['text'] and 'Person 1' not in anonymous['text'] and anonymous['buttons']==1 and not anonymous['type'] and not anonymous['org'],anonymous
+    assert 'result-910003' in anonymous['ids'],anonymous
+    search(requests_only=True);request_filtered=js("return {checked:document.querySelector('[name=has_representation_requests]').checked,ids:[...document.querySelectorAll('.result-card')].map(x=>x.id)}")
+    assert request_filtered=={'checked':True,'ids':['result-910001','result-910002']},request_filtered
+    invalid_request_filter=js("return fetch('/api/search.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Testort',days:[],time:'any',sort:'distance',limit:'all',hasRepresentationRequests:'yes'})}).then(async r=>({status:r.status,body:await r.json()}))")
+    assert invalid_request_filter['status']==400 and 'ungültig' in invalid_request_filter['body']['error'],invalid_request_filter
+    invalid_filter_logs=wd('POST',f'/session/{session}/log',{'type':'browser'})
+    assert invalid_filter_logs and all('/api/search.php' in entry.get('message','') and '400' in entry.get('message','') for entry in invalid_filter_logs if entry.get('level')=='SEVERE'),invalid_filter_logs
+    search()
     public_privacy=js("return fetch('/api/search.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Testort',days:[],time:'any',sort:'distance',limit:'all'})}).then(r=>r.json()).then(data=>{const raw=JSON.stringify(data.results.find(x=>x.orgId===910001).representationRequests);return {userId:raw.includes('user_id'),email:raw.includes('@'),displayName:raw.includes('displayName')}})")
     assert not any(public_privacy.values()),public_privacy
     js("document.querySelector('#result-910001 .request-contact-button').click()");time.sleep(.4)
@@ -103,6 +114,14 @@ try:
     js("document.querySelector('#request-contact-form').requestSubmit()");time.sleep(.7);assert 'Deine Rückmeldung wurde gesendet.' in js("return document.querySelector('#request-contact-content').textContent")
 
     go('/?view=vertretung');today=datetime.date.today();delta=(2-today.weekday())%7;wrong_date=today+datetime.timedelta(days=delta or 7);wrong_display=wrong_date.strftime('%d.%m.%Y')
+    representation_copy=js("return {database:document.body.innerText.includes('Lokale Datenbank'),heading:document.querySelector('#representation-list-heading').textContent.trim()}")
+    assert not representation_copy['database'] and representation_copy['heading']=='Chapterliste' and js("return document.querySelector('#select-visible-representations').textContent.trim()")=='Alle auswählen' and 'Alle sichtbaren auswählen' not in js("return document.querySelector('.representation-list-panel').innerText"),representation_copy
+    representation_api=js("return fetch('/api/representation/organizations.php').then(r=>r.json()).then(p=>({count:p.count,types:[...new Set(p.organizations.map(x=>x.orgType))],ids:p.organizations.map(x=>x.orgId)}))")
+    assert representation_api=={'count':3,'types':['CHAPTER'],'ids':[910001,910002,910003]},representation_api
+    offer_actions=js("const panel=document.querySelector('.representation-list-panel'),heading=panel.querySelector('.list-heading'),actions=panel.querySelector('.representation-list-actions'),table=panel.querySelector('.table-scroll');return {order:!!((heading.compareDocumentPosition(actions)&Node.DOCUMENT_POSITION_FOLLOWING)&&(actions.compareDocumentPosition(table)&Node.DOCUMENT_POSITION_FOLLOWING)),filterButtons:document.querySelector('.representation-filters .representation-actions')===null,overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth}")
+    assert offer_actions=={'order':True,'filterButtons':True,'overflow':False},offer_actions
+    selection_actions=js("const current=()=>[...document.querySelectorAll('#representation-list input[data-org-id]:not(:disabled)')],visible=current().length;document.querySelector('#select-visible-representations').click();const selected=current().filter(x=>x.checked).length;document.querySelector('#clear-representations').click();return {visible,selected,cleared:current().every(x=>!x.checked)}")
+    assert selection_actions['visible']>0 and selection_actions['selected']==selection_actions['visible'] and selection_actions['cleared'],selection_actions
     wd('POST',f'/session/{session}/log',{'type':'performance'})
     invalid_client=js(f"const row=document.querySelector('input[data-org-id=\"910001\"]');row.click();const input=document.querySelector('#representation-date');input.value={json.dumps(wrong_display)};input.dispatchEvent(new Event('input',{{bubbles:true}}));return {{chips:document.querySelectorAll('#representation-date-chips .date-chip').length,message:document.querySelector('#representation-date-message').textContent,selected:row.checked}}")
     invalid_network=wd('POST',f'/session/{session}/log',{'type':'performance'});assert invalid_client['chips']==0 and invalid_client['selected'] and 'passt nicht zum Meetingtag' in invalid_client['message'] and not [x for x in invalid_network if '/api/representation/offers.php' in x.get('message','') and 'Network.requestWillBeSent' in x.get('message','')],invalid_client
@@ -111,7 +130,8 @@ try:
     invalid_server_logs=wd('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in invalid_server_logs if entry.get('level')=='SEVERE' and '/api/representation/offers.php' not in entry.get('message','')],invalid_server_logs
     offer=js("document.querySelector('#representation-all-dates').click();document.querySelector('#save-representation-offer').click();return {ownDisabled:document.querySelector('input[data-org-id=\"910002\"]').disabled,typeHeader:[...document.querySelectorAll('#representation-table th')].some(x=>x.textContent.trim()==='Typ')}");time.sleep(.7)
     assert offer['ownDisabled'] and not offer['typeHeader'] and 'Vertretungsangebot' in js("return document.querySelector('#representation-save-message').textContent")
-    go('/?view=vertretung-finden');home=js("return document.querySelector('#representation-home-chapter').textContent");assert 'Testchapter Rhein' in home
+    go('/?view=vertretung-finden');find_copy=js("return {title:document.querySelector('.page-intro-title').textContent.trim(),heading:document.querySelector('#representation-requests-heading').textContent.trim(),hint:document.querySelector('.representation-requests>p').textContent.trim(),old:document.querySelector('.representation-requests').innerText.includes('Termine auswählen'),home:document.querySelector('#representation-home-chapter').textContent}");assert find_copy['title']=='Finde eine Vertretung' and find_copy['heading']=='Meine Vertretungsgesuche' and find_copy['hint']=='Wähle Termine aus, für die Du eine Vertretung suchst' and not find_copy['old'] and 'Testchapter Rhein' in find_copy['home'],find_copy
+    assert js("const s=document.querySelector('#all-dates-representations-section');return s.hidden&&!s.getClientRects().length&&!document.body.innerText.includes('Aktuell bietet sich niemand pauschal für alle Chaptertermine an.')")
     assert js("return document.querySelectorAll('#dated-representations .representation-provider-card').length")>=1
     today=datetime.date.today();delta=(2-today.weekday())%7;request_date=today+datetime.timedelta(days=delta or 7);display=request_date.strftime('%d.%m.%Y')
     js(f"const i=document.querySelector('#representation-request-date');i.value={json.dumps(display)};i.dispatchEvent(new Event('input',{{bubbles:true}}));");time.sleep(.7)

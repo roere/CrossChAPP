@@ -17,11 +17,6 @@
             <button id="apply-representation-radius" type="button" class="secondary">Umkreis anwenden</button>
         </div>
         <div id="representation-location-message" class="message" role="status" aria-live="polite"></div>
-        <div class="representation-actions">
-            <button id="select-visible-representations" type="button" class="secondary">Alle sichtbaren auswählen</button>
-            <button id="clear-representations" type="button" class="secondary">Auswahl aufheben</button>
-            <strong id="representation-counts">0 sichtbar · 0 Chapter ausgewählt</strong>
-        </div>
     </section>
 
     <section class="panel representation-dates" aria-labelledby="representation-date-heading">
@@ -35,7 +30,12 @@
     </section>
 
     <section class="table-panel representation-list-panel" aria-labelledby="representation-list-heading">
-        <div class="list-heading"><div><p class="section-kicker">Lokale Datenbank</p><h2 id="representation-list-heading">Chapterliste</h2></div></div>
+        <div class="list-heading"><div><h2 id="representation-list-heading">Chapterliste</h2></div></div>
+        <div class="representation-actions representation-list-actions">
+            <button id="select-visible-representations" type="button" class="secondary">Alle auswählen</button>
+            <button id="clear-representations" type="button" class="secondary">Auswahl aufheben</button>
+            <strong id="representation-counts">0 sichtbar · 0 Chapter ausgewählt</strong>
+        </div>
         <div class="table-scroll"><table id="representation-table">
             <thead><tr><th class="select-column"><span class="sr-only">Auswahl</span></th><th data-sort-key="chapterName"><button type="button" class="sort-button">Chaptername <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="country"><button type="button" class="sort-button">Land <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="city"><button type="button" class="sort-button">Ort <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="meetingDay"><button type="button" class="sort-button">Wochentag <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="meetingTime"><button type="button" class="sort-button">Uhrzeit <span class="sort-indicator" aria-hidden="true"></span></button></th><th id="representation-distance-heading" data-sort-key="distance" hidden><button type="button" class="sort-button">Entfernung <span class="sort-indicator" aria-hidden="true"></span></button></th></tr></thead>
             <tbody id="representation-list"><tr><td colspan="7">Lokale Organisationen werden geladen …</td></tr></tbody>

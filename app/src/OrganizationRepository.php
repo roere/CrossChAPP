@@ -65,6 +65,8 @@ final class OrganizationRepository
     /** @return list<array<string, mixed>> */
     public function representationOrganizations(): array
     {
+        $statement = $this->database->prepare('SELECT * FROM organizations WHERE org_type = :org_type ORDER BY org_id');
+        $statement->execute([':org_type' => 'CHAPTER']);
         return array_map(static fn (array $organization): array => [
             'orgId' => $organization['orgId'],
             'countryCode' => $organization['countryCode'],
@@ -77,7 +79,7 @@ final class OrganizationRepository
             'postalCode' => $organization['postalCode'],
             'meetingDay' => $organization['meetingDay'],
             'meetingTime' => $organization['meetingTime'],
-        ], $this->all());
+        ], array_map([$this, 'toApi'], $statement->fetchAll()));
     }
 
     /** @return array{count: int, with_details: int} */
@@ -96,9 +98,20 @@ final class OrganizationRepository
     }
 
     /** @return list<array<string, mixed>> */
-    public function searchableChapters(): array
+    public function searchableChapters(bool $hasRepresentationRequests = false, ?string $today = null): array
     {
-        $statement = $this->database->prepare(<<<'SQL'
+        if ($hasRepresentationRequests && ($today === null || preg_match('/^\d{4}-\d{2}-\d{2}$/', $today) !== 1)) {
+            throw new InvalidArgumentException('Für den Gesuchsfilter ist ein gültiges Datum erforderlich.');
+        }
+        $requestFilter = $hasRepresentationRequests ? <<<'SQL'
+              AND EXISTS (
+                  SELECT 1
+                  FROM representation_requests rr
+                  WHERE rr.org_id = organizations.org_id
+                    AND rr.request_date >= :today
+              )
+            SQL : '';
+        $statement = $this->database->prepare(<<<SQL
             SELECT * FROM organizations
             WHERE detail_status = :detail_status
               AND chapter_name IS NOT NULL
@@ -106,11 +119,14 @@ final class OrganizationRepository
               AND longitude IS NOT NULL
               AND meeting_day IS NOT NULL
               AND meeting_time IS NOT NULL
+            {$requestFilter}
             ORDER BY org_id
             SQL);
-        $statement->execute([
-            ':detail_status' => 'loaded',
-        ]);
+        $parameters = [':detail_status' => 'loaded'];
+        if ($hasRepresentationRequests) {
+            $parameters[':today'] = $today;
+        }
+        $statement->execute($parameters);
 
         return array_map([$this, 'toApi'], $statement->fetchAll());
     }

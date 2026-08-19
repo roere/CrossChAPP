@@ -15,7 +15,7 @@
             <button class="guide-image-button" type="button" data-guide-image="/assets/images/guide/vertretung-anbieten.png" data-guide-alt="Vertretungsangebot für ein BNI-Chapter erstellen" aria-label="Screenshot zum Vertretungsangebot vergrößern"><img src="/assets/images/guide/vertretung-anbieten.png" alt="Vertretungsangebot für ein BNI-Chapter erstellen"></button>
         </section>
         <section class="guide-step">
-            <div class="guide-step-copy"><h2>3. Vertretung für dein Chapter finden</h2><p>Lege für dein Heimatchapter ein Vertretungsgesuch an. CrossChAPP zeigt dir passende Vertretungsangebote und ermöglicht die direkte Kontaktaufnahme.</p></div>
+            <div class="guide-step-copy"><h2>3. Vertretung für dein Chapter finden</h2><p>Gib an, für welche Termine Du eine Vertretung suchst. CrossChAPP zeigt dir passende Vertretungsangebote und ermöglicht die direkte Kontaktaufnahme.</p></div>
             <button class="guide-image-button" type="button" data-guide-image="/assets/images/guide/vertretung-finden.png" data-guide-alt="Vertretung für das eigene BNI-Chapter finden" aria-label="Screenshot zur Vertretungssuche vergrößern"><img src="/assets/images/guide/vertretung-finden.png" alt="Vertretung für das eigene BNI-Chapter finden"></button>
         </section>
         <section class="guide-step">

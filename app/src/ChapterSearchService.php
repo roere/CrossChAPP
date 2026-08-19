@@ -20,10 +20,12 @@ final class ChapterSearchService
         string $timeFilter,
         string $sort,
         ?int $limit = 10,
+        bool $hasRepresentationRequests = false,
+        ?string $today = null,
     ): array
     {
         $results = [];
-        foreach ($this->repository->searchableChapters() as $chapter) {
+        foreach ($this->repository->searchableChapters($hasRepresentationRequests, $today) as $chapter) {
             if ($days !== [] && !in_array($chapter['meetingDay'], $days, true)) {
                 continue;
             }

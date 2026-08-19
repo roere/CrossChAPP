@@ -22,4 +22,5 @@ $request=(new RepresentationRequestRepository($db))->create((int)$a['id'],$nextF
 $offer=(new RepresentationOfferRepository($db))->createMany((int)$a['id'],[910002],false,[$nextWednesday])[0];
 (new RepresentationOfferRepository($db))->createMany((int)$a['id'],[910003],true,[]);
 (new RepresentationRequestRepository($db))->create((int)$b['id'],(new DateTimeImmutable('next wednesday +7 days',new DateTimeZone('Europe/Berlin')))->format('Y-m-d'));
+$pastRequest=$db->prepare('INSERT INTO representation_requests(user_id,org_id,request_date,created_at,updated_at) VALUES(?,?,?,?,?)');$pastRequest->execute([(int)$a['id'],910003,(new DateTimeImmutable('yesterday',new DateTimeZone('Europe/Berlin')))->format('Y-m-d'),$now,$now]);
 echo json_encode(['userA'=>(int)$a['id'],'userB'=>(int)$b['id'],'userC'=>(int)$c['id'],'deletableUser'=>(int)$deletable['id'],'requestId'=>(int)$request['id'],'offerId'=>$offer,'requestDate'=>$nextFriday,'offerDate'=>$nextWednesday],JSON_UNESCAPED_UNICODE),"\n";
