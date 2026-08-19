@@ -436,7 +436,6 @@ button.danger:hover { border-color: #8f101d; background: #8f101d; }
     .request-contact-identity { grid-template-columns: 1fr; }
     .request-contact-identity label:last-of-type { grid-column: auto; }
     .shell { width: min(100% - 1rem, 1480px); }
-    .topbar-inner { justify-content: space-between; }
     .header-inner { display: block; padding-top: .8rem; }
     .wordmark { width: max-content; margin-left: 1rem; }
     .wordmark::before { top: 0; bottom: 0; }

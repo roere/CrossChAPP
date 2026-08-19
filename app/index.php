@@ -80,7 +80,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
 <body>
     <header class="site-header">
         <div class="topbar">
-            <div class="shell topbar-inner"><span>Lokale Anwendung</span><strong>CrossChAPP</strong></div>
+            <div class="shell topbar-inner"><strong>CrossChAPP</strong></div>
         </div>
         <div class="main-header">
             <div class="shell header-inner">
