@@ -11,6 +11,22 @@ $service = new AccountService($users, $settings, $mailer, $directory);
 $pdo->exec("INSERT INTO organizations (org_id,country_code,org_type,chapter_url,created_at,updated_at) VALUES (99,'DE','CHAPTER','https://bni-test.de/de/chapterdetail',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),(100,'DE','CORE_GROUP','https://bni-test.de/de/chapterdetail',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
 $pdo->exec("INSERT INTO bni_member_directory_configs(org_id,endpoint,parameters,languages,website_type,website_id,mapped_widget_settings,referer,updated_at)VALUES(99,'https://bni-test.de/memberlist','chapterName=99','{}','3','1','[]','https://bni-test.de/memberlist',CURRENT_TIMESTAMP)");
 
+$previousTestMode=getenv('CROSSCHAPP_TEST_MODE');$previousCapture=getenv('CROSSCHAPP_MAIL_CAPTURE_PATH');putenv('CROSSCHAPP_TEST_MODE=0');putenv('CROSSCHAPP_MAIL_CAPTURE_PATH');
+$blockedDirectoryCalls=0;$blockedDirectory=new BniMemberDirectoryService($pdo,static function(string $method)use(&$blockedDirectoryCalls):array{$blockedDirectoryCalls++;return['status'=>200,'body'=>'','headers'=>[]];},static function(int $milliseconds):void{});
+$blockedService=new AccountService($users,$settings,new MailService($settings),$blockedDirectory);
+$usersBefore=(int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();$tokensBefore=(int)$pdo->query('SELECT COUNT(*) FROM email_verification_tokens')->fetchColumn();$memberAttemptsBefore=(int)$pdo->query('SELECT COUNT(*) FROM bni_member_check_attempts')->fetchColumn();
+$mailUnavailable='';try{$blockedService->register(['first_name'=>'Keine','last_name'=>'Mail','email'=>'no-mail@example.test','home_chapter_org_id'=>99,'password'=>'sicher123','password_confirmation'=>'sicher123']);}catch(RegistrationException $exception){$mailUnavailable=$exception->reason.':'.$exception->getMessage();}
+$check($mailUnavailable==='registration_mail_unavailable:Anmeldung momentan nicht möglich.','Fehlende Mailkonfiguration liefert ausschließlich den fachlichen Registrierungsfehler.');
+$check((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn()===$usersBefore&&(int)$pdo->query('SELECT COUNT(*) FROM email_verification_tokens')->fetchColumn()===$tokensBefore,'Fehlende Mailkonfiguration erzeugt weder Benutzer noch Verifikationstoken.');
+$check($blockedDirectoryCalls===0&&(int)$pdo->query('SELECT COUNT(*) FROM bni_member_check_attempts')->fetchColumn()===$memberAttemptsBefore,'Fehlende Mailkonfiguration erzeugt weder BNI-Aufruf noch Membercheck-Limit-Eintrag.');
+if($previousTestMode===false)putenv('CROSSCHAPP_TEST_MODE');else putenv('CROSSCHAPP_TEST_MODE='.$previousTestMode);if($previousCapture===false)putenv('CROSSCHAPP_MAIL_CAPTURE_PATH');else putenv('CROSSCHAPP_MAIL_CAPTURE_PATH='.$previousCapture);
+
+$failingService=new AccountService($users,$settings,new MailService($settings,static function():void{throw new RuntimeException('Simulierter Transportfehler.');}),$directory);
+$usersBeforeFailure=(int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();$tokensBeforeFailure=(int)$pdo->query('SELECT COUNT(*) FROM email_verification_tokens')->fetchColumn();$deliveryFailure='';
+try{$failingService->register(['first_name'=>'Mail','last_name'=>'Fehler','email'=>'mail-failure@example.test','password'=>'sicher123','password_confirmation'=>'sicher123']);}catch(RegistrationException $exception){$deliveryFailure=$exception->reason.':'.$exception->getMessage();}
+$check($deliveryFailure==='registration_mail_delivery_failed:Anmeldung momentan nicht möglich.','Transportfehler erzeugt keine falsche Erfolgsmeldung.');
+$check((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn()===$usersBeforeFailure&&(int)$pdo->query('SELECT COUNT(*) FROM email_verification_tokens')->fetchColumn()===$tokensBeforeFailure,'Transportfehler rollt Benutzer und Verifikationstoken atomar zurück.');
+
 $registration = $service->register(['first_name'=>'René','last_name'=>'Röderstein','email'=>'rene@example.test','home_chapter_org_id'=>99,'password'=>'sicher123','password_confirmation'=>'sicher123']);
 $user = $registration['user']; $check($user['status']==='pending' && $user['email_verified_at']===null && (int)$user['home_chapter_org_id']===99, 'Registrierung pending mit Heimatchapter.');
 $check(password_verify('sicher123',$user['password_hash']) && $user['password_hash']!=='sicher123', 'Passwort ausschließlich gehasht.');

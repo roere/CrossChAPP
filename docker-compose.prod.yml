@@ -1,4 +1,15 @@
 services:
+  db:
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${CROSSCHAPP_DB_NAME:?CROSSCHAPP_DB_NAME must be set}
+      MARIADB_USER: ${CROSSCHAPP_DB_USER:?CROSSCHAPP_DB_USER must be set}
+      MARIADB_PASSWORD: ${CROSSCHAPP_DB_PASSWORD:?CROSSCHAPP_DB_PASSWORD must be set}
+      MARIADB_ROOT_PASSWORD: ${CROSSCHAPP_DB_ROOT_PASSWORD:?CROSSCHAPP_DB_ROOT_PASSWORD must be set}
+    volumes: !override
+      - mariadb-data:/var/lib/mysql
+    networks:
+      - crosschapp-production
   web:
     build:
       context: .
@@ -9,7 +20,12 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-production}
       APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
-      CROSSCHAPP_DB_PATH: ${CROSSCHAPP_DB_PATH:-/var/www/data/bni-dach.sqlite}
+      CROSSCHAPP_DB_DRIVER: mysql
+      CROSSCHAPP_DB_HOST: db
+      CROSSCHAPP_DB_PORT: 3306
+      CROSSCHAPP_DB_NAME: ${CROSSCHAPP_DB_NAME:?CROSSCHAPP_DB_NAME must be set}
+      CROSSCHAPP_DB_USER: ${CROSSCHAPP_DB_USER:?CROSSCHAPP_DB_USER must be set}
+      CROSSCHAPP_DB_PASSWORD: ${CROSSCHAPP_DB_PASSWORD:?CROSSCHAPP_DB_PASSWORD must be set}
       CROSSCHAPP_TRUSTED_PROXIES: ${CROSSCHAPP_TRUSTED_PROXIES:-172.30.0.1}
     volumes: !override
       - ./data:/var/www/data
@@ -34,7 +50,12 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-production}
       APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL must be set}
-      CROSSCHAPP_DB_PATH: ${CROSSCHAPP_DB_PATH:-/var/www/data/bni-dach.sqlite}
+      CROSSCHAPP_DB_DRIVER: mysql
+      CROSSCHAPP_DB_HOST: db
+      CROSSCHAPP_DB_PORT: 3306
+      CROSSCHAPP_DB_NAME: ${CROSSCHAPP_DB_NAME:?CROSSCHAPP_DB_NAME must be set}
+      CROSSCHAPP_DB_USER: ${CROSSCHAPP_DB_USER:?CROSSCHAPP_DB_USER must be set}
+      CROSSCHAPP_DB_PASSWORD: ${CROSSCHAPP_DB_PASSWORD:?CROSSCHAPP_DB_PASSWORD must be set}
     volumes: !override
       - ./data:/var/www/data
     networks:
@@ -46,3 +67,6 @@ networks:
       config:
         - subnet: 172.30.0.0/24
           gateway: 172.30.0.1
+
+volumes:
+  mariadb-data:

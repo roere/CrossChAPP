@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+require_once __DIR__ . '/DatabaseDialect.php';
 
 final class RepresentationOfferRepository
 {
@@ -10,7 +11,7 @@ final class RepresentationOfferRepository
     public function createMany(int $userId, array $orgIds, bool $allDates, array $dates): array
     {
         sort($dates); $signature = $allDates ? '' : implode('|', $dates); $now = gmdate('Y-m-d\TH:i:s\Z');
-        $this->database->exec('BEGIN IMMEDIATE TRANSACTION');
+        DatabaseDialect::beginWrite($this->database);
         try {
             $this->assertMeetingDates($orgIds, $allDates, $dates);
             $duplicate = $this->database->prepare('SELECT COUNT(*) FROM representation_offers WHERE user_id = :user_id AND org_id = :org_id AND all_dates = :all_dates AND date_signature = :signature');
@@ -116,7 +117,7 @@ final class RepresentationOfferRepository
             LEFT JOIN representation_offer_dates dates ON dates.offer_id = offers.id
             WHERE offers.org_id = :org_id AND offers.user_id != :user_id
               AND (offers.all_dates = 1 OR dates.offer_date >= :today)
-            ORDER BY dates.offer_date, users.first_name COLLATE NOCASE, offers.id
+            ORDER BY dates.offer_date, LOWER(users.first_name), offers.id
             SQL);
         $statement->execute([':today' => $today, ':org_id' => $orgId, ':user_id' => $currentUserId]);
         $dated = []; $always = [];
@@ -142,16 +143,16 @@ final class RepresentationOfferRepository
         $statement = $this->database->prepare(<<<'SQL'
             SELECT offers.id, offers.all_dates, users.id AS user_id, users.first_name, users.last_name,
                    users.home_chapter_org_id, users.bni_verification_status,
-                   GROUP_CONCAT(CASE WHEN dates.offer_date >= :today THEN dates.offer_date END) AS offer_dates,
-                   MIN(CASE WHEN dates.offer_date >= :today THEN dates.offer_date END) AS next_date
+                   GROUP_CONCAT(CASE WHEN dates.offer_date >= :dates_today THEN dates.offer_date END) AS offer_dates,
+                   MIN(CASE WHEN dates.offer_date >= :minimum_today THEN dates.offer_date END) AS next_date
             FROM representation_offers offers
             JOIN users ON users.id = offers.user_id AND users.status = 'active' AND users.email_verified_at IS NOT NULL
             LEFT JOIN representation_offer_dates dates ON dates.offer_id = offers.id
             WHERE offers.org_id = :org_id AND offers.user_id != :user_id
             GROUP BY offers.id HAVING offers.all_dates = 1 OR next_date IS NOT NULL
-            ORDER BY offers.all_dates, next_date, users.first_name COLLATE NOCASE, offers.id
+            ORDER BY offers.all_dates, next_date, LOWER(users.first_name), offers.id
             SQL);
-        $statement->execute([':today' => $today, ':org_id' => $orgId, ':user_id' => $currentUserId]);
+        $statement->execute([':dates_today' => $today, ':minimum_today' => $today, ':org_id' => $orgId, ':user_id' => $currentUserId]);
         return array_map(static function (array $row): array {
             $provider = self::publicProvider($row); $dates = self::splitValues($row['offer_dates']);
             return $provider + ['allDates' => (bool) $row['all_dates'], 'dates' => $dates];

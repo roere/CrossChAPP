@@ -373,6 +373,14 @@ tr.organization:hover { background: #faf7f7; }
 button.danger { border-color: var(--bni-red-dark); color: white; background: var(--bni-red-dark); }
 button.danger:hover { border-color: #8f101d; background: #8f101d; }
 .registration-actions { display: flex; flex-wrap: wrap; gap: .65rem; }
+.skip-chapter-verification { display: flex; align-items: center; gap: .55rem; }
+.skip-chapter-verification[hidden] { display: none; }
+.skip-chapter-verification > label { display: inline-flex; grid-auto-flow: column; align-items: center; gap: .5rem; cursor: pointer; }
+.skip-chapter-verification input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.field-tooltip { position: relative; display: inline-flex; }
+.field-tooltip > button { width: 24px; min-height: 24px; padding: 0; border-radius: 50%; color: var(--muted); border: 1px solid var(--border); background: var(--soft); font-size: .72rem; font-weight: 900; }
+.field-tooltip [role="tooltip"] { position: absolute; z-index: 20; bottom: calc(100% + .45rem); left: 50%; width: min(300px, calc(100vw - 2rem)); padding: .55rem .7rem; transform: translateX(-50%); color: white; background: var(--anthracite); border-radius: 3px; font-size: .72rem; font-weight: 600; line-height: 1.4; opacity: 0; visibility: hidden; pointer-events: none; }
+.field-tooltip:hover [role="tooltip"], .field-tooltip:focus-within [role="tooltip"] { opacity: 1; visibility: visible; }
 .registration-confirmation { color: var(--anthracite) !important; font-size: 1.05rem; font-weight: 800; }
 .verification-panel { display: grid; justify-items: start; gap: 1rem; }
 .verification-success { color: var(--success) !important; font-weight: 800; }

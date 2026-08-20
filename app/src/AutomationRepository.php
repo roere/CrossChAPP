@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+require_once __DIR__ . '/DatabaseDialect.php';
 
 final class AutomationRepository
 {
@@ -64,15 +65,15 @@ final class AutomationRepository
 
     public function mapRefreshDue(int $days): bool
     {
-        $statement = $this->database->prepare("SELECT COUNT(*) FROM automation_runtime WHERE id = 1 AND (last_map_refresh_at IS NULL OR datetime(last_map_refresh_at) < datetime('now', :age)) AND (map_retry_after_until IS NULL OR datetime(map_retry_after_until) <= datetime('now'))");
-        $statement->execute([':age' => '-' . $days . ' days']); return (int) $statement->fetchColumn() === 1;
+        $statement = $this->database->prepare("SELECT COUNT(*) FROM automation_runtime WHERE id = 1 AND (last_map_refresh_at IS NULL OR last_map_refresh_at < :cutoff) AND (map_retry_after_until IS NULL OR map_retry_after_until <= :now)");
+        $statement->execute([':cutoff' => DatabaseDialect::ageCutoff($days), ':now'=>self::now()]); return (int) $statement->fetchColumn() === 1;
     }
 
     public function acquireMapLock(string $token, int $seconds = 120): bool
     {
         $now = self::now(); $until = gmdate('Y-m-d\TH:i:s\Z', time() + $seconds);
-        $statement = $this->database->prepare("UPDATE automation_runtime SET map_lock_token = :token, map_lock_until = :until, updated_at = :now WHERE id = 1 AND (map_lock_until IS NULL OR map_lock_until <= :now)");
-        $statement->execute([':token' => $token, ':until' => $until, ':now' => $now]); return $statement->rowCount() === 1;
+        $statement = $this->database->prepare("UPDATE automation_runtime SET map_lock_token = :token, map_lock_until = :until, updated_at = :updated_at WHERE id = 1 AND (map_lock_until IS NULL OR map_lock_until <= :expires_before)");
+        $statement->execute([':token' => $token, ':until' => $until, ':updated_at' => $now, ':expires_before' => $now]); return $statement->rowCount() === 1;
     }
 
     public function releaseMapLock(string $token): void
@@ -95,8 +96,9 @@ final class AutomationRepository
 
     public function markMapRefreshSuccess(): void
     {
-        $statement = $this->database->prepare('UPDATE automation_runtime SET last_map_refresh_at = :now, map_retry_after_until = NULL, updated_at = :now WHERE id = 1');
-        $statement->execute([':now' => self::now()]);
+        $statement = $this->database->prepare('UPDATE automation_runtime SET last_map_refresh_at = :refreshed_at, map_retry_after_until = NULL, updated_at = :updated_at WHERE id = 1');
+        $now = self::now();
+        $statement->execute([':refreshed_at' => $now, ':updated_at' => $now]);
     }
 
     public function setMapRetryAfter(?int $seconds): void
@@ -110,7 +112,13 @@ final class AutomationRepository
     {
         $now = self::now();
         $lockUntil = gmdate('Y-m-d\TH:i:s\Z', time() + $seconds);
-        $statement = $this->database->prepare(<<<'SQL'
+        $sql = DatabaseDialect::isMysql($this->database) ? <<<'SQL'
+            INSERT INTO chapter_refresh_locks (org_id,owner_token,lock_until,created_at) VALUES (:org_id,:owner_token,:lock_until,:created_at)
+            ON DUPLICATE KEY UPDATE
+              owner_token=IF(lock_until<=:now_owner,VALUES(owner_token),owner_token),
+              lock_until=IF(lock_until<=:now_until,VALUES(lock_until),lock_until),
+              created_at=IF(lock_until<=:now_created,VALUES(created_at),created_at)
+            SQL : <<<'SQL'
             INSERT INTO chapter_refresh_locks (org_id, owner_token, lock_until, created_at)
             VALUES (:org_id, :owner_token, :lock_until, :created_at)
             ON CONFLICT(org_id) DO UPDATE SET
@@ -118,15 +126,21 @@ final class AutomationRepository
                 lock_until = excluded.lock_until,
                 created_at = excluded.created_at
             WHERE chapter_refresh_locks.lock_until <= :now
-            SQL);
-        $statement->execute([
+            SQL;
+        $parameters = [
             ':org_id' => $orgId,
             ':owner_token' => $ownerToken,
             ':lock_until' => $lockUntil,
             ':created_at' => $now,
-            ':now' => $now,
-        ]);
-        return $statement->rowCount() === 1;
+        ];
+        if (DatabaseDialect::isMysql($this->database)) {
+            $parameters += [':now_owner' => $now, ':now_until' => $now, ':now_created' => $now];
+        } else {
+            $parameters[':now'] = $now;
+        }
+        $statement = $this->database->prepare($sql);
+        $statement->execute($parameters);
+        return $statement->rowCount() > 0;
     }
 
     public function releaseLock(int $orgId, string $ownerToken): void
@@ -151,8 +165,9 @@ final class AutomationRepository
             throw new InvalidArgumentException('Dieser Trigger unterliegt keinem automatischen Tageslimit.');
         }
         [$dayStart, $dayEnd] = self::localDayBounds();
-        $this->database->exec('BEGIN IMMEDIATE');
+        DatabaseDialect::beginWrite($this->database);
         try {
+            if (DatabaseDialect::isMysql($this->database)) $this->database->query('SELECT id FROM automation_settings WHERE id=1 FOR UPDATE')->fetchColumn();
             $statement = $this->database->prepare(<<<'SQL'
                 SELECT COUNT(*) FROM chapter_refresh_log
                 WHERE trigger_type IN ('usage_search', 'usage_detail', 'automatic')
@@ -212,11 +227,22 @@ final class AutomationRepository
         $next = gmdate('Y-m-d\TH:i:s\Z', time() + ($intervalMinutes * 60));
         $statement = $this->database->prepare(<<<'SQL'
             UPDATE automation_runtime
-            SET worker_last_seen_at = :now, last_check_at = :now,
-                next_check_at = :next_check, updated_at = :now
+            SET worker_last_seen_at = :last_seen, last_check_at = :last_check,
+                next_check_at = :next_check, updated_at = :updated_at
             WHERE id = 1
             SQL);
-        $statement->execute([':now' => $now, ':next_check' => $next]);
+        $statement->execute([':last_seen' => $now, ':last_check' => $now, ':next_check' => $next, ':updated_at' => $now]);
+    }
+
+    public function updateWorkerHeartbeat(): void
+    {
+        $now = self::now();
+        $statement = $this->database->prepare(<<<'SQL'
+            UPDATE automation_runtime
+            SET worker_last_seen_at = :last_seen, updated_at = :updated_at
+            WHERE id = 1
+            SQL);
+        $statement->execute([':last_seen' => $now, ':updated_at' => $now]);
     }
 
     /** @return array<string, mixed> */
@@ -227,29 +253,30 @@ final class AutomationRepository
             SELECT
                 MAX(CASE WHEN trigger_type = 'automatic' AND status = 'success' THEN finished_at END) AS last_automatic,
                 MAX(CASE WHEN trigger_type IN ('usage_search', 'usage_detail') AND status = 'success' THEN finished_at END) AS last_usage,
-                SUM(CASE WHEN trigger_type = 'automatic' AND status = 'success' AND finished_at >= :day_start AND finished_at < :day_end THEN 1 ELSE 0 END) AS automatic_today,
-                SUM(CASE WHEN trigger_type IN ('usage_search', 'usage_detail') AND status = 'success' AND finished_at >= :day_start AND finished_at < :day_end THEN 1 ELSE 0 END) AS usage_today,
-                SUM(CASE WHEN trigger_type IN ('usage_search', 'usage_detail', 'automatic') AND status != 'skipped' AND started_at >= :day_start AND started_at < :day_end THEN 1 ELSE 0 END) AS automatic_requests_today,
-                SUM(CASE WHEN finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS updates_seven_days,
-                SUM(CASE WHEN status = 'success' AND finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS success_seven_days,
-                SUM(CASE WHEN status = 'error' AND finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS errors_seven_days,
-                SUM(CASE WHEN status IN ('rate_limited', 'forbidden') AND finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS protection_stops_seven_days,
+                SUM(CASE WHEN trigger_type = 'automatic' AND status = 'success' AND finished_at >= :automatic_start AND finished_at < :automatic_end THEN 1 ELSE 0 END) AS automatic_today,
+                SUM(CASE WHEN trigger_type IN ('usage_search', 'usage_detail') AND status = 'success' AND finished_at >= :usage_start AND finished_at < :usage_end THEN 1 ELSE 0 END) AS usage_today,
+                SUM(CASE WHEN trigger_type IN ('usage_search', 'usage_detail', 'automatic') AND status != 'skipped' AND started_at >= :requests_start AND started_at < :requests_end THEN 1 ELSE 0 END) AS automatic_requests_today,
+                SUM(CASE WHEN finished_at >= :week1 THEN 1 ELSE 0 END) AS updates_seven_days,
+                SUM(CASE WHEN status = 'success' AND finished_at >= :week2 THEN 1 ELSE 0 END) AS success_seven_days,
+                SUM(CASE WHEN status = 'error' AND finished_at >= :week3 THEN 1 ELSE 0 END) AS errors_seven_days,
+                SUM(CASE WHEN status IN ('rate_limited', 'forbidden') AND finished_at >= :week4 THEN 1 ELSE 0 END) AS protection_stops_seven_days,
                 MAX(CASE WHEN status IN ('rate_limited', 'forbidden') THEN finished_at END) AS last_protection_stop
             FROM chapter_refresh_log
             SQL);
-        $statement->execute([':day_start' => $dayStart, ':day_end' => $dayEnd]);
+        $week=DatabaseDialect::ageCutoff(7);$statement->execute([':automatic_start'=>$dayStart,':automatic_end'=>$dayEnd,':usage_start'=>$dayStart,':usage_end'=>$dayEnd,':requests_start'=>$dayStart,':requests_end'=>$dayEnd,':week1'=>$week,':week2'=>$week,':week3'=>$week,':week4'=>$week]);
         $log = $statement->fetch();
         $runtime = $this->database->query('SELECT * FROM automation_runtime WHERE id = 1')->fetch();
-        $mapLog = $this->database->query(<<<'SQL'
+        $mapStatement = $this->database->prepare(<<<'SQL'
             SELECT
               MAX(CASE WHEN status = 'success' THEN finished_at END) AS last_success,
               MAX(CASE WHEN trigger_type = 'map_automatic' THEN started_at END) AS last_automatic_attempt,
-              SUM(CASE WHEN status = 'success' AND date(finished_at, 'localtime') = date('now', 'localtime') THEN 1 ELSE 0 END) AS success_today,
-              SUM(CASE WHEN finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS attempts_seven_days,
-              SUM(CASE WHEN status = 'error' AND finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS errors_seven_days,
-              SUM(CASE WHEN status IN ('rate_limited','forbidden') AND finished_at >= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS protection_seven_days
+              SUM(CASE WHEN status = 'success' AND finished_at >= :today AND finished_at < :tomorrow THEN 1 ELSE 0 END) AS success_today,
+              SUM(CASE WHEN finished_at >= :week1 THEN 1 ELSE 0 END) AS attempts_seven_days,
+              SUM(CASE WHEN status = 'error' AND finished_at >= :week2 THEN 1 ELSE 0 END) AS errors_seven_days,
+              SUM(CASE WHEN status IN ('rate_limited','forbidden') AND finished_at >= :week3 THEN 1 ELSE 0 END) AS protection_seven_days
             FROM map_refresh_log
-            SQL)->fetch();
+            SQL);
+        $mapStatement->execute([':today'=>$dayStart,':tomorrow'=>$dayEnd,':week1'=>$week,':week2'=>$week,':week3'=>$week]);$mapLog=$mapStatement->fetch();
         $automaticDue = $this->automaticDueCounts($automaticDays);
         $usedToday = (int) ($log['automatic_requests_today'] ?? 0);
         return [
@@ -296,9 +323,9 @@ final class AutomationRepository
             SELECT COUNT(*) FROM organizations
             WHERE detail_status = 'loaded'
               AND details_loaded_at IS NOT NULL
-              AND datetime(details_loaded_at) < datetime('now', :age)
+              AND details_loaded_at < :cutoff
             SQL);
-        $statement->execute([':age' => '-' . $days . ' days']);
+        $statement->execute([':cutoff' => DatabaseDialect::ageCutoff($days)]);
         return (int) $statement->fetchColumn();
     }
 
@@ -314,13 +341,13 @@ final class AutomationRepository
             SELECT
               SUM(CASE WHEN detail_status = 'not_loaded' OR (details_loaded_at IS NULL AND detail_status != 'error') THEN 1 ELSE 0 END) AS never_loaded,
               SUM(CASE WHEN detail_status = 'error' THEN 1 ELSE 0 END) AS errors,
-              SUM(CASE WHEN detail_status = 'loaded' AND details_loaded_at IS NOT NULL AND datetime(details_loaded_at) < datetime('now', :age) THEN 1 ELSE 0 END) AS stale_loaded,
-              SUM(CASE WHEN org_type = 'CHAPTER' AND (detail_status IN ('not_loaded','error') OR details_loaded_at IS NULL OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))) THEN 1 ELSE 0 END) AS chapter_due,
-              SUM(CASE WHEN org_type = 'CORE_GROUP' AND (detail_status IN ('not_loaded','error') OR details_loaded_at IS NULL OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))) THEN 1 ELSE 0 END) AS core_due,
-              SUM(CASE WHEN org_type = 'PLANNED_GROUP' AND (detail_status IN ('not_loaded','error') OR details_loaded_at IS NULL OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))) THEN 1 ELSE 0 END) AS planned_due
+              SUM(CASE WHEN detail_status = 'loaded' AND details_loaded_at IS NOT NULL AND details_loaded_at < :cutoff1 THEN 1 ELSE 0 END) AS stale_loaded,
+              SUM(CASE WHEN org_type = 'CHAPTER' AND (detail_status IN ('not_loaded','error') OR details_loaded_at IS NULL OR (detail_status = 'loaded' AND details_loaded_at < :cutoff2)) THEN 1 ELSE 0 END) AS chapter_due,
+              SUM(CASE WHEN org_type = 'CORE_GROUP' AND (detail_status IN ('not_loaded','error') OR details_loaded_at IS NULL OR (detail_status = 'loaded' AND details_loaded_at < :cutoff3)) THEN 1 ELSE 0 END) AS core_due,
+              SUM(CASE WHEN org_type = 'PLANNED_GROUP' AND (detail_status IN ('not_loaded','error') OR details_loaded_at IS NULL OR (detail_status = 'loaded' AND details_loaded_at < :cutoff4)) THEN 1 ELSE 0 END) AS planned_due
             FROM organizations
             SQL);
-        $statement->execute([':age' => '-' . $days . ' days']);
+        $cutoff=DatabaseDialect::ageCutoff($days);$statement->execute([':cutoff1'=>$cutoff,':cutoff2'=>$cutoff,':cutoff3'=>$cutoff,':cutoff4'=>$cutoff]);
         $row = $statement->fetch();
         $neverLoaded = (int) ($row['never_loaded'] ?? 0);
         $errors = (int) ($row['errors'] ?? 0);

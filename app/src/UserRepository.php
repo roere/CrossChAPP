@@ -6,6 +6,20 @@ final class UserRepository
 {
     public function __construct(private readonly PDO $database) {}
 
+    public function transaction(Closure $operation): mixed
+    {
+        $ownsTransaction = !$this->database->inTransaction();
+        if ($ownsTransaction) $this->database->beginTransaction();
+        try {
+            $result = $operation();
+            if ($ownsTransaction) $this->database->commit();
+            return $result;
+        } catch (Throwable $exception) {
+            if ($ownsTransaction && $this->database->inTransaction()) $this->database->rollBack();
+            throw $exception;
+        }
+    }
+
     /** @return array<string, mixed> */
     public function create(string $firstName, string $lastName, string $email, string $passwordHash, ?int $homeChapterOrgId, string $bniStatus = 'unverified', ?string $externalRef = null): array
     {
@@ -21,8 +35,9 @@ final class UserRepository
     /** @return array<string, mixed>|null */
     public function findByLogin(string $login): ?array
     {
-        $statement = $this->database->prepare('SELECT * FROM users WHERE email = :login COLLATE NOCASE OR username = :login COLLATE NOCASE');
-        $statement->execute([':login' => trim($login)]); $row = $statement->fetch();
+        $statement = $this->database->prepare('SELECT * FROM users WHERE LOWER(email) = LOWER(:email_login) OR LOWER(username) = LOWER(:username_login)');
+        $login = trim($login);
+        $statement->execute([':email_login' => $login, ':username_login' => $login]); $row = $statement->fetch();
         return is_array($row) ? $row : null;
     }
 
@@ -47,7 +62,7 @@ final class UserRepository
                    region, country_code AS countryCode
             FROM organizations
             WHERE org_type = 'CHAPTER' AND NULLIF(TRIM(chapter_name), '') IS NOT NULL
-            ORDER BY chapter_name COLLATE NOCASE, org_id
+            ORDER BY LOWER(chapter_name), org_id
             SQL)->fetchAll();
     }
 
@@ -133,7 +148,7 @@ final class UserRepository
                 GROUP BY contact_user_id
             ) contacts ON contacts.contact_user_id = users.id
             WHERE users.role = 'user'
-            ORDER BY users.last_name COLLATE NOCASE, users.first_name COLLATE NOCASE, users.email COLLATE NOCASE
+            ORDER BY LOWER(users.last_name), LOWER(users.first_name), LOWER(users.email)
             SQL);
         $statement->execute([':offer_today' => $today, ':request_today' => $today, ':offer_contact_since' => $contactsSince, ':request_contact_since' => $contactsSince]);
         $rows = $statement->fetchAll();
@@ -162,14 +177,19 @@ final class UserRepository
     public function issueToken(string $table, int $userId, int $ttlSeconds): string
     {
         self::assertTokenTable($table); $token = self::randomToken(); $hash = hash('sha256', $token); $now = self::now();
-        $this->database->beginTransaction();
+        $ownsTransaction = !$this->database->inTransaction();
+        if ($ownsTransaction) $this->database->beginTransaction();
         try {
             $invalidate = $this->database->prepare("UPDATE {$table} SET used_at = :used_at WHERE user_id = :user_id AND used_at IS NULL");
             $invalidate->execute([':used_at' => $now, ':user_id' => $userId]);
             $insert = $this->database->prepare("INSERT INTO {$table} (user_id, token_hash, expires_at, created_at) VALUES (:user_id, :token_hash, :expires_at, :created_at)");
             $insert->execute([':user_id' => $userId, ':token_hash' => $hash, ':expires_at' => gmdate('Y-m-d\TH:i:s\Z', time() + $ttlSeconds), ':created_at' => $now]);
-            $this->database->commit(); return $token;
-        } catch (Throwable $exception) { $this->database->rollBack(); throw $exception; }
+            if ($ownsTransaction) $this->database->commit();
+            return $token;
+        } catch (Throwable $exception) {
+            if ($ownsTransaction && $this->database->inTransaction()) $this->database->rollBack();
+            throw $exception;
+        }
     }
 
     public function verifyEmail(string $token): bool { return $this->verifyEmailResult($token) === 'verified'; }
@@ -216,8 +236,9 @@ final class UserRepository
 
     public function markLogin(int $userId): void
     {
-        $statement = $this->database->prepare('UPDATE users SET last_login_at = :now, updated_at = :now WHERE id = :id');
-        $statement->execute([':now' => self::now(), ':id' => $userId]);
+        $statement = $this->database->prepare('UPDATE users SET last_login_at = :login_at, updated_at = :updated_at WHERE id = :id');
+        $now = self::now();
+        $statement->execute([':login_at' => $now, ':updated_at' => $now, ':id' => $userId]);
     }
 
     public function updatePassword(int $userId, string $passwordHash): bool
@@ -249,8 +270,8 @@ final class UserRepository
     private function validToken(string $table, string $token): ?array
     {
         self::assertTokenTable($table); if (!preg_match('/^[A-Za-z0-9_-]{40,100}$/', $token)) return null;
-        $statement = $this->database->prepare("SELECT * FROM {$table} WHERE token_hash = :hash AND used_at IS NULL AND datetime(expires_at) > datetime('now')");
-        $statement->execute([':hash' => hash('sha256', $token)]); $row = $statement->fetch(); return is_array($row) ? $row : null;
+        $statement = $this->database->prepare("SELECT * FROM {$table} WHERE token_hash = :hash AND used_at IS NULL AND expires_at > :now");
+        $statement->execute([':hash' => hash('sha256', $token), ':now' => self::now()]); $row = $statement->fetch(); return is_array($row) ? $row : null;
     }
 
     private static function assertTokenTable(string $table): void { if (!in_array($table, ['email_verification_tokens', 'password_reset_tokens'], true)) throw new InvalidArgumentException('Ungültige Tokenart.'); }

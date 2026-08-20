@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+require_once __DIR__ . '/DatabaseDialect.php';
 
 final class RepresentationContactService
 {
@@ -52,7 +53,7 @@ final class RepresentationContactService
     private function reserve(int $recipientId, int $requesterId, int $offerId, string $date): int
     {
         $now = gmdate('Y-m-d\TH:i:s\Z'); $hour = gmdate('Y-m-d\TH:i:s\Z', time() - 3600); $ten = gmdate('Y-m-d\TH:i:s\Z', time() - 600);
-        $this->database->exec('BEGIN IMMEDIATE TRANSACTION');
+        DatabaseDialect::beginWrite($this->database);
         try {
             $count = $this->database->prepare('SELECT COUNT(*) FROM representation_contact_log WHERE requester_user_id = :user AND sent_at >= :since');
             $count->execute([':user' => $requesterId, ':since' => $hour]); $requestCount = $this->database->prepare('SELECT COUNT(*) FROM representation_request_contact_log WHERE contact_user_id = :user AND sent_at >= :since'); $requestCount->execute([':user' => $requesterId, ':since' => $hour]);

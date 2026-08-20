@@ -19,8 +19,8 @@ $checks=[
  'invalid offer orgs'=>'SELECT COUNT(*) FROM representation_offers r LEFT JOIN organizations o ON o.org_id=r.org_id WHERE o.org_id IS NULL',
  'invalid verification states'=>"SELECT COUNT(*) FROM users WHERE bni_verification_status NOT IN ('unverified','directory_match','manual_verified')",
  'blank selectable chapters'=>"SELECT COUNT(*) FROM organizations WHERE org_type='CHAPTER' AND NULLIF(TRIM(chapter_name),'') IS NULL",
- 'duplicate pending invitations'=>"SELECT COUNT(*) FROM (SELECT lower(email) FROM user_invitations WHERE status='pending' AND datetime(expires_at)>datetime('now') GROUP BY lower(email) HAVING COUNT(*)>1)",
- 'pending invitation for active user'=>"SELECT COUNT(*) FROM user_invitations i JOIN users u ON lower(u.email)=lower(i.email) AND u.status='active' WHERE i.status='pending' AND datetime(i.expires_at)>datetime('now')",
+ 'duplicate pending invitations'=>"SELECT COUNT(*) FROM (SELECT lower(email) FROM user_invitations WHERE status='pending' AND expires_at > '" . gmdate('Y-m-d\\TH:i:s\\Z') . "' GROUP BY lower(email) HAVING COUNT(*)>1) pending_duplicates",
+ 'pending invitation for active user'=>"SELECT COUNT(*) FROM user_invitations i JOIN users u ON lower(u.email)=lower(i.email) AND u.status='active' WHERE i.status='pending' AND i.expires_at > '" . gmdate('Y-m-d\\TH:i:s\\Z') . "'",
 ];
 foreach($checks as$name=>$sql)$ok((int)$db->query($sql)->fetchColumn()===0,$name);
 $settings=new MailSettingsRepository($db);$mail=new MailService($settings,static function():void{});$service=new InvitationService(new InvitationRepository($db),$users,$settings,$mail);$admin=$users->findByLogin('admin');$service->invite(['first_name'=>'Ina','last_name'=>'Invite','email'=>'invite@example.test','home_chapter_org_id'=>1],(int)$admin['id']);$duplicate=false;try{$service->invite(['first_name'=>'Ina','last_name'=>'Invite','email'=>'INVITE@example.test','home_chapter_org_id'=>1],(int)$admin['id']);}catch(DomainException){$duplicate=true;}$ok($duplicate,'Doppelte aktive Einladung wird fachlich verhindert.');

@@ -210,7 +210,9 @@
         if (!form.checkValidity()) { form.reportValidity(); return; }
         button.disabled = true;
         try {
-            const response = await fetch('/api/auth/register.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+            const registrationData = Object.fromEntries(new FormData(form));
+            registrationData.skip_chapter_verification = form.skip_chapter_verification.checked;
+            const response = await fetch('/api/auth/register.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(registrationData) });
             const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Registrierung fehlgeschlagen.');
             const panel = form.closest('.registration-panel');
             const confirmation = document.createElement('p'); confirmation.className = 'registration-confirmation'; confirmation.textContent = 'Bitte bestätige deine E-Mail-Adresse.';
@@ -291,6 +293,8 @@
 
     async function loadHomeChapters() {
         const result = document.querySelector('#home-chapter-results');
+        const skipOption = document.querySelector('#skip-chapter-verification-option');
+        const updateSkipOption = chapter => { if (skipOption) skipOption.hidden = chapter === null; };
         const picker = window.CrossChappChapterPicker.create({
             list: result,
             countryInput: document.querySelector('#home-chapter-country'),
@@ -305,6 +309,7 @@
             showAllByDefault: false,
             maxResults: 20,
             collapseAfterSelect: true,
+            onSelect: updateSkipOption,
         });
         try { const response = await fetch('/api/auth/chapters.php'); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); picker.setChapters(payload.chapters); }
         catch { result.textContent = 'Die lokale Chapterliste konnte nicht geladen werden.'; }

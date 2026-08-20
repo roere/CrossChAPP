@@ -59,6 +59,8 @@ run "Automation X/Y/Z Tests" php_group automation
 run "Search Tests" php_group search
 run "Database Integrity" compose_exec php /var/www/tests/check-database-integrity.php
 run "Isolated Fixture" compose_exec_web php /var/www/tests/check-fixture.php
+run "Worker Heartbeat" compose_exec php /var/www/tests/mysql-worker-heartbeat.php
+run "MariaDB Race Conditions" compose_exec sh /var/www/tests/check-mysql-races.sh
 
 chromedriver --port=9519 --allowed-ips=127.0.0.1 >"$TEST_DIR/chromedriver.log" 2>&1 & CHROMEDRIVER_PID=$!
 run "Chromedriver" bash -c 'for i in {1..40}; do curl -fsS http://127.0.0.1:9519/status >/dev/null && exit 0; sleep .25; done; exit 1'

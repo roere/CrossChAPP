@@ -10,8 +10,8 @@ final class InvitationRepository
     public function create(string $first, string $last, string $email, int $chapterId, int $adminId): array
     {
         $this->expire();
-        $existing=$this->database->prepare("SELECT 1 FROM users WHERE email=:email COLLATE NOCASE UNION SELECT 1 FROM user_invitations WHERE email=:email COLLATE NOCASE AND status='pending' AND datetime(expires_at)>datetime('now') LIMIT 1");
-        $existing->execute([':email'=>$email]); if ($existing->fetchColumn()) throw new DomainException('Für diese E-Mail-Adresse besteht bereits ein Konto oder eine offene Einladung.');
+        $existing=$this->database->prepare("SELECT 1 FROM users WHERE LOWER(email)=LOWER(:user_email) UNION SELECT 1 FROM user_invitations WHERE LOWER(email)=LOWER(:invitation_email) AND status='pending' AND expires_at>:now LIMIT 1");
+        $existing->execute([':user_email'=>$email,':invitation_email'=>$email,':now'=>self::now()]); if ($existing->fetchColumn()) throw new DomainException('Für diese E-Mail-Adresse besteht bereits ein Konto oder eine offene Einladung.');
         $token=rtrim(strtr(base64_encode(random_bytes(32)),'+/','-_'),'='); $now=self::now();
         $statement=$this->database->prepare("INSERT INTO user_invitations(first_name,last_name,email,home_chapter_org_id,token_hash,expires_at,created_at,created_by_user_id,status) VALUES(:first,:last,:email,:chapter,:hash,:expires,:created,:admin,'pending')");
         $statement->execute([':first'=>$first,':last'=>$last,':email'=>strtolower($email),':chapter'=>$chapterId,':hash'=>hash('sha256',$token),':expires'=>gmdate('Y-m-d\TH:i:s\Z',time()+604800),':created'=>$now,':admin'=>$adminId]);
@@ -36,12 +36,12 @@ final class InvitationRepository
     {
         $row=$this->byToken($token); if ($row===null)return ['status'=>'invalid']; if($row['status']==='accepted')return ['status'=>'used']; if($row['status']!=='pending')return ['status'=>$row['status']==='expired'?'expired':'invalid']; if(strtotime((string)$row['expires_at'])<=time()){ $this->expire();return ['status'=>'expired']; }
         if ($this->emailExists((string)$row['email'])) return ['status'=>'email_exists']; $now=self::now(); $this->database->beginTransaction();
-        try{$insert=$this->database->prepare("INSERT INTO users(first_name,last_name,email,password_hash,home_chapter_org_id,role,status,email_verified_at,bni_verification_status,bni_verified_at,bni_verified_by_user_id,created_at,updated_at) VALUES(:first,:last,:email,:hash,:chapter,'user','active',:now,'manual_verified',:now,:admin,:now,:now)");
-            $insert->execute([':first'=>$row['first_name'],':last'=>$row['last_name'],':email'=>$row['email'],':hash'=>$passwordHash,':chapter'=>$row['home_chapter_org_id'],':now'=>$now,':admin'=>$row['created_by_user_id']]);$userId=(int)$this->database->lastInsertId();
+        try{$insert=$this->database->prepare("INSERT INTO users(first_name,last_name,email,password_hash,home_chapter_org_id,role,status,email_verified_at,bni_verification_status,bni_verified_at,bni_verified_by_user_id,created_at,updated_at) VALUES(:first,:last,:email,:hash,:chapter,'user','active',:verified_at,'manual_verified',:bni_verified_at,:admin,:created_at,:updated_at)");
+            $insert->execute([':first'=>$row['first_name'],':last'=>$row['last_name'],':email'=>$row['email'],':hash'=>$passwordHash,':chapter'=>$row['home_chapter_org_id'],':verified_at'=>$now,':bni_verified_at'=>$now,':admin'=>$row['created_by_user_id'],':created_at'=>$now,':updated_at'=>$now]);$userId=(int)$this->database->lastInsertId();
             $update=$this->database->prepare("UPDATE user_invitations SET status='accepted',accepted_at=:now WHERE id=:id AND status='pending'");$update->execute([':now'=>$now,':id'=>$row['id']]);if($update->rowCount()!==1)throw new RuntimeException('Einladung wurde parallel verwendet.');$this->database->commit();return ['status'=>'accepted','userId'=>$userId];
         }catch(Throwable $e){if($this->database->inTransaction())$this->database->rollBack();throw $e;}
     }
-    private function emailExists(string $email):bool{$s=$this->database->prepare('SELECT 1 FROM users WHERE email=:email COLLATE NOCASE');$s->execute([':email'=>$email]);return(bool)$s->fetchColumn();}
-    private function expire():void{$this->database->exec("UPDATE user_invitations SET status='expired' WHERE status='pending' AND datetime(expires_at)<=datetime('now')");}
+    private function emailExists(string $email):bool{$s=$this->database->prepare('SELECT 1 FROM users WHERE LOWER(email)=LOWER(:email)');$s->execute([':email'=>$email]);return(bool)$s->fetchColumn();}
+    private function expire():void{$s=$this->database->prepare("UPDATE user_invitations SET status='expired' WHERE status='pending' AND expires_at<=:now");$s->execute([':now'=>self::now()]);}
     private static function now():string{return gmdate('Y-m-d\TH:i:s\Z');}
 }

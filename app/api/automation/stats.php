@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/src/Auth.php';
 require_once dirname(__DIR__, 2) . '/src/AutomationRepository.php';
+require_once dirname(__DIR__, 2) . '/src/WorkerHeartbeat.php';
 require_once dirname(__DIR__, 2) . '/src/Database.php';
 require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 
@@ -15,7 +16,7 @@ $repository = new AutomationRepository((new Database())->connection());
 $settings = $repository->settings();
 $statistics = $repository->statistics($settings['usageRefreshDays'], $settings['automaticRefreshDays'], $settings['automaticRefreshDailyLimit']);
 $lastSeen = is_string($statistics['workerLastSeenAt'] ?? null) ? strtotime($statistics['workerLastSeenAt']) : false;
-$statistics['workerActive'] = $lastSeen !== false && $lastSeen >= time() - ($settings['automaticRefreshIntervalMinutes'] * 120);
+$statistics['workerActive'] = $lastSeen !== false && $lastSeen >= time() - WorkerHeartbeat::ACTIVE_TIMEOUT_SECONDS;
 $statistics['mapRefreshEnabled'] = $settings['mapRefreshEnabled'];
 $statistics['mapRefreshDays'] = $settings['mapRefreshDays'];
 JsonResponse::send([

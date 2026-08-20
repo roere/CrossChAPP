@@ -10,6 +10,7 @@ require_once dirname(__DIR__) . '/src/Database.php';
 require_once dirname(__DIR__) . '/src/OrganizationRepository.php';
 require_once dirname(__DIR__) . '/src/MapRefreshService.php';
 require_once dirname(__DIR__) . '/src/RepresentationCleanupService.php';
+require_once dirname(__DIR__) . '/src/WorkerHeartbeat.php';
 
 $runOnce = in_array('--once', $argv, true);
 $requestedLimit = null;
@@ -42,6 +43,9 @@ do {
     }
 
     if (!$runOnce) {
-        sleep($interval * 60);
+        WorkerHeartbeat::wait($interval * 60, static function (): void {
+            $heartbeatDatabase = (new Database())->connection();
+            (new AutomationRepository($heartbeatDatabase))->updateWorkerHeartbeat();
+        });
     }
 } while (!$runOnce);

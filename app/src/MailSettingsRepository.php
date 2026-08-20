@@ -20,6 +20,21 @@ final class MailSettingsRepository
         ];
     }
 
+    public function isMailConfigured(): bool
+    {
+        try { $settings = $this->settings(true); }
+        catch (RuntimeException) { return false; }
+        $host = trim((string) ($settings['smtpHost'] ?? ''));
+        $port = (int) ($settings['smtpPort'] ?? 0);
+        $username = trim((string) ($settings['smtpUsername'] ?? ''));
+        $password = (string) ($settings['smtpPassword'] ?? '');
+        $sender = trim((string) ($settings['senderEmail'] ?? ''));
+        $encryption = (string) ($settings['encryption'] ?? '');
+        if ($host === '' || $port < 1 || $port > 65535 || filter_var($sender, FILTER_VALIDATE_EMAIL) === false) return false;
+        if (!in_array($encryption, ['starttls', 'tls', 'none'], true)) return false;
+        return ($username === '') === ($password === '');
+    }
+
     /** @param array<string, mixed> $settings */
     public function saveSettings(array $settings): void
     {

@@ -1,11 +1,30 @@
 services:
+  test-db:
+    image: mariadb:11.4
+    environment:
+      MARIADB_DATABASE: crosschapp_test
+      MARIADB_USER: crosschapp_test
+      MARIADB_PASSWORD: test-only-password
+      MARIADB_ROOT_PASSWORD: test-only-root-password
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks:
+      - check-internal
   test-web:
     build: .
     command: ["sh", "/usr/local/bin/bni-dach-entrypoint"]
     ports:
       - "127.0.0.1:${CROSSCHAPP_TEST_PORT:-18082}:80"
     environment:
-      CROSSCHAPP_DB_PATH: /var/www/data/check.sqlite
+      CROSSCHAPP_DB_DRIVER: mysql
+      CROSSCHAPP_DB_HOST: test-db
+      CROSSCHAPP_DB_PORT: 3306
+      CROSSCHAPP_DB_NAME: crosschapp_test
+      CROSSCHAPP_DB_USER: crosschapp_test
+      CROSSCHAPP_DB_PASSWORD: test-only-password
       CROSSCHAPP_TEST_MODE: "1"
       CROSSCHAPP_DISABLE_EXTERNAL_HTTP: "1"
       CROSSCHAPP_MAIL_CAPTURE_PATH: /var/www/data/mail-capture.jsonl
@@ -15,6 +34,9 @@ services:
       - ${CROSSCHAPP_TEST_DATA_DIR:?CROSSCHAPP_TEST_DATA_DIR must be set}:/var/www/data
     networks:
       - check-internal
+    depends_on:
+      test-db:
+        condition: service_healthy
 
 networks:
   check-internal: {}

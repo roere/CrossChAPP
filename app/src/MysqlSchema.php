@@ -1,0 +1,91 @@
+<?php
+
+declare(strict_types=1);
+
+final class MysqlSchema
+{
+    public static function migrate(PDO $db): void
+    {
+        $statements = self::statements();
+        $db->exec(array_shift($statements));
+        $version = (int) $db->query('SELECT COALESCE(MAX(version),0) FROM schema_migrations')->fetchColumn();
+        if ($version < 1) {
+            foreach ($statements as $sql) {
+                $db->exec($sql);
+            }
+            $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(1,UTC_TIMESTAMP())");
+        }
+        if (getenv('CROSSCHAPP_DB_SKIP_SEED') === '1') {
+            return;
+        }
+        $db->exec("INSERT IGNORE INTO automation_settings(id,updated_at) VALUES(1,UTC_TIMESTAMP())");
+        $db->exec("INSERT IGNORE INTO automation_runtime(id,updated_at) VALUES(1,UTC_TIMESTAMP())");
+        $db->exec("INSERT IGNORE INTO mail_settings(id,updated_at) VALUES(1,UTC_TIMESTAMP())");
+        self::seed($db);
+    }
+
+    /** @return list<string> */
+    private static function statements(): array
+    {
+        $engine = ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+        return [
+            "CREATE TABLE IF NOT EXISTS schema_migrations(version INT PRIMARY KEY,applied_at VARCHAR(32) NOT NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS organizations(id BIGINT AUTO_INCREMENT PRIMARY KEY,org_id BIGINT NOT NULL UNIQUE,cms_security_hash VARCHAR(255),country_code VARCHAR(8),org_type VARCHAR(64),longitude DOUBLE,latitude DOUBLE,chapter_name VARCHAR(255),region VARCHAR(255),region_id BIGINT,city VARCHAR(255),postal_code VARCHAR(32),street VARCHAR(255),venue VARCHAR(255),meeting_day VARCHAR(32),meeting_time VARCHAR(32),meeting_type VARCHAR(64),meeting_duration INT,member_count INT,chapter_url TEXT,visitor_registration_url TEXT,online_meeting_link TEXT,timezone VARCHAR(128),status VARCHAR(64),description TEXT,detail_status VARCHAR(32) NOT NULL DEFAULT 'not_loaded' CHECK(detail_status IN ('not_loaded','loaded','error')),map_loaded_at VARCHAR(32),details_loaded_at VARCHAR(32),created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,INDEX idx_organizations_detail_status(detail_status),INDEX idx_organizations_country_type(country_code,org_type))$engine",
+            "CREATE TABLE IF NOT EXISTS automation_settings(id INT PRIMARY KEY,usage_refresh_enabled TINYINT(1) NOT NULL DEFAULT 0,usage_refresh_days INT NOT NULL DEFAULT 7,automatic_refresh_enabled TINYINT(1) NOT NULL DEFAULT 0,automatic_refresh_days INT NOT NULL DEFAULT 30,automatic_refresh_batch_size INT NOT NULL DEFAULT 10,automatic_refresh_interval_minutes INT NOT NULL DEFAULT 60,automatic_refresh_daily_limit INT NOT NULL DEFAULT 50,map_refresh_enabled TINYINT(1) NOT NULL DEFAULT 0,map_refresh_days INT NOT NULL DEFAULT 1,updated_at VARCHAR(32) NOT NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS chapter_refresh_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,org_id BIGINT NOT NULL,trigger_type VARCHAR(32) NOT NULL,started_at VARCHAR(32) NOT NULL,finished_at VARCHAR(32),status VARCHAR(32) NOT NULL,http_status INT,error_category VARCHAR(64),INDEX idx_refresh_log_finished(finished_at),INDEX idx_refresh_log_trigger_status(trigger_type,status))$engine",
+            "CREATE TABLE IF NOT EXISTS chapter_refresh_locks(org_id BIGINT PRIMARY KEY,owner_token VARCHAR(128) NOT NULL,lock_until VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,INDEX idx_refresh_locks_until(lock_until))$engine",
+            "CREATE TABLE IF NOT EXISTS automation_runtime(id INT PRIMARY KEY,worker_last_seen_at VARCHAR(32),last_check_at VARCHAR(32),next_check_at VARCHAR(32),last_map_refresh_at VARCHAR(32),map_lock_token VARCHAR(128),map_lock_until VARCHAR(32),map_retry_after_until VARCHAR(32),updated_at VARCHAR(32) NOT NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS map_refresh_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,trigger_type VARCHAR(32) NOT NULL,started_at VARCHAR(32) NOT NULL,finished_at VARCHAR(32),status VARCHAR(32) NOT NULL,http_status INT,error_category VARCHAR(64),INDEX idx_map_refresh_log_time(started_at,trigger_type,status))$engine",
+            "CREATE TABLE IF NOT EXISTS users(id BIGINT AUTO_INCREMENT PRIMARY KEY,first_name VARCHAR(120) NOT NULL,last_name VARCHAR(120) NOT NULL,username VARCHAR(190) UNIQUE,email VARCHAR(254) NOT NULL UNIQUE,password_hash VARCHAR(255) NOT NULL,home_chapter_org_id BIGINT,role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK(role IN ('user','admin')),status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','active','disabled')),email_verified_at VARCHAR(32),created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,last_login_at VARCHAR(32),bni_verification_status VARCHAR(32) NOT NULL DEFAULT 'unverified' CHECK(bni_verification_status IN ('unverified','directory_match','manual_verified')),bni_verified_at VARCHAR(32),bni_verified_by_user_id BIGINT,bni_external_member_ref VARCHAR(255),INDEX idx_users_home_chapter(home_chapter_org_id),CONSTRAINT fk_users_home FOREIGN KEY(home_chapter_org_id) REFERENCES organizations(org_id) ON DELETE SET NULL,CONSTRAINT fk_users_verifier FOREIGN KEY(bni_verified_by_user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS email_verification_tokens(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT,token_hash CHAR(64) NOT NULL UNIQUE,expires_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,used_at VARCHAR(32),INDEX idx_email_verification_tokens_user_expiry(user_id,expires_at),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS password_reset_tokens(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT,token_hash CHAR(64) NOT NULL UNIQUE,expires_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,used_at VARCHAR(32),INDEX idx_password_reset_tokens_user_expiry(user_id,expires_at),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS mail_settings(id INT PRIMARY KEY,smtp_host VARCHAR(255),smtp_port INT NOT NULL DEFAULT 587,smtp_username VARCHAR(255),smtp_password TEXT,encryption VARCHAR(20) NOT NULL DEFAULT 'starttls',sender_email VARCHAR(254),sender_name VARCHAR(255) NOT NULL DEFAULT 'CrossChAPP',base_url VARCHAR(512) NOT NULL DEFAULT 'http://localhost:8082',updated_at VARCHAR(32) NOT NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS email_templates(template_key VARCHAR(100) PRIMARY KEY,subject TEXT NOT NULL,body LONGTEXT NOT NULL,updated_at VARCHAR(32) NOT NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS auth_attempts(id BIGINT AUTO_INCREMENT PRIMARY KEY,attempt_type VARCHAR(40) NOT NULL CHECK(attempt_type IN ('login','password_reset','resend_verification')),identifier_hash CHAR(64) NOT NULL,ip_hash CHAR(64) NOT NULL,successful TINYINT(1) NOT NULL DEFAULT 0 CHECK(successful IN (0,1)),attempted_at VARCHAR(32) NOT NULL,INDEX idx_auth_attempts_limit(attempt_type,identifier_hash,ip_hash,attempted_at))$engine",
+            "CREATE TABLE IF NOT EXISTS bni_member_check_attempts(id BIGINT AUTO_INCREMENT PRIMARY KEY,ip_hash CHAR(64) NOT NULL,attempted_at VARCHAR(32) NOT NULL,INDEX idx_bni_member_check_rate(ip_hash,attempted_at))$engine",
+            "CREATE TABLE IF NOT EXISTS bni_member_directory_configs(org_id BIGINT PRIMARY KEY,endpoint TEXT NOT NULL,parameters LONGTEXT NOT NULL,languages LONGTEXT NOT NULL,website_type VARCHAR(32) NOT NULL,website_id VARCHAR(64) NOT NULL,mapped_widget_settings LONGTEXT NOT NULL,referer TEXT NOT NULL,updated_at VARCHAR(32) NOT NULL,FOREIGN KEY(org_id) REFERENCES organizations(org_id) ON DELETE CASCADE)$engine",
+            "CREATE TABLE IF NOT EXISTS bni_member_check_lock(id INT PRIMARY KEY,owner_token VARCHAR(128) NOT NULL,lock_until VARCHAR(32) NOT NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS user_invitations(id BIGINT AUTO_INCREMENT PRIMARY KEY,first_name VARCHAR(120) NOT NULL,last_name VARCHAR(120) NOT NULL,email VARCHAR(254) NOT NULL,home_chapter_org_id BIGINT NOT NULL,token_hash CHAR(64) NOT NULL UNIQUE,expires_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,sent_at VARCHAR(32),accepted_at VARCHAR(32),created_by_user_id BIGINT NOT NULL,status VARCHAR(32) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','expired','cancelled')),pending_email VARCHAR(254) AS (CASE WHEN status='pending' THEN LOWER(email) ELSE NULL END) PERSISTENT,UNIQUE KEY uq_user_invitations_pending_email(pending_email),INDEX idx_user_invitations_email_status(email,status,expires_at),FOREIGN KEY(home_chapter_org_id) REFERENCES organizations(org_id),FOREIGN KEY(created_by_user_id) REFERENCES users(id))$engine",
+            "CREATE TABLE IF NOT EXISTS representation_offers(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT NOT NULL,org_id BIGINT NOT NULL,all_dates TINYINT(1) NOT NULL DEFAULT 0 CHECK(all_dates IN (0,1)),date_signature VARCHAR(255) NOT NULL,created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,INDEX idx_representation_offers_user(user_id),INDEX idx_representation_offers_chapter(org_id,user_id),UNIQUE KEY uq_representation_offer(user_id,org_id,all_dates,date_signature),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(org_id) REFERENCES organizations(org_id) ON DELETE CASCADE)$engine",
+            "CREATE TABLE IF NOT EXISTS representation_offer_chapters(id BIGINT AUTO_INCREMENT PRIMARY KEY,offer_id BIGINT,org_id BIGINT NOT NULL,UNIQUE KEY uq_offer_chapter(offer_id,org_id),INDEX idx_representation_chapters_org(org_id,offer_id),FOREIGN KEY(offer_id) REFERENCES representation_offers(id) ON DELETE SET NULL,FOREIGN KEY(org_id) REFERENCES organizations(org_id) ON DELETE CASCADE)$engine",
+            "CREATE TABLE IF NOT EXISTS representation_offer_dates(id BIGINT AUTO_INCREMENT PRIMARY KEY,offer_id BIGINT NOT NULL,offer_date CHAR(10) NOT NULL,UNIQUE KEY uq_offer_date(offer_id,offer_date),INDEX idx_representation_dates_offer_date(offer_id,offer_date),FOREIGN KEY(offer_id) REFERENCES representation_offers(id) ON DELETE CASCADE)$engine",
+            "CREATE TABLE IF NOT EXISTS representation_settings(id INT PRIMARY KEY,contact_hint TEXT NOT NULL,request_contact_hint TEXT NOT NULL,offer_custom_message TEXT NOT NULL,request_custom_message TEXT NOT NULL,updated_at VARCHAR(32) NOT NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS representation_contact_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,requester_user_id BIGINT NOT NULL,offer_id BIGINT,recipient_user_id BIGINT NOT NULL,requested_date CHAR(10) NOT NULL,sent_at VARCHAR(32) NOT NULL,status VARCHAR(32) NOT NULL,INDEX idx_representation_contact_rate(requester_user_id,sent_at),INDEX idx_representation_contact_duplicate(requester_user_id,offer_id,requested_date,sent_at),FOREIGN KEY(requester_user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(offer_id) REFERENCES representation_offers(id) ON DELETE SET NULL,FOREIGN KEY(recipient_user_id) REFERENCES users(id) ON DELETE CASCADE)$engine",
+            "CREATE TABLE IF NOT EXISTS representation_requests(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT NOT NULL,org_id BIGINT NOT NULL,request_date CHAR(10) NOT NULL,created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,UNIQUE KEY uq_representation_request(user_id,org_id,request_date),INDEX idx_representation_requests_user_date(user_id,org_id,request_date),INDEX idx_representation_requests_org_date(org_id,request_date),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(org_id) REFERENCES organizations(org_id) ON DELETE CASCADE)$engine",
+            "CREATE TABLE IF NOT EXISTS representation_request_contact_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,contact_user_id BIGINT NOT NULL,request_id BIGINT NOT NULL,recipient_user_id BIGINT NOT NULL,sent_at VARCHAR(32) NOT NULL,status VARCHAR(32) NOT NULL,INDEX idx_request_contact_rate(contact_user_id,sent_at),INDEX idx_request_contact_duplicate(contact_user_id,request_id,sent_at),FOREIGN KEY(contact_user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(request_id) REFERENCES representation_requests(id) ON DELETE CASCADE,FOREIGN KEY(recipient_user_id) REFERENCES users(id) ON DELETE CASCADE)$engine",
+            "CREATE TABLE IF NOT EXISTS representation_anonymous_request_contact_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,request_id BIGINT NOT NULL,recipient_user_id BIGINT NOT NULL,sender_email_hash CHAR(64) NOT NULL,ip_hash CHAR(64) NOT NULL,sent_at VARCHAR(32) NOT NULL,status VARCHAR(32) NOT NULL,INDEX idx_anonymous_request_contact_rate(ip_hash,sent_at),INDEX idx_anonymous_request_contact_duplicate(request_id,sender_email_hash,sent_at),FOREIGN KEY(request_id) REFERENCES representation_requests(id) ON DELETE CASCADE,FOREIGN KEY(recipient_user_id) REFERENCES users(id) ON DELETE CASCADE)$engine",
+        ];
+    }
+
+    private static function seed(PDO $db): void
+    {
+        $now = gmdate('Y-m-d\TH:i:s\Z');
+        $admin = $db->prepare("INSERT IGNORE INTO users(first_name,last_name,username,email,password_hash,role,status,email_verified_at,created_at,updated_at) VALUES('admin','','admin','admin@localhost.invalid',:hash,'admin','active',:verified,:created,:updated)");
+        $admin->execute([':hash'=>'$2y$10$/w.85OIJmzun7pFjgRPPaeD4Q4p.otU/T4wBIzkhPlniP1OY79sbW',':verified'=>$now,':created'=>$now,':updated'=>$now]);
+        $setting = $db->prepare("INSERT IGNORE INTO representation_settings(id,contact_hint,request_contact_hint,offer_custom_message,request_custom_message,updated_at) VALUES(1,:contact,:request,:offer_message,:request_message,:now)");
+        $setting->execute([':contact'=>'Möchtest Du eine Anfrage senden? Die Person erhält Deinen Namen und Deine eMail Adresse und kann sich bei Dir zurückmelden.',':request'=>'Möchtest Du anbieten, die Vertretung zu übernehmen? Die Person erhält Deinen Namen und Deine eMail-Adresse und kann sich bei Dir zurückmelden.',':offer_message'=>"Hallo,\n\nich suche für diesen Termin eine Vertretung für mein BNI-Chapter und würde mich freuen, wenn Du Dich bei mir meldest.\n\nViele Grüße",':request_message'=>"Hallo,\n\nich kann mir vorstellen, die Vertretung an diesem Termin zu übernehmen. Melde Dich gerne bei mir, damit wir die Details abstimmen können.\n\nViele Grüße",':now'=>$now]);
+        $templates = [
+            'verify_email'=>['Bitte bestätige deine E-Mail-Adresse bei CrossChAPP',"Hallo {{first_name}},\n\nvielen Dank für deine Registrierung bei CrossChAPP.\n\nBitte bestätige deine E-Mail-Adresse über folgenden Link:\n\n{{verification_link}}\n\nDer Link ist 24 Stunden gültig.\n\nViele Grüße\nCrossChAPP"],
+            'reset_password'=>['Neues Passwort für CrossChAPP festlegen',"Hallo {{first_name}},\n\nfür dein CrossChAPP-Konto wurde das Zurücksetzen des Passworts angefordert.\n\nÜber folgenden Link kannst du ein neues Passwort vergeben:\n\n{{reset_link}}\n\nDer Link ist 60 Minuten gültig.\n\nFalls du das Zurücksetzen nicht angefordert hast, kannst du diese Nachricht ignorieren.\n\nViele Grüße\nCrossChAPP"],
+            'user_invitation'=>['Einladung zu CrossChAPP',"Hallo {{first_name}},\n\ndu wurdest zu CrossChAPP eingeladen.\n\nÜber den folgenden Link kannst du dein Konto aktivieren und ein Passwort vergeben:\n\n{{invitation_link}}\n\nChapter: {{chapter}}\n\nViele Grüße\n{{app_name}}"],
+            'representation_contact'=>['CrossChAPP – Vertretungsanfrage für {{requested_date}}',"Hallo {{provider_first_name}},\n\n{{custom_message}}\n\n---\nAnfrage von:\n{{requester_full_name}}\n{{requester_email}}\nChapter: {{requester_chapter}}\nTermin: {{requested_date}}\n\nViele Grüße\n{{app_name}}"],
+            'representation_request_contact'=>['CrossChAPP – Rückmeldung zu deinem Vertretungsgesuch am {{requested_date}}',"Hallo {{request_owner_first_name}},\n\n{{custom_message}}\n\n---\nRückmeldung von:\n{{contact_full_name}}\n{{contact_email}}\nBNI-Chapter: {{contact_chapter}}\nVertretung für: {{requested_chapter}}\nTermin: {{requested_date}}\n\nViele Grüße\n{{app_name}}"],
+        ];
+        $insert = $db->prepare('INSERT IGNORE INTO email_templates(template_key,subject,body,updated_at) VALUES(:key,:subject,:body,:now)');
+        foreach ($templates as $key=>$template) $insert->execute([':key'=>$key,':subject'=>$template[0],':body'=>$template[1],':now'=>$now]);
+        $memberConfig = $db->prepare(<<<'SQL'
+            INSERT IGNORE INTO bni_member_directory_configs
+                (org_id,endpoint,parameters,languages,website_type,website_id,mapped_widget_settings,referer,updated_at)
+            SELECT 44628,:endpoint,:parameters,:languages,'3','27966',:settings,:referer,:updated_at
+            WHERE EXISTS (SELECT 1 FROM organizations WHERE org_id=44628)
+            SQL);
+        $memberConfig->execute([
+            ':endpoint'=>'https://bni-rheinruhr.de/bnicms/v3/frontend/memberlist/display',
+            ':parameters'=>'chapterName=44628&regionIds=11805,5843,9614,5925,5921,5939,11553&chapterWebsite=1',
+            ':languages'=>'{"availableLanguages":[{"type":"published","url":"http://bni-rheinruhr.de/koenigsforst/de/memberlist","descriptionKey":"Deutsch","id":18,"localeCode":"de"}],"activeLanguage":{"id":18,"localeCode":"de","descriptionKey":"Deutsch","cookieBotCode":"de"}}',
+            ':settings'=>'[{"key":113,"name":"Member Names","value":"Namen der Mitglieder"},{"key":117,"name":"Profession/Specialty","value":"Wirtschaftszweig/Fachgebiet"},{"key":118,"name":"Company","value":"Unternehmen"},{"key":119,"name":"Showing","value":"Zeige"},{"key":120,"name":"to","value":"bis"},{"key":121,"name":"of","value":"von"},{"key":122,"name":"entries","value":"Einträgen"},{"key":304,"name":"Zero Records","value":"Keine Einträge gefunden"},{"key":343,"name":"Phone","value":"Telefon"},{"key":344,"name":"Send Mail","value":"Nachricht senden"}]',
+            ':referer'=>'https://bni-rheinruhr.de/koenigsforst/de/memberlist',
+            ':updated_at'=>$now,
+        ]);
+    }
+}

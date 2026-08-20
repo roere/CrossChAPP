@@ -41,6 +41,15 @@ try:
     mobile_guide=js("const steps=[...document.querySelectorAll('.guide-step')];return {single:steps.every(x=>getComputedStyle(x).gridTemplateColumns.split(' ').length===1),ordered:steps.every(x=>x.querySelector('.guide-step-copy').getBoundingClientRect().top<x.querySelector('.guide-image-button').getBoundingClientRect().top),overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth,navVisible:[...document.querySelectorAll('nav a')].every(x=>x.getBoundingClientRect().width>0)}")
     assert mobile_guide=={'single':True,'ordered':True,'overflow':False,'navVisible':True},mobile_guide
     wd('POST',f'/session/{session}/window/rect',{'width':1440,'height':1000});time.sleep(.3)
+    go('/?view=register');time.sleep(.4)
+    registration_skip=js("const option=document.querySelector('#skip-chapter-verification-option'),actions=document.querySelector('.registration-actions'),input=option.querySelector('input'),tip=option.querySelector('[role=tooltip]');return {hidden:option.hidden,checked:input.checked,before:!!(option.compareDocumentPosition(actions)&Node.DOCUMENT_POSITION_FOLLOWING),text:option.innerText.includes('Chapter-Prüfung überspringen'),tooltip:tip.textContent.trim(),described:input.getAttribute('aria-describedby')===tip.id}")
+    assert registration_skip=={'hidden':True,'checked':True,'before':True,'text':True,'tooltip':'Es wird nicht geprüft, ob der Name in der Mitgliederliste des Chapters steht.','described':True},registration_skip
+    js("const input=document.querySelector('#home-chapter-search');input.value='Testchapter';input.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#home-chapter-results input').click()")
+    assert js("return !document.querySelector('#skip-chapter-verification-option').hidden&&document.querySelector('[name=skip_chapter_verification]').checked")
+    tooltip_focus=js("const b=document.querySelector('.field-tooltip button');b.focus();return {focus:document.activeElement===b,visibility:getComputedStyle(document.querySelector('[role=tooltip]')).visibility}")
+    assert tooltip_focus=={'focus':True,'visibility':'visible'},tooltip_focus
+    js("document.querySelector('#clear-home-chapter').click()")
+    assert js("return document.querySelector('#skip-chapter-verification-option').hidden")
     go('/?view=crosschaptern')
     assert js("return document.querySelector('.page-intro-title').textContent.trim()")=='Finde passende BNI-Chaptertreffen in deiner Nähe.'
     search_filter=js("const f=document.querySelector('#chapter-search-form'),c=f.elements.has_representation_requests,b=document.querySelector('#search-button');return {unchecked:!c.checked,before:!!(c.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING),label:c.closest('label').textContent.trim(),basis:document.body.innerText.includes('Datengrundlage:')}")

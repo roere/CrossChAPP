@@ -12,6 +12,7 @@ require_once $appRoot . '/src/Database.php';
 require_once $appRoot . '/src/HttpClient.php';
 require_once $appRoot . '/src/OrganizationRepository.php';
 require_once $appRoot . '/src/MapRefreshService.php';
+require_once $appRoot . '/src/WorkerHeartbeat.php';
 
 $check = static function (bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
@@ -36,6 +37,16 @@ $check($defaults['automaticRefreshEnabled'] === false && $defaults['automaticRef
 $check($defaults['automaticRefreshBatchSize'] === 10 && $defaults['automaticRefreshIntervalMinutes'] === 60, 'Worker-Standardwerte.');
 $check($defaults['automaticRefreshDailyLimit'] === 50, 'Tageslimit-Standardwert.');
 $check($defaults['mapRefreshEnabled'] === false && $defaults['mapRefreshDays'] === 1, 'Z-Standardwerte.');
+$automation->updateWorkerRuntime(60);
+$runtime = $database->query('SELECT worker_last_seen_at,last_check_at,next_check_at FROM automation_runtime WHERE id=1')->fetch();
+$check(strtotime((string) $runtime['next_check_at']) - strtotime((string) $runtime['last_check_at']) === 3600, 'Worker-Cycle setzt next_check_at einmalig auf +60 Minuten.');
+$database->exec("UPDATE automation_runtime SET worker_last_seen_at='2020-01-01T00:00:00Z',last_check_at='2026-08-20T10:00:00Z',next_check_at='2026-08-20T11:00:00Z' WHERE id=1");
+$sleeps = []; $heartbeats = 0;
+WorkerHeartbeat::wait(120, static function () use ($automation, &$heartbeats): void { $automation->updateWorkerHeartbeat(); $heartbeats++; }, static function (int $seconds) use (&$sleeps): void { $sleeps[] = $seconds; });
+$heartbeatRuntime = $database->query('SELECT worker_last_seen_at,last_check_at,next_check_at FROM automation_runtime WHERE id=1')->fetch();
+$check($heartbeats === 4 && $sleeps === [30,30,30,30], '60-Minuten-Wartephase wird in Heartbeat-Abschnitte geteilt.');
+$check($heartbeatRuntime['worker_last_seen_at'] !== '2020-01-01T00:00:00Z', 'Heartbeat aktualisiert worker_last_seen_at.');
+$check($heartbeatRuntime['last_check_at'] === '2026-08-20T10:00:00Z' && $heartbeatRuntime['next_check_at'] === '2026-08-20T11:00:00Z', 'Heartbeat verschiebt weder last_check_at noch next_check_at.');
 $automation->updateSettings(true, 5, true, 20, 75, true, 2);
 $saved = $automation->settings();
 $check($saved['usageRefreshEnabled'] && $saved['usageRefreshDays'] === 5, 'X persistent speichern.');

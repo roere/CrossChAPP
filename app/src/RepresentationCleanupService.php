@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+require_once __DIR__ . '/DatabaseDialect.php';
 
 final class RepresentationCleanupService
 {
@@ -24,12 +25,13 @@ final class RepresentationCleanupService
         $expiredRequests = $this->expiredIds($requests, 'request_date');
         $expiredDates = $this->expiredIds($dates, 'offer_date');
 
-        $this->database->exec('BEGIN IMMEDIATE TRANSACTION');
+        DatabaseDialect::beginWrite($this->database);
         try {
             $requestCount = $this->deleteIds('representation_requests', $expiredRequests);
             $dateCount = $this->deleteIds('representation_offer_dates', $expiredDates);
-            $signature = $this->database->prepare("UPDATE representation_offers SET date_signature = COALESCE((SELECT GROUP_CONCAT(offer_date, '|') FROM (SELECT offer_date FROM representation_offer_dates WHERE offer_id = :offer_id ORDER BY offer_date)), ''), updated_at = :updated WHERE id = :offer_id");
-            foreach ($this->database->query('SELECT id FROM representation_offers WHERE all_dates = 0')->fetchAll(PDO::FETCH_COLUMN) as $offerId) $signature->execute([':offer_id' => (int) $offerId, ':updated' => gmdate('Y-m-d\TH:i:s\Z')]);
+            $group = DatabaseDialect::isMysql($this->database) ? "GROUP_CONCAT(offer_date ORDER BY offer_date SEPARATOR '|')" : "GROUP_CONCAT(offer_date, '|')";
+            $signature = $this->database->prepare("UPDATE representation_offers SET date_signature = COALESCE((SELECT {$group} FROM representation_offer_dates WHERE offer_id = :dates_offer_id), ''), updated_at = :updated WHERE id = :offer_id");
+            foreach ($this->database->query('SELECT id FROM representation_offers WHERE all_dates = 0')->fetchAll(PDO::FETCH_COLUMN) as $offerId) $signature->execute([':dates_offer_id' => (int) $offerId, ':offer_id' => (int) $offerId, ':updated' => gmdate('Y-m-d\TH:i:s\Z')]);
             $statement = $this->database->prepare(<<<'SQL'
                 DELETE FROM representation_offers
                 WHERE all_dates = 0

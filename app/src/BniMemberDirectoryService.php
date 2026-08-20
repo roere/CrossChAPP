@@ -49,6 +49,6 @@ final class BniMemberDirectoryService
         return $normalize($candidate) === $normalize(trim($first) . ' ' . trim($last));
     }
 
-    private function acquire(string $owner): bool { $this->database->prepare("DELETE FROM bni_member_check_lock WHERE datetime(lock_until)<=datetime('now')")->execute(); try { $s=$this->database->prepare("INSERT INTO bni_member_check_lock(id,owner_token,lock_until) VALUES(1,:owner,datetime('now','+45 seconds'))"); $s->execute([':owner'=>$owner]); return true; } catch (PDOException) { return false; } }
+    private function acquire(string $owner): bool { $now=gmdate('Y-m-d\TH:i:s\Z');$this->database->prepare("DELETE FROM bni_member_check_lock WHERE lock_until<=:now")->execute([':now'=>$now]); try { $s=$this->database->prepare("INSERT INTO bni_member_check_lock(id,owner_token,lock_until) VALUES(1,:owner,:until)"); $s->execute([':owner'=>$owner,':until'=>gmdate('Y-m-d\TH:i:s\Z',time()+45)]); return true; } catch (PDOException) { return false; } }
     private function release(string $owner): void { $s=$this->database->prepare('DELETE FROM bni_member_check_lock WHERE id=1 AND owner_token=:owner'); $s->execute([':owner'=>$owner]); }
 }

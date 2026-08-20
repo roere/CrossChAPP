@@ -57,10 +57,10 @@ final class RepresentationRequestRepository
     {
         $statement = $this->database->prepare(<<<'SQL'
             DELETE FROM representation_requests
-            WHERE id = :id AND user_id = :user_id
-              AND org_id = (SELECT home_chapter_org_id FROM users WHERE id = :user_id)
+            WHERE id = :id AND user_id = :owner_user_id
+              AND org_id = (SELECT home_chapter_org_id FROM users WHERE id = :chapter_user_id)
             SQL);
-        $statement->execute([':id' => $requestId, ':user_id' => $userId]); return $statement->rowCount() === 1;
+        $statement->execute([':id' => $requestId, ':owner_user_id' => $userId, ':chapter_user_id' => $userId]); return $statement->rowCount() === 1;
     }
 
     /** @param list<int> $orgIds @return array<int,list<array<string,mixed>>> */

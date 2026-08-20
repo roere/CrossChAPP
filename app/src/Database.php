@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/MysqlSchema.php';
+
 final class Database
 {
     private const DEFAULT_PATH = '/var/www/data/bni-dach.sqlite';
@@ -10,6 +12,22 @@ final class Database
 
     public function __construct(?string $path = null)
     {
+        $driver = $path !== null ? 'sqlite' : strtolower(trim((string) (getenv('CROSSCHAPP_DB_DRIVER') ?: 'mysql')));
+        if ($driver === 'mysql') {
+            $host = trim((string) (getenv('CROSSCHAPP_DB_HOST') ?: 'db'));
+            $port = (int) (getenv('CROSSCHAPP_DB_PORT') ?: 3306);
+            $name = trim((string) (getenv('CROSSCHAPP_DB_NAME') ?: 'crosschapp'));
+            $user = trim((string) (getenv('CROSSCHAPP_DB_USER') ?: 'crosschapp'));
+            $password = (string) (getenv('CROSSCHAPP_DB_PASSWORD') ?: '');
+            $this->connection = new PDO("mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4", $user, $password, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ]);
+            MysqlSchema::migrate($this->connection);
+            return;
+        }
+        if ($driver !== 'sqlite') throw new InvalidArgumentException('Unbekannter Datenbanktreiber.');
         if ($path === null) {
             $override = getenv('CROSSCHAPP_DB_PATH');
             $path = is_string($override) && trim($override) !== '' ? trim($override) : self::DEFAULT_PATH;
@@ -306,6 +324,7 @@ final class Database
             )
             SQL);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_user_invitations_email_status ON user_invitations(email, status, expires_at)');
+        $this->connection->exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_invitations_pending_email ON user_invitations(LOWER(email)) WHERE status = 'pending'");
         $this->createRepresentationSchema();
     }
 
@@ -393,6 +412,7 @@ final class Database
             )
             SQL);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_requests_user_date ON representation_requests(user_id, org_id, request_date)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_requests_org_date ON representation_requests(org_id, request_date)');
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS representation_request_contact_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

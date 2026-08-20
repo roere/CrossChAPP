@@ -1,4 +1,20 @@
 services:
+  db:
+    image: mariadb:11.4
+    container_name: bni-dach-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${CROSSCHAPP_DB_NAME:-crosschapp}
+      MARIADB_USER: ${CROSSCHAPP_DB_USER:-crosschapp}
+      MARIADB_PASSWORD: ${CROSSCHAPP_DB_PASSWORD:-crosschapp-local}
+      MARIADB_ROOT_PASSWORD: ${CROSSCHAPP_DB_ROOT_PASSWORD:-crosschapp-root-local}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
   web:
     build: .
     container_name: bni-dach-web
@@ -8,13 +24,30 @@ services:
     volumes:
       - ./app:/var/www/html
       - ./data:/var/www/data
+    environment: &database-environment
+      CROSSCHAPP_DB_DRIVER: ${CROSSCHAPP_DB_DRIVER:-mysql}
+      CROSSCHAPP_DB_HOST: ${CROSSCHAPP_DB_HOST:-db}
+      CROSSCHAPP_DB_PORT: ${CROSSCHAPP_DB_PORT:-3306}
+      CROSSCHAPP_DB_NAME: ${CROSSCHAPP_DB_NAME:-crosschapp}
+      CROSSCHAPP_DB_USER: ${CROSSCHAPP_DB_USER:-crosschapp}
+      CROSSCHAPP_DB_PASSWORD: ${CROSSCHAPP_DB_PASSWORD:-crosschapp-local}
+    depends_on:
+      db:
+        condition: service_healthy
   worker:
     build: .
     container_name: bni-dach-worker
     command: ["sh", "/usr/local/bin/crosschapp-worker-entrypoint"]
     depends_on:
-      - web
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
     restart: unless-stopped
     volumes:
       - ./app:/var/www/html
       - ./data:/var/www/data
+    environment: *database-environment
+
+volumes:
+  mariadb-data:

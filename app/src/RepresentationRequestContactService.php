@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+require_once __DIR__ . '/DatabaseDialect.php';
 
 final class RepresentationRequestContactService
 {
@@ -77,13 +78,13 @@ final class RepresentationRequestContactService
 
     private function reserveAnonymous(int $requestId, int $recipientId, string $email, string $ip): int
     {
-        $now=gmdate('Y-m-d\TH:i:s\Z');$hour=gmdate('Y-m-d\TH:i:s\Z',time()-3600);$ten=gmdate('Y-m-d\TH:i:s\Z',time()-600);$ipHash=hash('sha256',trim($ip));$emailHash=hash('sha256',strtolower(trim($email)));$this->database->exec('BEGIN IMMEDIATE TRANSACTION');
+        $now=gmdate('Y-m-d\TH:i:s\Z');$hour=gmdate('Y-m-d\TH:i:s\Z',time()-3600);$ten=gmdate('Y-m-d\TH:i:s\Z',time()-600);$ipHash=hash('sha256',trim($ip));$emailHash=hash('sha256',strtolower(trim($email)));DatabaseDialect::beginWrite($this->database);
         try{$count=$this->database->prepare('SELECT COUNT(*) FROM representation_anonymous_request_contact_log WHERE ip_hash=:ip AND sent_at>=:since');$count->execute([':ip'=>$ipHash,':since'=>$hour]);if((int)$count->fetchColumn()>=5)throw new DomainException('Zu viele Anfragen. Bitte versuche es später erneut.');$duplicate=$this->database->prepare("SELECT COUNT(*) FROM representation_anonymous_request_contact_log WHERE request_id=:request AND sender_email_hash=:email AND sent_at>=:since AND status IN ('started','success')");$duplicate->execute([':request'=>$requestId,':email'=>$emailHash,':since'=>$ten]);if((int)$duplicate->fetchColumn()>0)throw new DomainException('Diese Rückmeldung wurde kürzlich bereits gesendet.');$insert=$this->database->prepare("INSERT INTO representation_anonymous_request_contact_log(request_id,recipient_user_id,sender_email_hash,ip_hash,sent_at,status)VALUES(:request,:recipient,:email,:ip,:sent,'started')");$insert->execute([':request'=>$requestId,':recipient'=>$recipientId,':email'=>$emailHash,':ip'=>$ipHash,':sent'=>$now]);$id=(int)$this->database->lastInsertId();$this->database->exec('COMMIT');return $id;}catch(Throwable $e){try{$this->database->exec('ROLLBACK');}catch(Throwable){}throw $e;}
     }
 
     private function reserve(int $contactUserId, int $requestId, int $recipientId): int
     {
-        $now=gmdate('Y-m-d\TH:i:s\Z');$hour=gmdate('Y-m-d\TH:i:s\Z',time()-3600);$ten=gmdate('Y-m-d\TH:i:s\Z',time()-600);$this->database->exec('BEGIN IMMEDIATE TRANSACTION');
+        $now=gmdate('Y-m-d\TH:i:s\Z');$hour=gmdate('Y-m-d\TH:i:s\Z',time()-3600);$ten=gmdate('Y-m-d\TH:i:s\Z',time()-600);DatabaseDialect::beginWrite($this->database);
         try { $offer=$this->database->prepare('SELECT COUNT(*) FROM representation_contact_log WHERE requester_user_id=:user AND sent_at>=:since');$offer->execute([':user'=>$contactUserId,':since'=>$hour]);$request=$this->database->prepare('SELECT COUNT(*) FROM representation_request_contact_log WHERE contact_user_id=:user AND sent_at>=:since');$request->execute([':user'=>$contactUserId,':since'=>$hour]);if((int)$offer->fetchColumn()+(int)$request->fetchColumn()>=10)throw new DomainException('Zu viele Anfragen. Bitte versuche es später erneut.');
             $duplicate=$this->database->prepare("SELECT COUNT(*) FROM representation_request_contact_log WHERE contact_user_id=:user AND request_id=:request AND sent_at>=:since AND status IN ('started','success')");$duplicate->execute([':user'=>$contactUserId,':request'=>$requestId,':since'=>$ten]);if((int)$duplicate->fetchColumn()>0)throw new DomainException('Diese Rückmeldung wurde kürzlich bereits gesendet.');
             $insert=$this->database->prepare("INSERT INTO representation_request_contact_log(contact_user_id,request_id,recipient_user_id,sent_at,status)VALUES(:user,:request,:recipient,:sent,'started')");$insert->execute([':user'=>$contactUserId,':request'=>$requestId,':recipient'=>$recipientId,':sent'=>$now]);$id=(int)$this->database->lastInsertId();$this->database->exec('COMMIT');return $id;

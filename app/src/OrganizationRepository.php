@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/DatabaseDialect.php';
+
 final class OrganizationRepository
 {
     public function __construct(private readonly PDO $database)
@@ -12,7 +14,11 @@ final class OrganizationRepository
     public function upsertMapOrganizations(array $organizations): void
     {
         $now = self::now();
-        $statement = $this->database->prepare(<<<'SQL'
+        $upsert = DatabaseDialect::isMysql($this->database) ? <<<'SQL'
+            INSERT INTO organizations (org_id,cms_security_hash,country_code,org_type,longitude,latitude,detail_status,map_loaded_at,created_at,updated_at)
+            VALUES (:org_id,:cms_security_hash,:country_code,:org_type,:longitude,:latitude,'not_loaded',:map_loaded_at,:created_at,:updated_at)
+            ON DUPLICATE KEY UPDATE cms_security_hash=VALUES(cms_security_hash),country_code=VALUES(country_code),org_type=VALUES(org_type),longitude=VALUES(longitude),latitude=VALUES(latitude),map_loaded_at=VALUES(map_loaded_at),updated_at=VALUES(updated_at)
+            SQL : <<<'SQL'
             INSERT INTO organizations (
                 org_id, cms_security_hash, country_code, org_type, longitude, latitude,
                 detail_status, map_loaded_at, created_at, updated_at
@@ -28,7 +34,8 @@ final class OrganizationRepository
                 latitude = excluded.latitude,
                 map_loaded_at = excluded.map_loaded_at,
                 updated_at = excluded.updated_at
-            SQL);
+            SQL;
+        $statement = $this->database->prepare($upsert);
 
         $this->database->beginTransaction();
         try {
@@ -154,13 +161,14 @@ final class OrganizationRepository
         $statement = $this->database->prepare(<<<'SQL'
             SELECT COUNT(*) AS total,
                    SUM(CASE WHEN detail_status = :loaded_status THEN 1 ELSE 0 END) AS loaded,
-                   SUM(CASE WHEN detail_status != :loaded_status THEN 1 ELSE 0 END) AS missing,
+                   SUM(CASE WHEN detail_status != :missing_loaded_status THEN 1 ELSE 0 END) AS missing,
                    SUM(CASE WHEN detail_status = :error_status THEN 1 ELSE 0 END) AS error
             FROM organizations
             WHERE org_type = :org_type
             SQL);
         $statement->execute([
             ':loaded_status' => 'loaded',
+            ':missing_loaded_status' => 'loaded',
             ':error_status' => 'error',
             ':org_type' => 'CHAPTER',
         ]);
@@ -214,7 +222,7 @@ final class OrganizationRepository
               AND (
                   detail_status IN ('not_loaded', 'error')
                   OR details_loaded_at IS NULL
-                  OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))
+                  OR (detail_status = 'loaded' AND details_loaded_at < :cutoff)
               )
             ORDER BY
               CASE
@@ -226,7 +234,7 @@ final class OrganizationRepository
               org_id ASC
             LIMIT :limit
             SQL);
-        $statement->bindValue(':age', '-' . $days . ' days', PDO::PARAM_STR);
+        $statement->bindValue(':cutoff', DatabaseDialect::ageCutoff($days), PDO::PARAM_STR);
         $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
         $statement->execute();
         return array_map([$this, 'toApi'], $statement->fetchAll());
@@ -241,10 +249,10 @@ final class OrganizationRepository
               AND (
                   detail_status IN ('not_loaded', 'error')
                   OR details_loaded_at IS NULL
-                  OR (detail_status = 'loaded' AND datetime(details_loaded_at) < datetime('now', :age))
+                  OR (detail_status = 'loaded' AND details_loaded_at < :cutoff)
               )
             SQL);
-        $statement->execute([':org_id' => $orgId, ':age' => '-' . $days . ' days']);
+        $statement->execute([':org_id' => $orgId, ':cutoff' => DatabaseDialect::ageCutoff($days)]);
         return (int) $statement->fetchColumn() === 1;
     }
 
@@ -258,9 +266,9 @@ final class OrganizationRepository
             WHERE org_id = :org_id
               AND detail_status = 'loaded'
               AND details_loaded_at IS NOT NULL
-              AND datetime(details_loaded_at) < datetime('now', :age)
+              AND details_loaded_at < :cutoff
             SQL);
-        $statement->execute([':org_id' => $orgId, ':age' => '-' . $days . ' days']);
+        $statement->execute([':org_id' => $orgId, ':cutoff' => DatabaseDialect::ageCutoff($days)]);
         return (int) $statement->fetchColumn() === 1;
     }
 

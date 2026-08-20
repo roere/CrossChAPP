@@ -6,8 +6,19 @@ final class MailService
 {
     public function __construct(private readonly MailSettingsRepository $repository, private readonly ?Closure $transport = null) {}
 
+    public function isReady(): bool
+    {
+        if ($this->transport !== null) return true;
+        if (getenv('CROSSCHAPP_TEST_MODE') === '1') {
+            $capturePath = getenv('CROSSCHAPP_MAIL_CAPTURE_PATH');
+            return is_string($capturePath) && trim($capturePath) !== '';
+        }
+        return is_file(dirname(__DIR__, 2) . '/vendor/autoload.php') && $this->repository->isMailConfigured();
+    }
+
     public function send(string $email, string $name, string $subject, string $body, ?string $replyToEmail = null, ?string $replyToName = null): void
     {
+        if (!$this->isReady()) throw new RuntimeException('Der E-Mail-Versand ist noch nicht konfiguriert.');
         if ($this->transport !== null) { ($this->transport)($email, $name, $subject, $body, $replyToEmail, $replyToName); return; }
         if (getenv('CROSSCHAPP_TEST_MODE') === '1') {
             $capturePath = getenv('CROSSCHAPP_MAIL_CAPTURE_PATH');

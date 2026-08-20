@@ -10,6 +10,14 @@ final class AccountResetException extends DomainException
     }
 }
 
+final class RegistrationException extends RuntimeException
+{
+    public function __construct(public readonly string $reason, string $message = 'Anmeldung momentan nicht möglich.')
+    {
+        parent::__construct($message);
+    }
+}
+
 final class AccountService
 {
     public function __construct(private readonly UserRepository $users, private readonly MailSettingsRepository $mailSettings, private readonly MailService $mailer, private readonly ?BniMemberDirectoryService $directory = null) {}
@@ -20,16 +28,19 @@ final class AccountService
         $first = trim((string) ($input['first_name'] ?? '')); $last = trim((string) ($input['last_name'] ?? ''));
         $email = strtolower(trim((string) ($input['email'] ?? ''))); $password = (string) ($input['password'] ?? '');
         $confirmation = (string) ($input['password_confirmation'] ?? ''); $home = $input['home_chapter_org_id'] ?? null;
+        $skipChapterVerification = $input['skip_chapter_verification'] ?? false;
+        if (!is_bool($skipChapterVerification)) throw new InvalidArgumentException('Die Auswahl zur Chapter-Prüfung ist ungültig.');
         if ($first === '' || strlen($first) > 120) throw new InvalidArgumentException('Bitte gib deinen Vornamen an.');
         if ($last === '' || strlen($last) > 120) throw new InvalidArgumentException('Bitte gib deinen Nachnamen an.');
         if (filter_var($email, FILTER_VALIDATE_EMAIL) === false || strlen($email) > 254) throw new InvalidArgumentException('Bitte gib eine gültige E-Mail-Adresse an.');
         if (strlen($password) < 8) throw new InvalidArgumentException('Das Passwort muss mindestens 8 Zeichen lang sein.');
         if (!hash_equals($password, $confirmation)) throw new InvalidArgumentException('Die Passwörter stimmen nicht überein.');
+        if (!$this->mailer->isReady()) throw new RegistrationException('registration_mail_unavailable');
         $homeId = $home === null || $home === '' ? null : filter_var($home, FILTER_VALIDATE_INT);
         if ($homeId === false || ($homeId !== null && !$this->users->isValidHomeChapter((int) $homeId))) throw new InvalidArgumentException('Das gewählte Heimatchapter ist ungültig.');
         if ($this->users->findByLogin($email) !== null) throw new DomainException('Für diese E-Mail-Adresse existiert bereits ein Konto.');
         $bniStatus = 'unverified'; $externalRef = null;
-        if ($homeId !== null) {
+        if ($homeId !== null && !$skipChapterVerification) {
             if ($this->directory === null) throw new RuntimeException('Die BNI-Mitgliederprüfung ist nicht verfügbar.');
             if ($this->users->memberCheckRateLimited($ip)) throw new DomainException('Zu viele BNI-Mitgliederprüfungen. Bitte versuche es später erneut.');
             $this->users->recordMemberCheck($ip); $match = $this->directory->match($first, $last, (int) $homeId);
@@ -41,9 +52,16 @@ final class AccountService
             if ($match['status'] !== 'match') throw new RuntimeException('Die BNI-Mitgliederprüfung ist derzeit nicht verfügbar.');
             $bniStatus = 'directory_match'; $externalRef = $match['externalRef'];
         }
-        try { $user = $this->users->create($first, $last, $email, password_hash($password, PASSWORD_DEFAULT), $homeId === null ? null : (int) $homeId, $bniStatus, $externalRef); }
-        catch (PDOException $exception) { if ($exception->getCode() === '23000') throw new DomainException('Für diese E-Mail-Adresse existiert bereits ein Konto.'); throw $exception; }
-        return ['user' => $user, 'mailSent' => $this->sendVerification($user)];
+        try {
+            return $this->users->transaction(function () use ($first, $last, $email, $password, $homeId, $bniStatus, $externalRef): array {
+                $user = $this->users->create($first, $last, $email, password_hash($password, PASSWORD_DEFAULT), $homeId === null ? null : (int) $homeId, $bniStatus, $externalRef);
+                if (!$this->sendVerification($user)) throw new RegistrationException('registration_mail_delivery_failed');
+                return ['user' => $user, 'mailSent' => true];
+            });
+        } catch (PDOException $exception) {
+            if ($exception->getCode() === '23000') throw new DomainException('Für diese E-Mail-Adresse existiert bereits ein Konto.');
+            throw $exception;
+        }
     }
 
     public function sendVerification(array $user): bool
