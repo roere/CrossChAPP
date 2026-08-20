@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/src/Database.php';
+require_once dirname(__DIR__) . '/src/LegalSettingsRepository.php';
 
 if (PHP_SAPI !== 'cli') {
     fwrite(STDERR, "Dieses Werkzeug darf nur über die Kommandozeile gestartet werden.\n");
@@ -24,7 +25,7 @@ if (strtolower((string) getenv('CROSSCHAPP_DB_DRIVER')) !== 'mysql') {
 $tables = [
     'organizations', 'automation_settings', 'chapter_refresh_log', 'chapter_refresh_locks',
     'automation_runtime', 'map_refresh_log', 'users', 'email_verification_tokens',
-    'password_reset_tokens', 'mail_settings', 'email_templates', 'auth_attempts',
+    'password_reset_tokens', 'mail_settings', 'legal_settings', 'email_templates', 'auth_attempts',
     'bni_member_check_attempts', 'bni_member_directory_configs', 'bni_member_check_lock',
     'user_invitations', 'representation_offers', 'representation_offer_chapters',
     'representation_offer_dates', 'representation_settings', 'representation_contact_log',
@@ -54,6 +55,12 @@ try {
     try {
         foreach ($tables as $table) {
             if (!isset($sourceTables[$table])) {
+                if ($table === 'legal_settings') {
+                    $insertDefault=$target->prepare('INSERT INTO legal_settings(id,imprint_text,privacy_text,updated_at)VALUES(1,:imprint,:privacy,:updated)');
+                    $insertDefault->execute([':imprint'=>LegalSettingsRepository::DEFAULT_IMPRINT,':privacy'=>LegalSettingsRepository::DEFAULT_PRIVACY,':updated'=>gmdate('Y-m-d\TH:i:s\Z')]);
+                    $sourceCounts[$table] = 1;
+                    continue;
+                }
                 $sourceCounts[$table] = 0;
                 continue;
             }

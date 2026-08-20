@@ -244,6 +244,13 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                 <fieldset><legend>Vertretungsgesuch beantworten</legend><label>Hinweis Vertretungsgesuch annehmen<textarea name="request_contact_hint" rows="5"></textarea></label><label>Standardnachricht – Vertretungsgesuch beantworten<textarea name="request_custom_message" rows="7"></textarea></label><label>E-Mail-Betreff<input name="request_contact_subject"></label><label>E-Mail-Text<textarea name="request_contact_body" rows="12"></textarea></label><p>{{request_owner_first_name}}, {{contact_first_name}}, {{contact_last_name}}, {{contact_full_name}}, {{contact_email}}, {{contact_chapter}}, {{requested_chapter}}, {{requested_date}}, {{custom_message}}, {{app_name}}</p></fieldset>
                 <div class="email-template-actions"><button type="submit">E-Mail-Vorlagen speichern</button></div>
             </form><div id="email-templates-message" class="message" role="status"></div></section>
+            <section><p class="section-kicker">Inhalte</p><h2>Rechtliche Texte</h2>
+                <form id="legal-settings-form" class="legal-settings-form">
+                    <label>Impressum<textarea name="imprintText" rows="14" required></textarea></label>
+                    <label>Datenschutzerklärung<textarea name="privacyText" rows="22" required></textarea></label>
+                    <button type="submit">Rechtliche Texte speichern</button>
+                </form><div id="legal-settings-message" class="message" role="status" aria-live="polite"></div>
+            </section>
         </div>
     </details>
 </main>

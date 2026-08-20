@@ -39,7 +39,7 @@ php_group() {
     while IFS= read -r file; do
         [[ -z "$file" || "$file" == \#* ]] && continue
         case "$group:$file" in
-            accounts:account-auth.php|accounts:admin-users-overview.php|accounts:login-rate-limit.php|accounts:bni-verification-invitations.php) ;;
+            accounts:account-auth.php|accounts:admin-users-overview.php|accounts:login-rate-limit.php|accounts:bni-verification-invitations.php|accounts:legal-settings.php) ;;
             representation:representation-*.php) ;;
             automation:automation-refresh.php|automation:bni-request-policy.php|automation:pending-chapters.php) ;;
             search:chapter-search.php) ;;

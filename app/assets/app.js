@@ -46,6 +46,7 @@
         automationMessage: document.querySelector('#automation-message'), automationStats: document.querySelector('#automation-stats'), workerStatus: document.querySelector('#worker-status'),
         miscPanel: document.querySelector('#misc-panel'), mailSettingsForm: document.querySelector('#mail-settings-form'),
         mailSettingsMessage: document.querySelector('#mail-settings-message'), templatesForm: document.querySelector('#email-templates-form'), templatesMessage: document.querySelector('#email-templates-message'),
+        legalSettingsForm: document.querySelector('#legal-settings-form'), legalSettingsMessage: document.querySelector('#legal-settings-message'),
         testMailAddress: document.querySelector('#test-mail-address'), sendTestMail: document.querySelector('#send-test-mail'), testMailMessage: document.querySelector('#test-mail-message'),
         usersPanel: document.querySelector('#users-panel'), usersStats: document.querySelector('#users-stats'), usersSearch: document.querySelector('#users-search'), usersStatus: document.querySelector('#users-status-filter'), usersVerification: document.querySelector('#users-verification-filter'), usersChapter: document.querySelector('#users-chapter-filter'), usersMessage: document.querySelector('#users-message'), usersTableWrap: document.querySelector('#users-table-wrap'), usersList: document.querySelector('#users-list'), usersActions: document.querySelector('#users-actions'), usersSelectionHint: document.querySelector('#users-selection-hint'), resetSelectedUser: document.querySelector('#reset-selected-user'), deleteSelectedUser: document.querySelector('#delete-selected-user'), resetUserDialog: document.querySelector('#admin-reset-password-dialog'), resetUserConfirmation: document.querySelector('#admin-reset-password-confirmation'), resetUserMessage: document.querySelector('#admin-reset-password-message'), confirmResetUser: document.querySelector('#confirm-admin-reset-password'), cancelResetUser: document.querySelector('#cancel-admin-reset-password'), deleteUserDialog: document.querySelector('#admin-delete-user-dialog'), deleteUserConfirmation: document.querySelector('#admin-delete-user-confirmation'), deleteUserMessage: document.querySelector('#admin-delete-user-message'), confirmDeleteUser: document.querySelector('#confirm-admin-delete-user'), cancelDeleteUser: document.querySelector('#cancel-admin-delete-user'),
         invitationsPanel: document.querySelector('#invitations-panel'), invitationForm: document.querySelector('#invitation-form'), invitationMessage: document.querySelector('#invitation-message'), invitationList: document.querySelector('#invitation-list'), invitationResults: document.querySelector('#invitation-chapter-results'), invitationTemplateForm: document.querySelector('#invitation-template-form'), invitationTemplateMessage: document.querySelector('#invitation-template-message'), cancelInvitationDialog: document.querySelector('#cancel-invitation-dialog'), confirmCancelInvitation: document.querySelector('#confirm-cancel-invitation'), cancelInvitationMessage: document.querySelector('#cancel-invitation-message'),
@@ -91,6 +92,7 @@
     elements.miscPanel.addEventListener('toggle', () => { if (elements.miscPanel.open) loadMailConfiguration(); });
     elements.mailSettingsForm.addEventListener('submit', saveMailSettings);
     elements.templatesForm.addEventListener('submit', saveEmailTemplates);
+    elements.legalSettingsForm.addEventListener('submit', saveLegalSettings);
     elements.sendTestMail.addEventListener('click', sendTestMail);
     elements.usersPanel.addEventListener('toggle', () => { if (elements.usersPanel.open && !elements.usersPanel.dataset.loaded) loadUsers(); });
     [elements.usersSearch, elements.usersStatus, elements.usersVerification, elements.usersChapter].forEach(input => input.addEventListener('input', renderUsers));
@@ -329,9 +331,9 @@
 
     async function loadMailConfiguration() {
         try {
-            const [settingsResponse, templatesResponse] = await Promise.all([fetch('/api/admin/mail-settings.php'), fetch('/api/admin/email-templates.php')]);
-            const settingsPayload = await settingsResponse.json(); const templatesPayload = await templatesResponse.json();
-            if (!settingsResponse.ok || !templatesResponse.ok) throw new Error('Die E-Mail-Konfiguration konnte nicht geladen werden.');
+            const [settingsResponse, templatesResponse, legalResponse] = await Promise.all([fetch('/api/admin/mail-settings.php'), fetch('/api/admin/email-templates.php'), fetch('/api/admin/legal-settings.php')]);
+            const settingsPayload = await settingsResponse.json(); const templatesPayload = await templatesResponse.json(); const legalPayload = await legalResponse.json();
+            if (!settingsResponse.ok || !templatesResponse.ok || !legalResponse.ok) throw new Error('Die Konfiguration konnte nicht geladen werden.');
             const form = elements.mailSettingsForm; const settings = settingsPayload.settings;
             ['smtpHost', 'smtpPort', 'smtpUsername', 'encryption', 'senderEmail', 'senderName', 'baseUrl'].forEach(name => { form.elements[name].value = settings[name] ?? ''; });
             form.elements.smtpPassword.value = ''; form.elements.smtpPassword.placeholder = settings.hasSmtpPassword ? '••••••••' : '';
@@ -340,6 +342,7 @@
             elements.templatesForm.elements.contact_hint.value = templatesPayload.contactHint || ''; elements.templatesForm.elements.contact_subject.value = templates.representation_contact.subject; elements.templatesForm.elements.contact_body.value = templates.representation_contact.body;
             elements.templatesForm.elements.request_contact_hint.value = templatesPayload.requestContactHint || ''; elements.templatesForm.elements.request_contact_subject.value = templates.representation_request_contact.subject; elements.templatesForm.elements.request_contact_body.value = templates.representation_request_contact.body;
             elements.templatesForm.elements.offer_custom_message.value = templatesPayload.offerCustomMessage || ''; elements.templatesForm.elements.request_custom_message.value = templatesPayload.requestCustomMessage || '';
+            elements.legalSettingsForm.elements.imprintText.value = legalPayload.settings.imprintText || ''; elements.legalSettingsForm.elements.privacyText.value = legalPayload.settings.privacyText || '';
         } catch (error) { elements.mailSettingsMessage.textContent = error.message; elements.mailSettingsMessage.className = 'message error'; }
     }
 
@@ -354,6 +357,12 @@
         const body = { verify_email: { subject: form.elements.verify_subject.value, body: form.elements.verify_body.value }, reset_password: { subject: form.elements.reset_subject.value, body: form.elements.reset_body.value }, representation_contact: { subject: form.elements.contact_subject.value, body: form.elements.contact_body.value }, representation_request_contact: { subject: form.elements.request_contact_subject.value, body: form.elements.request_contact_body.value }, contactHint: form.elements.contact_hint.value, requestContactHint: form.elements.request_contact_hint.value, offerCustomMessage: form.elements.offer_custom_message.value, requestCustomMessage: form.elements.request_custom_message.value };
         try { const response = await fetch('/api/admin/email-templates.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN }, body: JSON.stringify(body) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); elements.templatesMessage.textContent = 'E-Mail-Vorlagen gespeichert.'; elements.templatesMessage.className = 'message success'; }
         catch (error) { elements.templatesMessage.textContent = error.message; elements.templatesMessage.className = 'message error'; }
+    }
+
+    async function saveLegalSettings(event) {
+        event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget));
+        try { const response = await fetch('/api/admin/legal-settings.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN }, body: JSON.stringify(values) }); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); elements.legalSettingsMessage.textContent = payload.message; elements.legalSettingsMessage.className = 'message success'; }
+        catch (error) { elements.legalSettingsMessage.textContent = error.message; elements.legalSettingsMessage.className = 'message error'; }
     }
 
     async function sendTestMail() {

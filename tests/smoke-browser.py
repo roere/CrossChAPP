@@ -23,6 +23,7 @@ try:
     guide=js("const nav=[...document.querySelectorAll('nav a')],steps=[...document.querySelectorAll('.guide-step')],images=[...document.querySelectorAll('.guide-image-button img')],rects=steps.map(step=>({copy:step.querySelector('.guide-step-copy').getBoundingClientRect(),image:step.querySelector('.guide-image-button').getBoundingClientRect()}));return {nav:nav.map(x=>x.textContent.trim()),active:nav.filter(x=>x.classList.contains('active')).map(x=>x.textContent.trim()),title:document.querySelector('.page-intro-title').textContent.trim(),headings:steps.map(x=>x.querySelector('h2').textContent.trim()),text:document.querySelector('.guide-page').innerText,loaded:images.map(x=>({complete:x.complete,naturalWidth:x.naturalWidth,naturalHeight:x.naturalHeight,displayWidth:x.getBoundingClientRect().width,displayHeight:x.getBoundingClientRect().height})),alternating:rects.map(x=>x.copy.left<x.image.left),cta:[...document.querySelectorAll('.guide-cta-actions a')].map(x=>x.textContent.trim()),overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth}")
     assert guide['nav'][:2]==['Was ist CrossChAPP?','CrossChAPPtern'] and guide['active']==['Was ist CrossChAPP?'] and guide['title']=='Was ist CrossChAPP?',guide
     assert guide['headings']==['1. Passende Chapter finden','2. Vertretung anbieten','3. Vertretung für dein Chapter finden','4. Verifiziertes Benutzerkonto'],guide['headings']
+    assert js("return [...document.querySelectorAll('.site-footer a')].map(x=>x.textContent.trim())")==['Impressum','Datenschutzerklärung']
     assert 'Gib an, für welche Termine Du eine Vertretung suchst.' in guide['text'] and 'Lege für dein Heimatchapter ein Vertretungsgesuch an.' not in guide['text'],guide['text']
     widths=[x['displayWidth'] for x in guide['loaded']]
     assert all(x['complete'] and x['naturalWidth']>0 and x['naturalHeight']>0 and abs((x['displayWidth']/x['displayHeight'])-(x['naturalWidth']/x['naturalHeight']))<.02 for x in guide['loaded']) and max(widths)-min(widths)<=2 and guide['alternating']==[True,False,True,False] and guide['cta']==['CrossChAPPtern öffnen','Anmelden'] and 'Geschäftsreise' in guide['text'] and 'Urlaub' in guide['text'] and not guide['overflow'],guide
@@ -34,6 +35,11 @@ try:
             if message['method']=='Network.requestWillBeSent':guide_urls.append(message['params']['request']['url'])
         except (KeyError,ValueError):pass
     assert not [url for url in guide_urls if '/api/' in url or any(host in url for host in FORBIDDEN)],guide_urls
+    wd('POST',f'/session/{session}/log',{'type':'performance'});go('/?view=impressum');assert js("return {heading:document.querySelector('h1').textContent.trim(),text:document.querySelector('.legal-document').innerText,overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth}")['heading']=='Impressum'
+    assert 'Bitte vor Veröffentlichung' in js("return document.querySelector('.legal-document').innerText")
+    go('/?view=datenschutz');legal_default=js("return {heading:document.querySelector('h1').textContent.trim(),text:document.querySelector('.legal-document').innerText,overflow:document.documentElement.scrollWidth>document.documentElement.clientWidth}");assert legal_default['heading']=='Datenschutzerklärung' and 'technisch notwendiges Session-Cookie' in legal_default['text'] and not legal_default['overflow'],legal_default
+    legal_network=wd('POST',f'/session/{session}/log',{'type':'performance'});assert not [entry for entry in legal_network if '/api/' in entry.get('message','') or any(host in entry.get('message','') for host in FORBIDDEN)],legal_network
+    go('/?view=about')
     dialog=js("const b=document.querySelector('.guide-image-button');b.click();return {open:document.querySelector('#guide-image-dialog').open,focus:document.activeElement.id,src:document.querySelector('#guide-image-dialog img').getAttribute('src')}");assert dialog['open'] and dialog['focus']=='close-guide-image' and dialog['src'].endswith('crosschaptern-finden.png'),dialog
     wd('POST',f'/session/{session}/actions',{'actions':[{'type':'key','id':'keyboard','actions':[{'type':'keyDown','value':'\ue00c'},{'type':'keyUp','value':'\ue00c'}]}]});time.sleep(.2)
     assert js("return !document.querySelector('#guide-image-dialog').open&&document.activeElement===document.querySelector('.guide-image-button')")
@@ -95,8 +101,9 @@ try:
     anonymous_admin=js("const t=document.querySelector('meta[name=csrf-token]').content;return fetch('/api/admin/invitations.php',{headers:{'X-CSRF-Token':t}}).then(r=>r.status)")
     assert anonymous_admin in (401,403),anonymous_admin
     anonymous_users=js("return fetch('/api/admin/users.php').then(r=>r.status)");assert anonymous_users==401,anonymous_users
+    anonymous_legal=js("return fetch('/api/admin/legal-settings.php').then(r=>r.status)");assert anonymous_legal==401,anonymous_legal
     anonymous_user_actions=js("return Promise.all([fetch('/api/admin/user-password-reset.php',{method:'POST'}).then(r=>r.status),fetch('/api/admin/users.php',{method:'DELETE'}).then(r=>r.status)])");assert anonymous_user_actions==[401,401],anonymous_user_actions
-    expected_auth_logs=wd('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in expected_auth_logs if entry.get('level')=='SEVERE' and not any(path in entry.get('message','') for path in ('/api/auth/login.php','/api/admin/invitations.php','/api/admin/users.php','/api/admin/user-password-reset.php'))],expected_auth_logs
+    expected_auth_logs=wd('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in expected_auth_logs if entry.get('level')=='SEVERE' and not any(path in entry.get('message','') for path in ('/api/auth/login.php','/api/admin/invitations.php','/api/admin/users.php','/api/admin/user-password-reset.php','/api/admin/legal-settings.php'))],expected_auth_logs
 
     login('check-b@example.test');assert js("return new URL(location.href).searchParams.get('view')")=='crosschaptern';go('/?view=about')
     assert js("return [...document.querySelectorAll('.guide-cta-actions a')].map(x=>x.textContent.trim())")==['CrossChAPPtern','Vertretung anbieten','Vertretung finden']
@@ -112,9 +119,10 @@ try:
     assert js("return document.querySelector('#my-account-dialog').open&&!document.querySelector('#delete-account-dialog').open")
     user_admin=js("return fetch('/api/admin/invitations.php').then(r=>r.status)");assert user_admin in (401,403),user_admin
     user_users_api=js("return fetch('/api/admin/users.php').then(r=>r.status)");assert user_users_api==403,user_users_api
+    user_legal_api=js("return fetch('/api/admin/legal-settings.php').then(r=>r.status)");assert user_legal_api==403,user_legal_api
     user_actions_api=js("return Promise.all([fetch('/api/admin/user-password-reset.php',{method:'POST'}).then(r=>r.status),fetch('/api/admin/users.php',{method:'DELETE'}).then(r=>r.status)])");assert user_actions_api==[403,403],user_actions_api
     csrf_guard=js("return fetch('/api/representation/requests.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request_date:'2099-01-01'})}).then(r=>r.status)");assert csrf_guard==403,csrf_guard
-    expected_user_security_logs=wd('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in expected_user_security_logs if entry.get('level')=='SEVERE' and not any(path in entry.get('message','') for path in ('/api/auth/account.php','/api/admin/invitations.php','/api/admin/users.php','/api/admin/user-password-reset.php','/api/representation/requests.php'))],expected_user_security_logs
+    expected_user_security_logs=wd('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in expected_user_security_logs if entry.get('level')=='SEVERE' and not any(path in entry.get('message','') for path in ('/api/auth/account.php','/api/admin/invitations.php','/api/admin/users.php','/api/admin/user-password-reset.php','/api/admin/legal-settings.php','/api/representation/requests.php'))],expected_user_security_logs
     foreign=js("const c=document.querySelector('#result-910001');return {text:c.textContent,buttons:c.querySelectorAll('.request-contact-button').length}")
     assert 'Anna A.' in foreign['text'] and 'Dein Gesuch' not in foreign['text'] and foreign['buttons']==1,foreign
     js("document.querySelector('#result-910001 .request-contact-button').click()");time.sleep(.4)
@@ -214,6 +222,13 @@ try:
     assert 'Testchapter Königsforst' in chapter['row'] and 'Overath' in chapter['row'] and 'Deutschland' in chapter['row'] and 'Testchapter Königsforst' in chapter['selected'],chapter
     smtp_privacy=js("return fetch('/api/admin/mail-settings.php').then(r=>r.json()).then(data=>({password:Object.prototype.hasOwnProperty.call(data,'smtpPassword')||JSON.stringify(data).includes('smtp_password'),configured:Object.prototype.hasOwnProperty.call(data,'smtpPasswordConfigured')}))")
     assert not smtp_privacy['password'],smtp_privacy
+    js("document.querySelector('#misc-panel').open=true;document.querySelector('#misc-panel').dispatchEvent(new Event('toggle'))");time.sleep(.5)
+    legal_admin=js("const f=document.querySelector('#legal-settings-form');return {section:!!f,imprint:f.imprintText.value,privacy:f.privacyText.value}");assert legal_admin['section'] and 'Bitte vor Veröffentlichung' in legal_admin['imprint'] and 'DATENSCHUTZERKLÄRUNG' in legal_admin['privacy'],legal_admin
+    legal_csrf=js("return fetch('/api/admin/legal-settings.php',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.status)");assert legal_csrf==403,legal_csrf
+    legal_csrf_logs=wd('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in legal_csrf_logs if entry.get('level')=='SEVERE' and '/api/admin/legal-settings.php' not in entry.get('message','')],legal_csrf_logs
+    js("const f=document.querySelector('#legal-settings-form');f.imprintText.value='Test Impressum\\n<script>window.legalXss=true</script>';f.privacyText.value='Test Datenschutz\\nZweite Zeile';f.requestSubmit()");time.sleep(.5);assert js("return document.querySelector('#legal-settings-message').textContent")=='Rechtliche Texte gespeichert.'
+    go('/?view=impressum');xss_view=js("return {text:document.querySelector('.legal-document').innerText,script:!!document.querySelector('.legal-document script'),executed:window.legalXss===true,breaks:getComputedStyle(document.querySelector('.legal-document div')).whiteSpace}");assert '<script>window.legalXss=true</script>' in xss_view['text'] and not xss_view['script'] and not xss_view['executed'] and xss_view['breaks']=='pre-wrap',xss_view
+    go('/?view=datenschutz');assert js("return document.querySelector('.legal-document').innerText")=='Test Datenschutz\nZweite Zeile'
     js("document.querySelector('#logout-button').click()");time.sleep(.3)
     console=wd('POST',f'/session/{session}/log',{'type':'browser'});bad=[entry for entry in console if entry.get('level')=='SEVERE' and 'favicon' not in entry.get('message','')]
     assert not bad,bad

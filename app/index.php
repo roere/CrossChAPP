@@ -12,6 +12,7 @@ require_once __DIR__ . '/src/AccountFactory.php';
 require_once __DIR__ . '/src/InvitationRepository.php';
 require_once __DIR__ . '/src/InvitationService.php';
 require_once __DIR__ . '/src/InvitationFactory.php';
+require_once __DIR__ . '/src/LegalSettingsRepository.php';
 
 Auth::start();
 if (isset($_GET['verify'])) {
@@ -38,6 +39,8 @@ $returnViewParameter = (string) ($_GET['return_view'] ?? '');
 $returnView = in_array($returnViewParameter, ['crosschaptern', 'vertretung', 'vertretung-finden'], true) ? $returnViewParameter : '';
 $requestedView = isset($_GET['invite']) || isset($_GET['reset']) ? 'auth' : match ($viewParameter) {
     'about' => 'about',
+    'impressum' => 'impressum',
+    'datenschutz' => 'datenschutz',
     'admin' => 'admin',
     'login', 'register', 'forgot', 'reset', 'verified', 'invite' => 'auth',
     'vertretung' => 'vertretung',
@@ -52,11 +55,14 @@ $verificationResult = $authMode === 'verified' ? (string) ($_SESSION['verificati
 if ($authMode === 'verified') unset($_SESSION['verification_result']);
 $pageTitle = match ($requestedView) {
     'about' => 'Was ist CrossChAPP? | CrossChAPP',
+    'impressum' => 'Impressum | CrossChAPP',
+    'datenschutz' => 'Datenschutzerklärung | CrossChAPP',
     'admin' => 'Admin | CrossChAPP',
     'vertretung' => 'Vertretung anbieten | CrossChAPP',
     'vertretung-finden' => 'Vertretung finden | CrossChAPP',
     default => 'CrossChAPPtern | CrossChAPP',
 };
+$legalSettings=(new LegalSettingsRepository((new Database())->connection()))->settings();
 $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__ . '/assets/' . $asset) ?: 1);
 ?>
 <!doctype html>
@@ -176,6 +182,10 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <?php
     if ($requestedView === 'about') {
         require __DIR__ . '/views/about.php';
+    } elseif ($requestedView === 'impressum' || $requestedView === 'datenschutz') {
+        $legalHeading=$requestedView==='impressum'?'Impressum':'Datenschutzerklärung';
+        $legalContent=$requestedView==='impressum'?$legalSettings['imprintText']:$legalSettings['privacyText'];
+        require __DIR__ . '/views/legal.php';
     } elseif ($requestedView === 'admin') {
         require $isAdmin ? __DIR__ . '/views/admin.php' : __DIR__ . '/views/login.php';
     } elseif ($requestedView === 'auth') {
@@ -188,5 +198,6 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
         require __DIR__ . '/views/search.php';
     }
     ?>
+    <footer class="site-footer"><div class="shell"><nav aria-label="Rechtliche Informationen"><a href="/?view=impressum">Impressum</a><span aria-hidden="true">·</span><a href="/?view=datenschutz">Datenschutzerklärung</a></nav></div></footer>
 </body>
 </html>

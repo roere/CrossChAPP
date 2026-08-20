@@ -15,12 +15,20 @@ final class MysqlSchema
             }
             $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(1,UTC_TIMESTAMP())");
         }
+        if ($version < 2) {
+            $engine = ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+            $db->exec("CREATE TABLE IF NOT EXISTS legal_settings(id INT PRIMARY KEY,imprint_text LONGTEXT NOT NULL,privacy_text LONGTEXT NOT NULL,updated_at VARCHAR(32) NOT NULL)$engine");
+            $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(2,UTC_TIMESTAMP())");
+        }
         if (getenv('CROSSCHAPP_DB_SKIP_SEED') === '1') {
             return;
         }
         $db->exec("INSERT IGNORE INTO automation_settings(id,updated_at) VALUES(1,UTC_TIMESTAMP())");
         $db->exec("INSERT IGNORE INTO automation_runtime(id,updated_at) VALUES(1,UTC_TIMESTAMP())");
         $db->exec("INSERT IGNORE INTO mail_settings(id,updated_at) VALUES(1,UTC_TIMESTAMP())");
+        require_once __DIR__ . '/LegalSettingsRepository.php';
+        $legal=$db->prepare('INSERT IGNORE INTO legal_settings(id,imprint_text,privacy_text,updated_at)VALUES(1,:imprint,:privacy,:updated)');
+        $legal->execute([':imprint'=>LegalSettingsRepository::DEFAULT_IMPRINT,':privacy'=>LegalSettingsRepository::DEFAULT_PRIVACY,':updated'=>gmdate('Y-m-d\TH:i:s\Z')]);
         self::seed($db);
     }
 

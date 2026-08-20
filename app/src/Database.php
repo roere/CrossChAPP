@@ -242,6 +242,17 @@ final class Database
             SQL);
         $this->connection->exec("INSERT OR IGNORE INTO mail_settings (id, updated_at) VALUES (1, CURRENT_TIMESTAMP)");
         $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS legal_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                imprint_text TEXT NOT NULL,
+                privacy_text TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            SQL);
+        require_once __DIR__ . '/LegalSettingsRepository.php';
+        $legal=$this->connection->prepare('INSERT OR IGNORE INTO legal_settings(id,imprint_text,privacy_text,updated_at)VALUES(1,:imprint,:privacy,:updated)');
+        $legal->execute([':imprint'=>LegalSettingsRepository::DEFAULT_IMPRINT,':privacy'=>LegalSettingsRepository::DEFAULT_PRIVACY,':updated'=>gmdate('Y-m-d\TH:i:s\Z')]);
+        $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS email_templates (
                 template_key TEXT PRIMARY KEY,
                 subject TEXT NOT NULL,
