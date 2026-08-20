@@ -78,6 +78,7 @@ final class UserRepository
     {
         $statement = $this->database->prepare(<<<'SQL'
             SELECT users.id, users.first_name, users.last_name, users.email, users.role,
+                   users.home_chapter_org_id,
                    users.bni_verification_status,
                    organizations.chapter_name AS home_chapter_name
             FROM users
@@ -86,6 +87,30 @@ final class UserRepository
             SQL);
         $statement->execute([':id' => $userId]); $row = $statement->fetch();
         return is_array($row) ? $row : null;
+    }
+
+    public function updateHomeChapterVerification(int $userId, ?int $orgId, string $verificationStatus, ?string $externalRef): void
+    {
+        $verifiedAt = $verificationStatus === 'directory_match' ? self::now() : null;
+        $statement = $this->database->prepare(<<<'SQL'
+            UPDATE users
+            SET home_chapter_org_id = :org_id,
+                bni_verification_status = :verification_status,
+                bni_external_member_ref = :external_ref,
+                bni_verified_at = :verified_at,
+                bni_verified_by_user_id = NULL,
+                updated_at = :updated_at
+            WHERE id = :id AND role = 'user'
+            SQL);
+        $statement->execute([
+            ':org_id' => $orgId,
+            ':verification_status' => $verificationStatus,
+            ':external_ref' => $externalRef,
+            ':verified_at' => $verifiedAt,
+            ':updated_at' => self::now(),
+            ':id' => $userId,
+        ]);
+        if ($statement->rowCount() !== 1) throw new RuntimeException('Das Heimatchapter konnte nicht gespeichert werden.');
     }
 
     public function deleteAccount(int $userId): bool

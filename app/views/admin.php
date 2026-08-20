@@ -7,16 +7,17 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
         <div>
             <p class="section-kicker">Gespeicherter Bestand</p>
             <h2 id="local-heading">Lokale Datenbank</h2>
-            <p>Die Übersicht wird direkt aus SQLite geladen. Das Öffnen dieses Bereichs ruft keine BNI-Daten ab.</p>
+            <p>Die Übersicht verwendet die lokal gespeicherten Organisationsdaten. Das Öffnen dieses Bereichs ruft keine BNI-Daten ab.</p>
         </div>
         <div id="local-message" class="message" role="status" aria-live="polite">Lokale Daten werden geladen …</div>
     </section>
 
     <section id="results" class="results" hidden>
+        <p class="page-meta">Gesamtbestand inkl. Chapter im Aufbau und in Planung</p>
         <div id="stats" class="stats" aria-label="Chapter-Statistik"></div>
         <section class="panel batch-panel" aria-labelledby="batch-heading">
             <div class="section-heading">
-                <div><p class="section-kicker">Kontrollierter Detailimport</p><h2 id="batch-heading">Fehlende Chapterdetails laden</h2></div>
+                <div><p class="section-kicker">Kontrollierter Detailimport</p><h2 id="batch-heading">Fehlende Chapterdetails laden</h2><p class="page-meta">Nur bestehende Chapter</p></div>
             </div>
             <div id="batch-stats" class="batch-stats" aria-label="Detailstatus bestehender Chapter"></div>
             <div class="batch-controls">
@@ -81,7 +82,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                         <div id="automation-message" class="message" role="status" aria-live="polite"></div>
                     </form>
                     <section class="automation-statistics" aria-labelledby="automation-stats-heading">
-                        <div class="section-heading"><div><p class="section-kicker">SQLite-Historie</p><h3 id="automation-stats-heading">Automatische Aktualisierungen</h3></div><span id="worker-status" class="status-badge">Status wird geladen</span></div>
+                        <div class="section-heading"><div><p class="section-kicker">Aktualisierungshistorie</p><h3 id="automation-stats-heading">Automatische Aktualisierungen</h3></div><span id="worker-status" class="status-badge">Status wird geladen</span></div>
                         <div id="automation-stats" class="automation-stats"></div>
                     </section>
                 </div>
@@ -104,7 +105,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             </div>
             <label class="reload-option"><input id="reload-details" type="checkbox"> Bereits geladene Details erneut abrufen</label>
             <div class="actions">
-                <button id="select-visible" type="button" class="secondary">Alle sichtbaren auswählen</button>
+                <button id="select-visible" type="button" class="secondary">Alle auswählen</button>
                 <button id="clear-selection" type="button" class="secondary">Auswahl aufheben</button>
                 <button id="load-details" type="button">Details für ausgewählte laden</button>
             </div>

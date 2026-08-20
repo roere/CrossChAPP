@@ -165,6 +165,7 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline: 3px 
 button { padding: .65rem 1.1rem; border: 1px solid var(--bni-red); color: white; background: var(--bni-red); font-weight: 800; cursor: pointer; }
 button:hover { border-color: var(--bni-red-dark); background: var(--bni-red-dark); }
 button:disabled { cursor: wait; opacity: .55; }
+#my-account-actions button:disabled, #close-my-account-icon:disabled { cursor: not-allowed; opacity: .45; filter: grayscale(.35); }
 button.secondary { border-color: #a9aaac; color: #343538; background: white; }
 button.secondary:hover { border-color: #68696b; background: #f2f2f2; }
 .message { grid-column: 1 / -1; min-height: 1.25rem; font-size: .88rem; font-weight: 700; }

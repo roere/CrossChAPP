@@ -116,7 +116,7 @@
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Lokale Daten konnten nicht geladen werden.');
             applyOrganizations(payload);
-            elements.localMessage.textContent = `${payload.count} Organisationen aus SQLite geladen, ${payload.with_details} mit Detaildaten.`;
+            elements.localMessage.textContent = `${payload.count} Organisationen geladen, ${payload.with_details} mit Detaildaten.`;
             elements.localMessage.className = 'message success';
         } catch (error) {
             elements.localMessage.textContent = error.message;

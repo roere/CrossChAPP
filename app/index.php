@@ -139,10 +139,21 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <div><dt>Heimatchapter</dt><dd data-account-field="homeChapterName">Wird geladen …</dd></div>
                     <div><dt>Verifikation</dt><dd data-account-field="verificationStatus">Wird geladen …</dd></div>
                 </dl>
+                <?php if (!$isAdmin): ?>
+                    <section id="my-account-chapter-editor" hidden>
+                        <?php $chapterPicker = ['legend'=>'Heimatchapter','optional'=>true,'inputId'=>'account-home-chapter-id','inputName'=>'home_chapter_org_id','countryId'=>'account-home-chapter-country','searchId'=>'account-home-chapter-search','locationId'=>'account-home-chapter-location','clearId'=>'clear-account-home-chapter','clearLabel'=>'Heimatchapter entfernen','selectedId'=>'account-selected-home-chapter','resultsId'=>'account-home-chapter-results','emptyLabel'=>'Kein Heimatchapter ausgewählt.','ariaLabel'=>'Heimatchapter auswählen']; require __DIR__ . '/views/partials/chapter-picker.php'; ?>
+                        <div id="account-skip-chapter-verification-option" class="skip-chapter-verification" hidden>
+                            <label><input name="account_skip_chapter_verification" type="checkbox" value="1" aria-describedby="account-skip-chapter-verification-tooltip"> <span>Chapter-Prüfung überspringen</span></label>
+                            <span class="field-tooltip"><button type="button" aria-label="Hinweis zur Chapter-Prüfung" aria-describedby="account-skip-chapter-verification-tooltip">i</button><span id="account-skip-chapter-verification-tooltip" role="tooltip">Es wird nicht geprüft, ob der Name in der Mitgliederliste des Chapters steht.</span></span>
+                        </div>
+                        <div class="registration-actions"><button id="save-account-home-chapter" type="button">Speichern</button><button id="cancel-account-edit" type="button" class="secondary">Abbrechen</button></div>
+                    </section>
+                <?php endif; ?>
                 <div id="my-account-message" class="message" role="alert" aria-live="polite"></div>
-                <div class="registration-actions">
-                    <?php if (!$isAdmin): ?><button id="open-delete-account" type="button" class="danger">Konto löschen</button><?php endif; ?>
+                <div id="my-account-actions" class="registration-actions">
+                    <?php if (!$isAdmin): ?><button id="edit-my-account" type="button">Bearbeiten</button><?php endif; ?>
                     <button id="close-my-account" type="button" class="secondary">Schließen</button>
+                    <?php if (!$isAdmin): ?><button id="open-delete-account" type="button" class="danger">Konto löschen</button><?php endif; ?>
                 </div>
             </div>
         </dialog>

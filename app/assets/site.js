@@ -136,15 +136,28 @@
         const cancelDelete = document.querySelector('#cancel-delete-account');
         const closeDeleteIcon = document.querySelector('#close-delete-account-icon');
         const deleteMessage = document.querySelector('#delete-account-message');
-        const closeAccount = () => { dialog.close(); trigger.focus(); };
+        const details = document.querySelector('#my-account-details');
+        const editButton = document.querySelector('#edit-my-account');
+        const editor = document.querySelector('#my-account-chapter-editor');
+        const saveChapter = document.querySelector('#save-account-home-chapter');
+        const cancelEdit = document.querySelector('#cancel-account-edit');
+        const skipOption = document.querySelector('#account-skip-chapter-verification-option');
+        const skipCheckbox = skipOption?.querySelector('input') || null;
+        let accountData = null; let accountPicker = null; let chaptersLoaded = false; let accountEditActive = false;
+        const setEditMode = active => {
+            accountEditActive = active;
+            if (editor) editor.hidden = !active;
+            if (details) details.hidden = active;
+            [editButton, closeButton, deleteButton, closeIcon].filter(Boolean).forEach(button => { button.disabled = active; });
+            if (!active) { if (skipOption) skipOption.hidden = true; if (skipCheckbox) skipCheckbox.checked = false; }
+        };
+        const leaveEditMode = () => setEditMode(false);
+        const closeAccount = () => { if (accountEditActive) return; dialog.close(); trigger.focus(); };
         const closeDelete = () => { deleteDialog?.close(); deleteButton?.focus(); };
-        trigger.addEventListener('click', async () => {
-            message.textContent = ''; message.className = 'message'; dialog.showModal();
-            try {
-                const response = await fetch('/api/auth/account.php'); const payload = await response.json();
-                if (!response.ok) throw new Error(payload.error || 'Die Kontodaten konnten nicht geladen werden.');
-                const verificationLabels = { manual_verified: 'Verifiziert', directory_match: 'BNI-Datensatz gefunden', unverified: 'Nicht verifiziert' };
-                for (const [key, value] of Object.entries(payload.account)) {
+        const renderAccount = account => {
+            accountData = account;
+            const verificationLabels = { manual_verified: 'Verifiziert', directory_match: 'BNI-Datensatz gefunden', unverified: 'Nicht verifiziert' };
+            for (const [key, value] of Object.entries(account)) {
                     const output = dialog.querySelector(`[data-account-field="${key}"]`);
                     if (!output) continue;
                     if (key === 'verificationStatus') {
@@ -155,12 +168,63 @@
                             output.append(document.createTextNode(`${verificationLabels[value]} `), badge);
                         } else output.textContent = verificationLabels[value] || 'Nicht verifiziert';
                     } else output.textContent = value === null || String(value).trim() === '' ? '—' : String(value);
-                }
+            }
+            const headerBadge = document.querySelector('#account-menu-trigger .verification-badge');
+            if (account.verificationStatus !== 'manual_verified') headerBadge?.remove();
+        };
+        const loadAccount = async () => {
+            const response = await fetch('/api/auth/account.php'); const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Die Kontodaten konnten nicht geladen werden.');
+            renderAccount(payload.account); return payload.account;
+        };
+        trigger.addEventListener('click', async () => {
+            message.textContent = ''; message.className = 'message'; leaveEditMode(); dialog.showModal();
+            try {
+                await loadAccount();
                 closeButton.focus();
             } catch (error) { message.textContent = error.message; message.className = 'message error'; }
         });
+        if (editor && editButton && saveChapter && cancelEdit) {
+            accountPicker = window.CrossChappChapterPicker.create({
+                list: document.querySelector('#account-home-chapter-results'),
+                countryInput: document.querySelector('#account-home-chapter-country'),
+                searchInput: document.querySelector('#account-home-chapter-search'),
+                locationInput: document.querySelector('#account-home-chapter-location'),
+                selectedInput: document.querySelector('#account-home-chapter-id'),
+                selectedOutput: document.querySelector('#account-selected-home-chapter'),
+                clearButton: document.querySelector('#clear-account-home-chapter'),
+                radioName: 'account_home_chapter_choice', selectedLabelPrefix: 'Heimatchapter:',
+                emptyLabel: 'Kein Heimatchapter ausgewählt.', showAllByDefault: false,
+                maxResults: 20, collapseAfterSelect: true,
+                onSelect: () => { if (skipOption) skipOption.hidden = true; if (skipCheckbox) skipCheckbox.checked = false; },
+            });
+            editButton.addEventListener('click', async () => {
+                message.textContent = ''; message.className = 'message';
+                setEditMode(true);
+                try {
+                    if (!chaptersLoaded) {
+                        const response=await fetch('/api/auth/chapters.php'),payload=await response.json();
+                        if(!response.ok)throw new Error(payload.error||'Die lokale Chapterliste konnte nicht geladen werden.');
+                        accountPicker.setChapters(payload.chapters||[]);chaptersLoaded=true;
+                    }
+                    accountPicker.setSelectedOrgId(accountData?.homeChapterOrgId ?? null);
+                    document.querySelector('#account-home-chapter-search')?.focus();
+                } catch(error){message.textContent=error.message;message.className='message error';}
+            });
+            cancelEdit.addEventListener('click',()=>{accountPicker.setSelectedOrgId(accountData?.homeChapterOrgId??null);leaveEditMode();editButton.focus();});
+            saveChapter.addEventListener('click',async()=>{
+                saveChapter.disabled=true;message.textContent='';message.className='message';
+                try{
+                    const response=await fetch('/api/auth/account.php',{method:'PATCH',headers:jsonHeaders,body:JSON.stringify({home_chapter_org_id:document.querySelector('#account-home-chapter-id').value||null,skip_chapter_verification:skipCheckbox?.checked===true})});
+                    const payload=await response.json();
+                    if(!response.ok){if(payload.code==='technical_unavailable'&&payload.canSkip===true&&skipOption){skipOption.hidden=false;if(skipCheckbox)skipCheckbox.checked=false;}throw new Error(payload.message||payload.error||'Das Heimatchapter konnte nicht gespeichert werden.');}
+                    renderAccount(payload.account);leaveEditMode();message.textContent=payload.result==='removed'?'Das Heimatchapter wurde entfernt.':'Das Heimatchapter wurde gespeichert.';message.className='message success';editButton.focus();
+                }catch(error){message.textContent=error.message;message.className='message error';}finally{saveChapter.disabled=false;}
+            });
+        }
         closeButton.addEventListener('click', closeAccount); closeIcon.addEventListener('click', closeAccount);
-        dialog.addEventListener('cancel', event => { event.preventDefault(); closeAccount(); });
+        dialog.addEventListener('keydown', event => { if (accountEditActive && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); } }, true);
+        dialog.addEventListener('cancel', event => { event.preventDefault(); if (!accountEditActive) closeAccount(); });
         if (!deleteDialog || !deleteButton || !confirmDelete || !cancelDelete || !closeDeleteIcon || !deleteMessage) return;
         deleteButton.addEventListener('click', () => { deleteMessage.textContent = ''; deleteMessage.className = 'message'; deleteDialog.showModal(); confirmDelete.focus(); });
         cancelDelete.addEventListener('click', closeDelete); closeDeleteIcon.addEventListener('click', closeDelete);
@@ -213,9 +277,16 @@
             const registrationData = Object.fromEntries(new FormData(form));
             registrationData.skip_chapter_verification = form.skip_chapter_verification.checked;
             const response = await fetch('/api/auth/register.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(registrationData) });
-            const payload = await response.json(); if (!response.ok) throw new Error(payload.error || 'Registrierung fehlgeschlagen.');
+            const payload = await response.json();
+            if (!response.ok) {
+                if (payload.code === 'technical_unavailable' && payload.canSkip === true) {
+                    const skipOption = document.querySelector('#skip-chapter-verification-option');
+                    if (skipOption) { skipOption.hidden = false; form.skip_chapter_verification.checked = false; }
+                }
+                throw new Error(payload.message || payload.error || 'Registrierung fehlgeschlagen.');
+            }
             const panel = form.closest('.registration-panel');
-            const confirmation = document.createElement('p'); confirmation.className = 'registration-confirmation'; confirmation.textContent = 'Bitte bestätige deine E-Mail-Adresse.';
+            const confirmation = document.createElement('p'); confirmation.className = 'registration-confirmation'; confirmation.textContent = payload.message || 'Bitte bestätige deine E-Mail-Adresse.';
             panel.replaceChildren(confirmation);
         } catch (error) { message.textContent = error.message; message.className = 'message error'; }
         finally { button.disabled = false; }
@@ -294,7 +365,7 @@
     async function loadHomeChapters() {
         const result = document.querySelector('#home-chapter-results');
         const skipOption = document.querySelector('#skip-chapter-verification-option');
-        const updateSkipOption = chapter => { if (skipOption) skipOption.hidden = chapter === null; };
+        const resetSkipOption = () => { if (skipOption) { skipOption.hidden = true; const checkbox=skipOption.querySelector('input');if(checkbox)checkbox.checked=false; } };
         const picker = window.CrossChappChapterPicker.create({
             list: result,
             countryInput: document.querySelector('#home-chapter-country'),
@@ -309,7 +380,7 @@
             showAllByDefault: false,
             maxResults: 20,
             collapseAfterSelect: true,
-            onSelect: updateSkipOption,
+            onSelect: resetSkipOption,
         });
         try { const response = await fetch('/api/auth/chapters.php'); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); picker.setChapters(payload.chapters); }
         catch { result.textContent = 'Die lokale Chapterliste konnte nicht geladen werden.'; }

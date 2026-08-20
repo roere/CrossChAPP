@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/HomeChapterVerificationService.php';
+
 final class AccountResetException extends DomainException
 {
     public function __construct(public readonly string $reason, string $message)
@@ -20,9 +22,14 @@ final class RegistrationException extends RuntimeException
 
 final class AccountService
 {
-    public function __construct(private readonly UserRepository $users, private readonly MailSettingsRepository $mailSettings, private readonly MailService $mailer, private readonly ?BniMemberDirectoryService $directory = null) {}
+    private readonly HomeChapterVerificationService $homeChapterVerification;
 
-    /** @param array<string, mixed> $input @return array{user:array<string,mixed>,mailSent:bool} */
+    public function __construct(private readonly UserRepository $users, private readonly MailSettingsRepository $mailSettings, private readonly MailService $mailer, private readonly ?BniMemberDirectoryService $directory = null)
+    {
+        $this->homeChapterVerification = new HomeChapterVerificationService($users, $directory);
+    }
+
+    /** @param array<string, mixed> $input @return array{user:array<string,mixed>,mailSent:bool,status:string} */
     public function register(array $input, string $ip = ''): array
     {
         $first = trim((string) ($input['first_name'] ?? '')); $last = trim((string) ($input['last_name'] ?? ''));
@@ -39,24 +46,25 @@ final class AccountService
         $homeId = $home === null || $home === '' ? null : filter_var($home, FILTER_VALIDATE_INT);
         if ($homeId === false || ($homeId !== null && !$this->users->isValidHomeChapter((int) $homeId))) throw new InvalidArgumentException('Das gewählte Heimatchapter ist ungültig.');
         if ($this->users->findByLogin($email) !== null) throw new DomainException('Für diese E-Mail-Adresse existiert bereits ein Konto.');
-        $bniStatus = 'unverified'; $externalRef = null;
+        $bniStatus = 'unverified'; $externalRef = null; $registrationStatus = 'registered';
         if ($homeId !== null && !$skipChapterVerification) {
-            if ($this->directory === null) throw new RuntimeException('Die BNI-Mitgliederprüfung ist nicht verfügbar.');
-            if ($this->users->memberCheckRateLimited($ip)) throw new DomainException('Zu viele BNI-Mitgliederprüfungen. Bitte versuche es später erneut.');
-            $this->users->recordMemberCheck($ip); $match = $this->directory->match($first, $last, (int) $homeId);
-            if ($match['status'] === 'ambiguous') throw new InvalidArgumentException('Der BNI-Eintrag konnte nicht eindeutig zugeordnet werden.');
-            if ($match['status'] === 'not_found') throw new InvalidArgumentException('Der angegebene Name konnte in diesem BNI-Chapter nicht gefunden werden. Du kannst das Konto ohne Heimatchapter anlegen.');
-            if ($match['status'] === 'unavailable') throw new InvalidArgumentException('Für dieses Chapter ist die automatische BNI-Prüfung derzeit noch nicht verfügbar.');
-            if ($match['status'] === 'rate_limited') throw new RuntimeException('Die BNI-Mitgliederprüfung ist vorübergehend rate-limitiert. Bitte versuche es später erneut.');
-            if (in_array($match['status'], ['forbidden','upstream_error'], true)) throw new RuntimeException('Die BNI-Mitgliederprüfung ist derzeit nicht verfügbar. Bitte versuche es später erneut.');
-            if ($match['status'] !== 'match') throw new RuntimeException('Die BNI-Mitgliederprüfung ist derzeit nicht verfügbar.');
-            $bniStatus = 'directory_match'; $externalRef = $match['externalRef'];
+            $verification = $this->homeChapterVerification->verify($first, $last, (int) $homeId, false, $ip);
+            if ($verification['result'] === 'not_found') {
+                $homeId = null;
+                $registrationStatus = 'not_found';
+            } else {
+                $bniStatus = $verification['verificationStatus'];
+                $externalRef = $verification['externalRef'];
+            }
+        } elseif ($homeId !== null) {
+            $verification = $this->homeChapterVerification->verify($first, $last, (int) $homeId, true, $ip);
+            $bniStatus = $verification['verificationStatus'];
         }
         try {
-            return $this->users->transaction(function () use ($first, $last, $email, $password, $homeId, $bniStatus, $externalRef): array {
+            return $this->users->transaction(function () use ($first, $last, $email, $password, $homeId, $bniStatus, $externalRef, $registrationStatus): array {
                 $user = $this->users->create($first, $last, $email, password_hash($password, PASSWORD_DEFAULT), $homeId === null ? null : (int) $homeId, $bniStatus, $externalRef);
                 if (!$this->sendVerification($user)) throw new RegistrationException('registration_mail_delivery_failed');
-                return ['user' => $user, 'mailSent' => true];
+                return ['user' => $user, 'mailSent' => true, 'status' => $registrationStatus];
             });
         } catch (PDOException $exception) {
             if ($exception->getCode() === '23000') throw new DomainException('Für diese E-Mail-Adresse existiert bereits ein Konto.');
@@ -128,7 +136,7 @@ final class AccountService
         return $this->users->updatePassword($userId, password_hash($password, PASSWORD_DEFAULT));
     }
 
-    /** @return array{firstName:string,lastName:string,email:string,homeChapterName:?string,verificationStatus:string,canDelete:bool} */
+    /** @return array{firstName:string,lastName:string,email:string,homeChapterOrgId:?int,homeChapterName:?string,verificationStatus:string,canDelete:bool} */
     public function account(int $userId): array
     {
         $account = $this->users->accountDetails($userId);
@@ -137,10 +145,36 @@ final class AccountService
             'firstName' => (string) $account['first_name'],
             'lastName' => (string) $account['last_name'],
             'email' => (string) $account['email'],
+            'homeChapterOrgId' => $account['home_chapter_org_id'] === null ? null : (int) $account['home_chapter_org_id'],
             'homeChapterName' => $account['home_chapter_name'] === null ? null : (string) $account['home_chapter_name'],
             'verificationStatus' => (string) $account['bni_verification_status'],
             'canDelete' => $account['role'] !== 'admin',
         ];
+    }
+
+    /** @return array{result:string,account:array<string,mixed>} */
+    public function updateHomeChapter(int $userId, mixed $homeChapterOrgId, mixed $skipChapterVerification, string $ip = ''): array
+    {
+        if (!is_bool($skipChapterVerification)) throw new InvalidArgumentException('Die Auswahl zur Chapter-Prüfung ist ungültig.');
+        $user = $this->users->findById($userId);
+        if ($user === null) throw new DomainException('Das Benutzerkonto wurde nicht gefunden.');
+        if ($user['role'] !== 'user') throw new DomainException('Administratorkonten können hier nicht bearbeitet werden.');
+        if ($homeChapterOrgId === null || $homeChapterOrgId === '') {
+            if ($user['home_chapter_org_id'] === null) return ['result' => 'unchanged', 'account' => $this->account($userId)];
+            $this->users->updateHomeChapterVerification($userId, null, 'unverified', null);
+            return ['result' => 'removed', 'account' => $this->account($userId)];
+        }
+        $orgId = filter_var($homeChapterOrgId, FILTER_VALIDATE_INT);
+        if ($orgId === false || !$this->users->isValidHomeChapter((int) $orgId)) throw new InvalidArgumentException('Das gewählte Heimatchapter ist ungültig.');
+        if ((int) ($user['home_chapter_org_id'] ?? 0) === (int) $orgId && !$skipChapterVerification) {
+            return ['result' => 'unchanged', 'account' => $this->account($userId)];
+        }
+        $verification = $this->homeChapterVerification->verify((string) $user['first_name'], (string) $user['last_name'], (int) $orgId, $skipChapterVerification, $ip);
+        if ($verification['result'] === 'not_found') {
+            throw new HomeChapterVerificationException('not_found', 'Dein Name konnte im ausgewählten Chapter nicht verifiziert werden.');
+        }
+        $this->users->updateHomeChapterVerification($userId, (int) $orgId, $verification['verificationStatus'], $verification['externalRef']);
+        return ['result' => $verification['result'], 'account' => $this->account($userId)];
     }
 
     public function deleteAccount(int $userId): bool

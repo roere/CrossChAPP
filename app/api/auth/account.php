@@ -10,8 +10,9 @@ require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 require_once dirname(__DIR__, 2) . '/src/MailService.php';
 require_once dirname(__DIR__, 2) . '/src/MailSettingsRepository.php';
 require_once dirname(__DIR__, 2) . '/src/UserRepository.php';
+require_once dirname(__DIR__, 2) . '/src/ClientIp.php';
 
-if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'DELETE'], true)) JsonResponse::send(['error' => 'Nur GET und DELETE sind erlaubt.'], 405);
+if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'PATCH', 'DELETE'], true)) JsonResponse::send(['error' => 'Nur GET, PATCH und DELETE sind erlaubt.'], 405);
 $identity = Auth::requireUserJson();
 $account = AccountFactory::create();
 
@@ -27,11 +28,23 @@ try {
     $payload = $raw === '' ? [] : json_decode($raw, true, 8, JSON_THROW_ON_ERROR);
     if (!is_array($payload)) throw new JsonException('Ungültige Anfrage.');
     if (array_intersect(['id', 'user_id', 'userId'], array_keys($payload)) !== []) JsonResponse::send(['error' => 'Eine Benutzerwahl ist nicht erlaubt.'], 400);
+    if ($_SERVER['REQUEST_METHOD'] === 'PATCH') {
+        if (!array_key_exists('home_chapter_org_id', $payload) || !array_key_exists('skip_chapter_verification', $payload)) throw new JsonException('Ungültige Anfrage.');
+        $home=(int)($payload['home_chapter_org_id']??0);if($payload['skip_chapter_verification']===true&&(int)($_SESSION['account_chapter_skip_org_id']??0)!==$home)JsonResponse::send(['error'=>'Die Chapter-Prüfung kann nur nach einem technischen Prüffehler übersprungen werden.','code'=>'skip_not_allowed'],409);
+        $result=$account['service']->updateHomeChapter((int)$identity['user_id'],$payload['home_chapter_org_id'],$payload['skip_chapter_verification'],ClientIp::address());
+        unset($_SESSION['account_chapter_skip_org_id']);
+        JsonResponse::send(['updated'=>true]+$result);
+    }
     if (!$account['service']->deleteAccount((int) $identity['user_id'])) JsonResponse::send(['error' => 'Das Konto konnte nicht gelöscht werden.'], 404);
     Auth::logout();
     JsonResponse::send(['deleted' => true]);
 } catch (JsonException) {
     JsonResponse::send(['error' => 'Ungültige Anfrage.'], 400);
+} catch (HomeChapterVerificationException $exception) {
+    if($exception->canSkip&&isset($payload)&&is_array($payload))$_SESSION['account_chapter_skip_org_id']=(int)($payload['home_chapter_org_id']??0);else unset($_SESSION['account_chapter_skip_org_id']);
+    JsonResponse::send(['error'=>$exception->getMessage(),'message'=>$exception->getMessage(),'code'=>$exception->reason,'technicalReason'=>$exception->technicalReason,'canSkip'=>$exception->canSkip],$exception->reason==='technical_unavailable'?503:422);
+} catch (InvalidArgumentException $exception) {
+    JsonResponse::send(['error'=>$exception->getMessage()],400);
 } catch (DomainException) {
     JsonResponse::send(['error' => 'Administratorkonten können nicht gelöscht werden.'], 403);
 } catch (Throwable) {
