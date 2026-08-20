@@ -3,16 +3,19 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/BniMemberListClient.php';
+require_once __DIR__ . '/BniMemberDirectoryConfigResolver.php';
 
 final class BniMemberDirectoryService
 {
     private readonly BniMemberListClient $client;
-    public function __construct(private readonly PDO $database, ?Closure $transport = null, ?Closure $delay = null) { $this->client=new BniMemberListClient($database,$transport,$delay); }
+    private readonly BniMemberDirectoryConfigResolver $resolver;
+    public function __construct(private readonly PDO $database, ?Closure $transport = null, ?Closure $delay = null, ?Closure $resolverTransport = null) { $this->client=new BniMemberListClient($database,$transport,$delay);$this->resolver=new BniMemberDirectoryConfigResolver($database,$resolverTransport,$delay); }
 
     /** @return array{status:string,externalRef:?string} */
     public function match(string $firstName, string $lastName, int $orgId): array
     {
         if ($this->chapter($orgId) === null) return ['status' => 'unavailable', 'externalRef' => null];
+        $resolved=$this->resolver->resolve($orgId);if($resolved['status']!=='configured')return['status'=>$resolved['status'],'externalRef'=>null];
         $owner = bin2hex(random_bytes(16));
         if (!$this->acquire($owner)) throw new RuntimeException('Die BNI-Mitgliederprüfung läuft bereits. Bitte versuche es später erneut.');
         try {
