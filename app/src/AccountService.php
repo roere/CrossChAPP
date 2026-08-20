@@ -46,25 +46,20 @@ final class AccountService
         $homeId = $home === null || $home === '' ? null : filter_var($home, FILTER_VALIDATE_INT);
         if ($homeId === false || ($homeId !== null && !$this->users->isValidHomeChapter((int) $homeId))) throw new InvalidArgumentException('Das gewählte Heimatchapter ist ungültig.');
         if ($this->users->findByLogin($email) !== null) throw new DomainException('Für diese E-Mail-Adresse existiert bereits ein Konto.');
-        $bniStatus = 'unverified'; $externalRef = null; $registrationStatus = 'registered';
+        $bniStatus = 'unverified'; $externalRef = null;
         if ($homeId !== null && !$skipChapterVerification) {
             $verification = $this->homeChapterVerification->verify($first, $last, (int) $homeId, false, $ip);
-            if ($verification['result'] === 'not_found') {
-                $homeId = null;
-                $registrationStatus = 'not_found';
-            } else {
-                $bniStatus = $verification['verificationStatus'];
-                $externalRef = $verification['externalRef'];
-            }
+            $bniStatus = $verification['verificationStatus'];
+            $externalRef = $verification['externalRef'];
         } elseif ($homeId !== null) {
             $verification = $this->homeChapterVerification->verify($first, $last, (int) $homeId, true, $ip);
             $bniStatus = $verification['verificationStatus'];
         }
         try {
-            return $this->users->transaction(function () use ($first, $last, $email, $password, $homeId, $bniStatus, $externalRef, $registrationStatus): array {
+            return $this->users->transaction(function () use ($first, $last, $email, $password, $homeId, $bniStatus, $externalRef): array {
                 $user = $this->users->create($first, $last, $email, password_hash($password, PASSWORD_DEFAULT), $homeId === null ? null : (int) $homeId, $bniStatus, $externalRef);
                 if (!$this->sendVerification($user)) throw new RegistrationException('registration_mail_delivery_failed');
-                return ['user' => $user, 'mailSent' => true, 'status' => $registrationStatus];
+                return ['user' => $user, 'mailSent' => true, 'status' => 'registered'];
             });
         } catch (PDOException $exception) {
             if ($exception->getCode() === '23000') throw new DomainException('Für diese E-Mail-Adresse existiert bereits ein Konto.');
@@ -170,9 +165,6 @@ final class AccountService
             return ['result' => 'unchanged', 'account' => $this->account($userId)];
         }
         $verification = $this->homeChapterVerification->verify((string) $user['first_name'], (string) $user['last_name'], (int) $orgId, $skipChapterVerification, $ip);
-        if ($verification['result'] === 'not_found') {
-            throw new HomeChapterVerificationException('not_found', 'Dein Name konnte im ausgewählten Chapter nicht verifiziert werden.');
-        }
         $this->users->updateHomeChapterVerification($userId, (int) $orgId, $verification['verificationStatus'], $verification['externalRef']);
         return ['result' => $verification['result'], 'account' => $this->account($userId)];
     }

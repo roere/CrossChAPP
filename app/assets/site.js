@@ -279,10 +279,10 @@
             const response = await fetch('/api/auth/register.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(registrationData) });
             const payload = await response.json();
             if (!response.ok) {
+                const skipOption = document.querySelector('#skip-chapter-verification-option');
                 if (payload.code === 'technical_unavailable' && payload.canSkip === true) {
-                    const skipOption = document.querySelector('#skip-chapter-verification-option');
                     if (skipOption) { skipOption.hidden = false; form.skip_chapter_verification.checked = false; }
-                }
+                } else if (skipOption) { skipOption.hidden = true; form.skip_chapter_verification.checked = false; }
                 throw new Error(payload.message || payload.error || 'Registrierung fehlgeschlagen.');
             }
             const panel = form.closest('.registration-panel');

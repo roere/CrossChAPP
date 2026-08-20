@@ -1,5 +1,5 @@
 <main class="shell content no-hero-content">
-    <p class="page-intro-title">Vertretung anbieten</p>
+    <p class="page-intro-title">Für welche Chapter und für welche Termine möchtest Du eine Vertretung anbieten?</p>
 <?php if ($currentUser === null): ?>
     <section class="panel representation-access-hint">
         <p>Um Vertretungsangebote zu machen musst du angemeldet sein.</p>

@@ -47,7 +47,10 @@ final class HomeChapterVerificationService
                 'verificationStatus' => 'directory_match',
                 'externalRef' => isset($match['externalRef']) ? (string) $match['externalRef'] : null,
             ],
-            'not_found' => ['result' => 'not_found', 'verificationStatus' => 'unverified', 'externalRef' => null],
+            'not_found' => throw new HomeChapterVerificationException(
+                'chapter_member_not_found',
+                'Dein Name konnte im ausgewählten Chapter nicht verifiziert werden.',
+            ),
             'ambiguous' => throw new HomeChapterVerificationException(
                 'ambiguous',
                 'Der BNI-Eintrag konnte nicht eindeutig zugeordnet werden.',
