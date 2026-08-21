@@ -113,6 +113,29 @@ final class UserRepository
         if ($statement->rowCount() !== 1) throw new RuntimeException('Das Heimatchapter konnte nicht gespeichert werden.');
     }
 
+    public function manuallyVerify(int $userId, int $adminUserId): void
+    {
+        $user = $this->findById($userId);
+        if ($user === null) throw new AdminUserVerificationException('user_not_found', 'Der ausgewählte Anwender wurde nicht gefunden.');
+        if (($user['role'] ?? null) !== 'user') throw new AdminUserVerificationException('invalid_role', 'Dieses Konto kann nicht manuell verifiziert werden.');
+        if ($user['home_chapter_org_id'] === null) throw new AdminUserVerificationException('home_chapter_missing', 'Dieser Anwender kann erst verifiziert werden, wenn ein Heimatchapter hinterlegt ist.');
+        if (($user['bni_verification_status'] ?? '') === 'manual_verified') throw new AdminUserVerificationException('already_verified', 'Dieser Anwender ist bereits verifiziert.');
+        $admin = $this->findById($adminUserId);
+        if ($admin === null || ($admin['role'] ?? null) !== 'admin') throw new AdminUserVerificationException('invalid_verifier', 'Die Admin-Berechtigung konnte nicht bestätigt werden.');
+        $now = self::now();
+        $statement = $this->database->prepare(<<<'SQL'
+            UPDATE users
+            SET bni_verification_status = 'manual_verified',
+                bni_verified_at = :verified_at,
+                bni_verified_by_user_id = :admin_id,
+                updated_at = :updated_at
+            WHERE id = :id AND role = 'user' AND home_chapter_org_id IS NOT NULL
+              AND bni_verification_status IN ('unverified', 'directory_match')
+            SQL);
+        $statement->execute([':verified_at' => $now, ':admin_id' => $adminUserId, ':updated_at' => $now, ':id' => $userId]);
+        if ($statement->rowCount() !== 1) throw new AdminUserVerificationException('verification_conflict', 'Der Verifikationsstatus hat sich zwischenzeitlich geändert.');
+    }
+
     public function deleteAccount(int $userId): bool
     {
         $account = $this->accountDetails($userId);
@@ -137,7 +160,7 @@ final class UserRepository
     {
         $statement = $this->database->prepare(<<<'SQL'
             SELECT users.id AS userId, users.first_name AS firstName, users.last_name AS lastName, users.email,
-                   organizations.chapter_name AS homeChapterName, users.status,
+                   users.home_chapter_org_id AS homeChapterOrgId, organizations.chapter_name AS homeChapterName, users.status,
                    users.bni_verification_status AS verificationStatus, users.created_at AS createdAt,
                    users.email_verified_at AS emailVerifiedAt,
                    COALESCE(offers.currentOffers, 0) AS currentOffers,
@@ -181,6 +204,7 @@ final class UserRepository
             $row['currentOffers'] = (int) $row['currentOffers'];
             $row['currentRequests'] = (int) $row['currentRequests'];
             $row['contacts30Days'] = (int) $row['contacts30Days'];
+            $row['homeChapterOrgId'] = $row['homeChapterOrgId'] !== null ? (int) $row['homeChapterOrgId'] : null;
             $row['emailVerified'] = $row['emailVerifiedAt'] !== null;
             return $row;
         }, $rows);
@@ -304,4 +328,9 @@ final class UserRepository
     private static function ipHash(string $ip): string { return hash('sha256', trim($ip)); }
     private static function randomToken(): string { return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '='); }
     private static function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }
+}
+
+final class AdminUserVerificationException extends DomainException
+{
+    public function __construct(public readonly string $reason, string $message) { parent::__construct($message); }
 }

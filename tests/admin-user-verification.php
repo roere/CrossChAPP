@@ -1,0 +1,21 @@
+<?php
+declare(strict_types=1);
+$root=is_file(__DIR__.'/../app/src/Database.php')?__DIR__.'/../app':'/var/www/html';
+require_once $root.'/src/Database.php';require_once $root.'/src/UserRepository.php';
+$check=static function(bool $condition,string $message):void{if(!$condition)throw new RuntimeException($message);};
+$db=(new Database(':memory:'))->connection();$users=new UserRepository($db);$now=gmdate('Y-m-d\TH:i:s\Z');
+$db->exec("INSERT INTO organizations(org_id,org_type,chapter_name,created_at,updated_at)VALUES(801,'CHAPTER','Verify Chapter','$now','$now')");
+$admin=$users->findByLogin('admin');$check($admin!==null,'Testadmin vorhanden.');
+$eligible=$users->create('Vera','Verify','verify@example.test',password_hash('password-123',PASSWORD_DEFAULT),801,'unverified','existing-ref');
+$missing=$users->create('Ohne','Chapter','missing@example.test',password_hash('password-123',PASSWORD_DEFAULT),null);
+$directory=$users->create('Directory','Match','directory@example.test',password_hash('password-123',PASSWORD_DEFAULT),801,'directory_match','directory-ref');
+$users->manuallyVerify((int)$eligible['id'],(int)$admin['id']);$verified=$users->findById((int)$eligible['id']);
+$check($verified['bni_verification_status']==='manual_verified'&&$verified['bni_verified_at']!==null&&(int)$verified['bni_verified_by_user_id']===(int)$admin['id']&&$verified['bni_external_member_ref']==='existing-ref','Status, Zeitpunkt, Admin und bestehende externe Referenz korrekt gespeichert.');
+$reason=static function(callable $operation):string{try{$operation();return '';}catch(AdminUserVerificationException $exception){return $exception->reason;}};
+$check($reason(fn()=> $users->manuallyVerify((int)$eligible['id'],(int)$admin['id']))==='already_verified','Manuell verifizierter Anwender blockiert.');
+$users->manuallyVerify((int)$directory['id'],(int)$admin['id']);$directoryVerified=$users->findById((int)$directory['id']);
+$check($directoryVerified['bni_verification_status']==='manual_verified'&&$directoryVerified['bni_verified_at']!==null&&(int)$directoryVerified['bni_verified_by_user_id']===(int)$admin['id']&&$directoryVerified['bni_external_member_ref']==='directory-ref','Directory-Match wird manuell verifiziert und behält die externe Referenz.');
+$check($reason(fn()=> $users->manuallyVerify((int)$missing['id'],(int)$admin['id']))==='home_chapter_missing','Fehlendes Heimatchapter blockiert.');
+$check($reason(fn()=> $users->manuallyVerify((int)$admin['id'],(int)$admin['id']))==='invalid_role','Adminziel blockiert.');
+$check($reason(fn()=> $users->manuallyVerify(999999,(int)$admin['id']))==='user_not_found','Fehlender Anwender klar unterschieden.');
+echo "PASS Admin-Verifizierung: Regeln und Auditfelder\n";

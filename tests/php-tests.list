@@ -2,6 +2,7 @@
 account-auth.php
 legal-settings.php
 admin-users-overview.php
+admin-user-verification.php
 login-rate-limit.php
 bni-verification-invitations.php
 chapter-search.php

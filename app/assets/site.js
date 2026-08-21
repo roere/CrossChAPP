@@ -156,7 +156,7 @@
         const closeDelete = () => { deleteDialog?.close(); deleteButton?.focus(); };
         const renderAccount = account => {
             accountData = account;
-            const verificationLabels = { manual_verified: 'Verifiziert', directory_match: 'BNI-Datensatz gefunden', unverified: 'Nicht verifiziert' };
+            const verificationLabels = { manual_verified: 'Verifiziert', directory_match: 'BNI-Chapter gefunden', unverified: 'Nicht verifiziert' };
             for (const [key, value] of Object.entries(account)) {
                     const output = dialog.querySelector(`[data-account-field="${key}"]`);
                     if (!output) continue;

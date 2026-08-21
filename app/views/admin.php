@@ -154,7 +154,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                 <div class="users-filter-grid">
                     <label>Suche<input id="users-search" type="search" placeholder="Name, E-Mail oder Chapter"></label>
                     <label>Status<select id="users-status-filter"><option value="">Alle</option><option value="active">Aktiv</option><option value="pending">Ausstehend</option><option value="disabled">Deaktiviert</option></select></label>
-                    <label>Verifikation<select id="users-verification-filter"><option value="">Alle</option><option value="unverified">Nicht verifiziert</option><option value="directory_match">BNI-Datensatz gefunden</option><option value="manual_verified">Verifiziert</option></select></label>
+                    <label>Verifikation<select id="users-verification-filter"><option value="">Alle</option><option value="unverified">Nicht verifiziert</option><option value="directory_match">BNI-Chapter gefunden</option><option value="manual_verified">Verifiziert</option></select></label>
                     <label>Heimatchapter<select id="users-chapter-filter"><option value="">Alle</option><option value="yes">Ja</option><option value="no">Nein</option></select></label>
                 </div>
                 <div id="users-message" class="message" role="status" aria-live="polite"></div>
@@ -178,6 +178,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                 </div>
                 <div id="users-actions" class="users-actions" aria-describedby="users-selection-hint">
                     <button id="reset-selected-user" type="button" disabled>Passwort zurücksetzen</button>
+                    <button id="verify-selected-user" type="button" disabled>Verifizieren</button>
                     <button id="delete-selected-user" type="button" class="danger" disabled>Konto löschen</button>
                     <p id="users-selection-hint">Bitte wähle zuerst einen Anwender aus.</p>
                 </div>
@@ -191,6 +192,15 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div id="admin-reset-password-confirmation"><p>Möchtest du eine E-Mail zum Zurücksetzen des Passworts an <strong data-admin-user-name></strong> senden?</p><p data-admin-user-email></p></div>
             <div id="admin-reset-password-message" class="message" role="status" aria-live="polite"></div>
             <div class="registration-actions"><button id="confirm-admin-reset-password" type="button">Reset-Link senden</button><button id="cancel-admin-reset-password" type="button" class="secondary">Abbrechen</button></div>
+        </div>
+    </dialog>
+    <dialog id="admin-verify-user-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-verify-user-heading">
+        <div class="account-dialog-card">
+            <button id="close-admin-verify-user-icon" type="button" class="dialog-close" aria-label="Verifizierungsdialog schließen">×</button>
+            <h2 id="admin-verify-user-heading">Anwender verifizieren?</h2>
+            <div id="admin-verify-user-confirmation"><p>Möchtest Du <strong data-admin-user-name></strong> als verifiziert kennzeichnen?</p><p>Die manuelle Verifizierung wird im Benutzerkonto gespeichert.</p></div>
+            <div id="admin-verify-user-message" class="message" role="status" aria-live="polite"></div>
+            <div class="registration-actions"><button id="confirm-admin-verify-user" type="button">Verifizieren</button><button id="cancel-admin-verify-user" type="button" class="secondary">Abbrechen</button></div>
         </div>
     </dialog>
     <dialog id="admin-delete-user-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-delete-user-heading">
