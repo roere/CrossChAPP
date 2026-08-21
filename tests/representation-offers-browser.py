@@ -22,28 +22,27 @@ try:
     own_rejected=script(f"""const token=document.querySelector('meta[name="csrf-token"]').content;return fetch('/api/representation/offers.php',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':token}},body:JSON.stringify({{orgIds:[{CHAPTER_IDS[0]},{setup['own']}],allDates:true,dates:[]}})}}).then(async r=>({{status:r.status,payload:await r.json()}}));""")
     assert own_rejected['status']==400 and 'eigenes Chapter' in own_rejected['payload']['error']
     assert script("return document.querySelectorAll('#representation-own-list .representation-offer-card').length;")==0
-    ids=json.dumps(CHAPTER_IDS)
-    script(f"for(const id of {ids})document.querySelector('input[data-org-id=\"'+id+'\"]').click();document.querySelector('#representation-all-dates').click();document.querySelector('#save-representation-offer').click();");time.sleep(.7)
+    script(f"document.querySelector('input[data-org-id=\"{CHAPTER_IDS[0]}\"]').click();document.querySelector('#representation-all-dates').click();document.querySelector('#save-representation-offer').click();");time.sleep(.7)
     saved=script("return {message:document.querySelector('#representation-save-message').textContent,cards:[...document.querySelectorAll('#representation-own-list .representation-offer-card')].map(x=>({heading:x.querySelector('h3').textContent,badges:x.querySelectorAll('.date-chip').length}))};")
-    assert saved['message']=='3 Vertretungsangebote gespeichert.' and len(saved['cards'])==3 and all(x['badges']==1 for x in saved['cards']),saved
+    assert saved['message']=='Vertretungsangebot gespeichert.' and len(saved['cards'])==1 and saved['cards'][0]['badges']==1,saved
     duplicate=script(f"""const token=document.querySelector('meta[name="csrf-token"]').content;return fetch('/api/representation/offers.php',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':token}},body:JSON.stringify({{orgIds:[{CHAPTER_IDS[0]}],allDates:true,dates:[]}})}}).then(async r=>({{status:r.status,payload:await r.json()}}));""")
     assert duplicate['status']==409 and 'identisches' in duplicate['payload']['error']
     request('POST',f'/session/{session}/log',{'type':'performance'})
     dialog=script("document.querySelector('#representation-own-list button[data-delete-offer]').click();const d=document.querySelector('#delete-representation-dialog');return {open:d.open,title:d.querySelector('h2').textContent,aria:d.getAttribute('aria-modal')};")
     assert dialog['open'] and dialog['title']=='Vertretungsangebot löschen' and dialog['aria']=='true'
     script("document.querySelector('#cancel-delete-representation').click()");time.sleep(.2)
-    assert script("return !document.querySelector('#delete-representation-dialog').open&&document.querySelectorAll('#representation-own-list .representation-offer-card').length===3;")
+    assert script("return !document.querySelector('#delete-representation-dialog').open&&document.querySelectorAll('#representation-own-list .representation-offer-card').length===1;")
     cancel_network=request('POST',f'/session/{session}/log',{'type':'performance'});assert not [x for x in cancel_network if '/api/representation/offers.php' in x.get('message','')]
     script("document.querySelector('#representation-own-list button[data-delete-offer]').click();document.querySelector('#delete-representation-dialog').dispatchEvent(new Event('cancel',{cancelable:true}));")
     assert not script("return document.querySelector('#delete-representation-dialog').open;")
-    for expected in [2,1,0]:
+    for expected in [0]:
         script("document.querySelector('#representation-own-list button[data-delete-offer]').click();document.querySelector('#confirm-delete-representation').click();");time.sleep(.5)
         assert script("return document.querySelectorAll('#representation-own-list .representation-offer-card').length;")==expected
-    for chapter_id in CHAPTER_IDS[:2]:script(f"document.querySelector('input[data-org-id=\"{chapter_id}\"]').click();")
+    script(f"document.querySelector('input[data-org-id=\"{CHAPTER_IDS[0]}\"]').click();")
     for date in ['21.08.2099','28.08.2099']:script(f"const i=document.querySelector('#representation-date');i.value='{date}';i.dispatchEvent(new Event('input',{{bubbles:true}}));")
     script("document.querySelector('#save-representation-offer').click()");time.sleep(.7)
     dated=script("return [...document.querySelectorAll('#representation-own-list .representation-offer-card')].map(x=>({heading:x.querySelector('h3').textContent,dates:x.querySelectorAll('.date-chip').length}));")
-    assert len(dated)==2 and all(x['dates']==2 for x in dated),dated
+    assert len(dated)==1 and dated[0]['dates']==2,dated
     always_added=script(f"""const token=document.querySelector('meta[name="csrf-token"]').content;return fetch('/api/representation/offers.php',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':token}},body:JSON.stringify({{orgIds:[{CHAPTER_IDS[0]}],allDates:true,dates:[]}})}}).then(async r=>({{status:r.status,payload:await r.json()}}));""")
     assert always_added['status']==201,always_added
     script("document.querySelector('#logout-button').click()");time.sleep(.4);login('representation-a@example.invalid')
@@ -51,7 +50,7 @@ try:
     request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=vertretung-finden'});time.sleep(.7)
     found=script("const dated=document.querySelector('#dated-representations');return {dates:dated.querySelectorAll('.representation-date-group').length,cards:dated.querySelectorAll('.representation-provider-card').length,text:dated.textContent,email:document.body.textContent.includes('representation-b@example.invalid'),orgId:/orgId/i.test(document.body.textContent)};")
     assert found['dates']==2 and found['cards']==2 and 'Bernd B.' in found['text'] and not found['email'] and not found['orgId'],found
-    all_dates=script("const s=document.querySelector('#all-dates-representations-section');return {hidden:s.hidden,visible:s.getClientRects().length>0,cards:s.querySelectorAll('.representation-provider-card').length,heading:s.querySelector('h2').textContent,text:s.textContent};")
+    all_dates=script("const s=document.querySelector('#all-dates-representations-section');return {hidden:s.hidden,visible:s.getClientRects().length>0,cards:s.querySelectorAll('.representation-provider-card').length,heading:s.querySelector('h3').textContent,text:s.textContent};")
     assert all_dates['hidden'] is False and all_dates['visible'] and all_dates['cards']==1 and all_dates['heading']=='Für alle Chaptertermine verfügbar' and 'Bernd B.' in all_dates['text'],all_dates
     overview=script("return {cards:document.querySelectorAll('#representation-offers-overview .representation-offer-card').length,buttons:[...document.querySelectorAll('#representation-offers-overview .representation-offer-card')].map(x=>x.querySelectorAll('.contact-provider').length),dateType:document.querySelector('#representation-request-date').type,dayHint:document.querySelector('#representation-request-day-hint').textContent};")
     assert overview['cards']==2 and overview['buttons']==[1,1] and overview['dateType']=='text' and 'freitags' in overview['dayHint'],overview

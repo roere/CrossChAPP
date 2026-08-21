@@ -84,6 +84,7 @@ final class OrganizationRepository
             'region' => $organization['region'],
             'city' => $organization['city'],
             'postalCode' => $organization['postalCode'],
+            'street' => $organization['street'],
             'meetingDay' => $organization['meetingDay'],
             'meetingTime' => $organization['meetingTime'],
         ], array_map([$this, 'toApi'], $statement->fetchAll()));

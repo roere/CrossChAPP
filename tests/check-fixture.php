@@ -13,8 +13,10 @@ $rows=[
     [910002,'DE','CHAPTER',50.9600,7.3100,'Testchapter Rhein','Testregion','Köln','50667','Mittwoch','07:00','Präsenz',30,'Europe/Berlin'],
     [910003,'AT','CHAPTER',50.9700,7.3200,'Testchapter Alpen','Testregion Österreich','Wien','1010','Montag','08:00','Präsenz',18,'Europe/Vienna'],
     [910004,'DE','CORE_GROUP',50.9800,7.3300,'Testgruppe Aufbau','Testregion','Bonn','53111','Dienstag','09:00','Online',8,'Europe/Berlin'],
+    [910005,'DE','CHAPTER',null,null,'Testchapter ohne Karte','Testregion','Siegburg','53721','Donnerstag','07:30','Präsenz',20,'Europe/Berlin'],
 ];
 foreach($rows as$row)$organization->execute([...$row,$now,$now,$now]);
+$db->exec("UPDATE organizations SET street='Musterstraße 10' WHERE org_id=910001");
 $users=new UserRepository($db);$a=$users->create('Anna','Alpha','check-a@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),910001,'manual_verified');$b=$users->create('Bernd','Beta','check-b@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),910002,'directory_match');$c=$users->create('Carla','Gamma','check-c@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),null);$deletable=$users->create('Dora','Delete','check-delete@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),910003);$db->exec("UPDATE users SET status='active',email_verified_at='$now' WHERE id IN (".(int)$a['id'].','.(int)$b['id'].','.(int)$deletable['id'].')');
 $nextFriday=(new DateTimeImmutable('next friday',new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
 $nextWednesday=(new DateTimeImmutable('next wednesday',new DateTimeZone('Europe/Berlin')))->format('Y-m-d');

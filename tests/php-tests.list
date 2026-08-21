@@ -6,6 +6,7 @@ login-rate-limit.php
 bni-verification-invitations.php
 chapter-search.php
 representation-offers.php
+representation-routing.php
 representation-requests.php
 representation-cleanup.php
 representation-contact.php

@@ -57,12 +57,12 @@
         homeChapter.hidden = chapterName === '';
         renderRequests(data.requests || []);
         const groups = data.datedOffers || [];
-        dated.replaceChildren(...(groups.length ? groups.map(dateGroup) : [paragraph('Aktuell sind keine Vertretungstermine oder konkreten Angebote hinterlegt.')]));
+        dated.replaceChildren(...(groups.length ? groups.map(dateGroup) : [paragraph('Aktuell sind keine Angebote hinterlegt.')]));
         const providers = data.allDatesOffers || [];
         always.replaceChildren(...providers.map(provider => providerCard(provider, null)));
         alwaysSection.hidden = providers.length === 0;
         const offers = data.offers || [];
-        overview.replaceChildren(...(offers.length ? offers.map(overviewCard) : [paragraph('Aktuell sind keine Vertretungsangebote für dein Chapter hinterlegt.')]));
+        overview.replaceChildren(...(offers.length ? offers.map(overviewCard) : [paragraph('Aktuell sind keine Angebote hinterlegt.')]));
     }
 
     function configureRequestPicker(data) {

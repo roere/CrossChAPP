@@ -5,16 +5,15 @@
 <?php else: ?>
 <main class="shell content no-hero-content"><h1 class="page-intro-title">Finde eine Vertretung</h1>
     <p id="representation-home-chapter" class="page-meta" hidden></p>
-    <section class="panel representation-requests" aria-labelledby="representation-requests-heading">
+    <section class="panel representation-find-block representation-find-block--requests representation-requests" aria-labelledby="representation-requests-heading">
         <h2 id="representation-requests-heading">Meine Vertretungsgesuche</h2>
         <p>Wähle Termine aus, für die Du eine Vertretung suchst</p>
         <?php $datePickerPrefix = 'representation-request'; require __DIR__ . '/partials/date-picker.php'; ?>
         <p id="representation-request-day-hint" class="automation-hint"></p><div id="representation-request-message" class="message" role="status" aria-live="polite"></div>
         <div id="representation-request-chips" class="date-chips" aria-label="Meine Vertretungsgesuche"><p>Vertretungsgesuche werden geladen …</p></div>
     </section>
-    <section class="panel"><h2>Termine mit Vertretungsangeboten</h2><div id="dated-representations"><p>Vertretungsangebote werden geladen …</p></div></section>
-    <section id="all-dates-representations-section" class="panel" hidden><h2>Für alle Chaptertermine verfügbar</h2><p>Folgende Personen bieten sich für alle Chaptertermine als Vertretung an.</p><div id="all-date-representations" class="representation-offer-grid"></div></section>
-    <section class="panel"><h2>Vertretungsangebote</h2><div id="representation-offers-overview" class="representation-offer-grid"><p>Vertretungsangebote werden geladen …</p></div></section>
+    <section class="panel representation-find-block representation-find-block--dates"><h2>Termine mit Vertretungsangeboten</h2><div id="dated-representations"><p>Vertretungsangebote werden geladen …</p></div></section>
+    <section class="panel representation-find-block representation-find-block--overview"><h2>Übersicht Vertretungsangebote</h2><div id="all-dates-representations-section" class="representation-find-subsection" hidden><h3>Für alle Chaptertermine verfügbar</h3><p>Folgende Personen bieten sich für alle Chaptertermine als Vertretung an.</p><div id="all-date-representations" class="representation-offer-grid"></div></div><div id="representation-offers-overview" class="representation-offer-grid"><p>Vertretungsangebote werden geladen …</p></div></section>
 </main>
 <dialog id="representation-contact-dialog" class="account-dialog" role="dialog" aria-modal="true" aria-labelledby="representation-contact-heading"><div class="account-dialog-card">
  <button id="close-representation-contact" type="button" class="dialog-close" aria-label="Anfrage schließen">×</button><div id="representation-contact-content"><h2 id="representation-contact-heading">Anfrage senden</h2><p id="representation-contact-hint"></p>

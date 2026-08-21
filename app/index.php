@@ -73,13 +73,15 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <title><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
     <meta name="csrf-token" content="<?= htmlspecialchars(Auth::csrfToken(), ENT_QUOTES, 'UTF-8') ?>">
     <meta name="auth-status" content="<?= $currentUser !== null ? 'authenticated' : 'anonymous' ?>">
+    <?php if (getenv('CROSSCHAPP_TEST_MODE') === '1'): ?><meta name="crosschapp-test-mode" content="1"><?php endif; ?>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23cf2030'/%3E%3Cpath d='M21 10a8 8 0 1 0 0 12l-3-3a4 4 0 1 1 0-6z' fill='white'/%3E%3C/svg%3E">
-    <?php if ($requestedView === 'crosschaptern'): ?>
+    <?php if ($requestedView === 'crosschaptern' || $requestedView === 'vertretung'): ?>
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
     <?php endif; ?>
     <link rel="stylesheet" href="/assets/app.css?v=<?= $assetVersion('app.css') ?>">
     <script src="/assets/chapter-picker.js?v=<?= $assetVersion('chapter-picker.js') ?>" defer></script>
+    <?php if ($requestedView === 'crosschaptern' || $requestedView === 'vertretung'): ?><script src="/assets/map.js?v=<?= $assetVersion('map.js') ?>" defer></script><?php endif; ?>
     <script src="/assets/site.js?v=<?= $assetVersion('site.js') ?>" defer></script>
     <?php if ($requestedView === 'vertretung' || $requestedView === 'vertretung-finden'): ?><script src="/assets/date-picker.js?v=<?= $assetVersion('date-picker.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $isAdmin)): ?><script src="/assets/sort-utils.js?v=<?= $assetVersion('sort-utils.js') ?>" defer></script><?php endif; ?>

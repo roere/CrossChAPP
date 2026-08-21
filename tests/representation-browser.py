@@ -40,7 +40,7 @@ try:
     assert not [entry for entry in request("POST", f"/session/{session}/log", {"type": "performance"}) if "/api/representation/find.php" in entry.get("message", "")]
 
     assert cross["text"] == "Finde passende BNI-Chaptertreffen in deiner Nähe."
-    assert offer["text"] == "Vertretung anbieten"
+    assert offer["text"] == "Für welche Chapter und für welche Termine möchtest Du eine Vertretung anbieten?"
     assert find["text"] == "Finde eine Vertretung"
     comparable = ("fontFamily", "fontSize", "fontWeight", "color", "marginTop", "marginBottom")
     assert all(cross[key] == offer[key] == find[key] for key in comparable), (cross, offer, find)

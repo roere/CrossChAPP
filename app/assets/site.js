@@ -650,27 +650,17 @@
 
     function renderMap() {
         if (!searchState.payload || !window.L) return;
-        if (!searchState.map) {
-            searchState.map = L.map('results-map');
-            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-            }).addTo(searchState.map);
-            searchState.markerLayer = L.layerGroup().addTo(searchState.map);
-        }
-        searchState.markerLayer.clearLayers();
+        if (!searchState.map) searchState.map = window.CrossChappMap.create(document.querySelector('#results-map'));
+        searchState.map.clear();
         const points = []; const location = searchState.payload.search_location;
         const locationPoint = [location.latitude, location.longitude]; points.push(locationPoint);
-        L.circleMarker(locationPoint, { radius: 9, color: '#202124', weight: 3, fillColor: '#ffffff', fillOpacity: 1 })
-            .bindPopup(popupContent('Suchstandort', location.display_name)).addTo(searchState.markerLayer);
+        searchState.map.start(locationPoint, popupContent('Suchstandort', location.display_name));
         searchState.payload.results.forEach(chapter => {
             if (!Number.isFinite(chapter.latitude) || !Number.isFinite(chapter.longitude)) return;
             const point = [chapter.latitude, chapter.longitude]; points.push(point);
-            L.marker(point).bindPopup(chapterPopup(chapter)).addTo(searchState.markerLayer);
+            searchState.map.marker(point, chapterPopup(chapter));
         });
-        window.setTimeout(() => {
-            searchState.map.invalidateSize();
-            points.length === 1 ? searchState.map.setView(points[0], 11) : searchState.map.fitBounds(points, { padding: [35, 35], maxZoom: 13 });
-        }, 0);
+        searchState.map.fit(points);
     }
 
     function chapterPopup(chapter) {
