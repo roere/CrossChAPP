@@ -4,6 +4,7 @@
 <main class="shell content no-hero-content"><h1 class="page-intro-title">Finde einen Vertreter</h1><section class="panel representation-access-hint"><p>Für dein Benutzerkonto ist noch kein Heimatchapter hinterlegt.</p><p>Ein Heimatchapter ist erforderlich, um passende Vertretungsangebote anzuzeigen.</p></section></main>
 <?php else: ?>
 <main class="shell content no-hero-content"><h1 class="page-intro-title">Finde einen Vertreter</h1>
+    <?php $assignmentRole='requester';require __DIR__.'/partials/representation-assignments.php'; ?>
     <p id="representation-home-chapter" class="page-meta" hidden></p>
     <section class="panel representation-find-block representation-find-block--requests representation-requests" aria-labelledby="representation-requests-heading">
         <h2 id="representation-requests-heading">Meine Vertretungsgesuche</h2>

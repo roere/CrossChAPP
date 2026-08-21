@@ -61,6 +61,13 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .representation-access-hint { display: grid; justify-items: start; gap: .8rem; }
 .representation-access-hint p { margin: 0; }
 .panel.representation-find-block { margin-top: 1.25rem; padding: 1.5rem; border-radius: 6px; box-shadow: 0 8px 24px rgb(28 29 31 / 6%); }
+.representation-assignments { margin: 0 0 1.25rem; padding: 0; overflow: hidden; background: #f7f9fa; }
+.representation-assignments summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; cursor: pointer; font-weight: 900; list-style: none; }
+.representation-assignments summary::-webkit-details-marker { display: none; }
+.representation-assignments[open] .assignment-chevron { transform: rotate(180deg); }
+.representation-assignments > [data-assignment-list] { padding: 0 1.25rem 1.25rem; }
+.assignment-card { margin-top: .75rem; padding: 1rem; border: 1px solid var(--border); border-radius: 6px; background: white; }
+.assignment-card h3 { margin: 0 0 .5rem; }.assignment-card p { margin: .35rem 0; }.assignment-card button { margin-top: .75rem; }
 .representation-find-block > h2 { margin-bottom: .75rem; }
 .panel.representation-find-block--requests { background: #fffaf7; }
 .panel.representation-find-block--dates { background: #f6f9fb; }

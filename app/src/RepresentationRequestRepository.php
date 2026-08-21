@@ -23,14 +23,15 @@ final class RepresentationRequestRepository
     public function forUser(int $userId, string $today): array
     {
         $statement = $this->database->prepare(<<<'SQL'
-            SELECT requests.id, requests.request_date
+            SELECT requests.id, requests.request_date,
+                   CASE WHEN EXISTS(SELECT 1 FROM representation_assignments a WHERE a.request_id=requests.id AND a.status='active') THEN 1 ELSE 0 END is_assigned
             FROM representation_requests requests
             JOIN users ON users.id = requests.user_id AND users.home_chapter_org_id = requests.org_id
             WHERE requests.user_id = :user_id AND requests.request_date >= :today
             ORDER BY requests.request_date, requests.id
             SQL);
         $statement->execute([':user_id' => $userId, ':today' => $today]);
-        return array_map(static fn (array $row): array => ['id' => (int) $row['id'], 'requestDate' => (string) $row['request_date']], $statement->fetchAll());
+        return array_map(static fn (array $row): array => ['id' => (int) $row['id'], 'requestDate' => (string) $row['request_date'], 'isAssigned'=>(bool)$row['is_assigned']], $statement->fetchAll());
     }
 
     /** @return array{id:int,requestDate:string} */
@@ -69,11 +70,11 @@ final class RepresentationRequestRepository
         $orgIds = array_values(array_unique(array_filter($orgIds, static fn ($id): bool => is_int($id) && $id > 0)));
         if ($orgIds === []) return [];
         $placeholders = implode(',', array_fill(0, count($orgIds), '?'));
-        $statement = $this->database->prepare("SELECT requests.id,requests.user_id,requests.org_id,requests.request_date,users.first_name,users.last_name,users.bni_verification_status FROM representation_requests requests JOIN users ON users.id=requests.user_id AND users.status='active' AND users.email_verified_at IS NOT NULL WHERE requests.org_id IN ({$placeholders}) AND requests.request_date >= ? ORDER BY requests.org_id,requests.request_date,requests.id");
+        $statement = $this->database->prepare("SELECT requests.id,requests.user_id,requests.org_id,requests.request_date,users.first_name,users.last_name,users.bni_verification_status,CASE WHEN EXISTS(SELECT 1 FROM representation_assignments a WHERE a.request_id=requests.id AND a.status='active') THEN 1 ELSE 0 END is_assigned FROM representation_requests requests JOIN users ON users.id=requests.user_id AND users.status='active' AND users.email_verified_at IS NOT NULL WHERE requests.org_id IN ({$placeholders}) AND requests.request_date >= ? ORDER BY requests.org_id,requests.request_date,requests.id");
         $statement->execute([...$orgIds, $today]); $result = [];
         foreach ($statement->fetchAll() as $row) {
             $own = $viewerUserId !== null && (int) $row['user_id'] === $viewerUserId;
-            $item = ['requestDate' => (string) $row['request_date'], 'isOwn' => $own, 'canContact' => !$own, 'isVerified' => ($row['bni_verification_status']??'') === 'manual_verified'];
+            $assigned=(bool)$row['is_assigned'];$item = ['requestDate' => (string) $row['request_date'], 'isOwn' => $own, 'isAssigned'=>$assigned, 'canContact' => !$own&&!$assigned, 'isVerified' => ($row['bni_verification_status']??'') === 'manual_verified'];
             if ($viewerUserId !== null) { $initial = function_exists('mb_substr') ? mb_substr((string) $row['last_name'], 0, 1) : substr((string) $row['last_name'], 0, 1); $item['displayName'] = trim((string) $row['first_name'] . ' ' . $initial . '.'); }
             if (!$own) $item['requestId'] = (int) $row['id'];
             $result[(int) $row['org_id']][] = $item;
@@ -87,7 +88,7 @@ final class RepresentationRequestRepository
         $statement = $this->database->prepare(<<<'SQL'
             SELECT requests.id,requests.user_id AS recipient_id,requests.request_date,requests.org_id,
                    owner.first_name AS owner_first_name,owner.last_name AS owner_last_name,owner.email AS owner_email,
-                   contact.first_name AS contact_first_name,contact.last_name AS contact_last_name,contact.email AS contact_email,
+                   contact.id AS contact_user_id,contact.first_name AS contact_first_name,contact.last_name AS contact_last_name,contact.email AS contact_email,
                    contact.home_chapter_org_id,contact_chapter.chapter_name AS contact_chapter,requested_chapter.chapter_name AS requested_chapter,
                    requested_chapter.timezone
             FROM representation_requests requests

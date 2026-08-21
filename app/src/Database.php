@@ -272,6 +272,15 @@ final class Database
         $statement->execute([':key' => 'representation_contact', ':subject' => 'CrossChAPP – Vertretungsanfrage für {{requested_date}}', ':body' => $contactBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
         $requestContactBody = "Hallo {{request_owner_first_name}},\n\n{{custom_message}}\n\n---\nRückmeldung von:\n{{contact_full_name}}\n{{contact_email}}\nBNI-Chapter: {{contact_chapter}}\nVertretung für: {{requested_chapter}}\nTermin: {{requested_date}}\n\nViele Grüße\n{{app_name}}";
         $statement->execute([':key' => 'representation_request_contact', ':subject' => 'CrossChAPP – Rückmeldung zu deinem Vertretungsgesuch am {{requested_date}}', ':body' => $requestContactBody, ':updated_at' => gmdate('Y-m-d\TH:i:s\Z')]);
+        $assignmentTemplates = [
+            'request_contact_acceptance'=>['CrossChAPP – Vertretungsangebot für {{requested_date}}',"Hallo {{requester_first_name}},\n\n{{custom_message}}\n\nVertretungsangebot von: {{representative_full_name}} ({{representative_email}})\nChapter: {{chapter}}\nTermin: {{requested_date}}\n\nWenn Du dieses Vertretungsangebot annehmen möchtest, öffne den folgenden Link:\n{{acceptance_link}}\n\nDiese Nachricht wurde automatisch versendet. Bitte antworte nicht auf diese E-Mail."],
+            'offer_contact_acceptance'=>['CrossChAPP – Vertretungsgesuch für {{requested_date}}',"Hallo {{representative_first_name}},\n\n{{custom_message}}\n\nVertretungsgesuch von: {{requester_full_name}} ({{requester_email}})\nChapter: {{chapter}}\nTermin: {{requested_date}}\n\nWenn Du dieses Vertretungsgesuch annehmen möchtest, öffne den folgenden Link:\n{{acceptance_link}}\n\nDiese Nachricht wurde automatisch versendet. Bitte antworte nicht auf diese E-Mail."],
+            'representation_assignment_confirmed_requester'=>['CrossChAPP – Vertretung vereinbart',"Hallo {{requester_first_name}},\n\ndie Vertretung am {{requested_date}} für {{chapter}} wurde vereinbart.\nVertreter: {{representative_full_name}}\nE-Mail: {{representative_email}}\n\nDie Vereinbarung ist in CrossChAPP unter „Gefundene Vertreter“ sichtbar.\n\nDiese Nachricht wurde automatisch versendet. Bitte antworte nicht auf diese E-Mail."],
+            'representation_assignment_confirmed_representative'=>['CrossChAPP – Vertretung vereinbart',"Hallo {{representative_first_name}},\n\ndie Vertretung am {{requested_date}} für {{chapter}} wurde vereinbart.\nSuchender: {{requester_full_name}}\nE-Mail: {{requester_email}}\n\nDie Vereinbarung ist in CrossChAPP unter „Angenommene Vertretungen“ sichtbar.\n\nDiese Nachricht wurde automatisch versendet. Bitte antworte nicht auf diese E-Mail."],
+            'representation_assignment_cancelled_requester'=>['CrossChAPP – Vertretung storniert',"Hallo {{requester_first_name}},\n\ndie vereinbarte Vertretung am {{requested_date}} für {{chapter}} wurde von {{cancelled_by}} storniert. Der Termin ist wieder für neue Vertretungen freigegeben.\n\nDiese Nachricht wurde automatisch versendet. Bitte antworte nicht auf diese E-Mail."],
+            'representation_assignment_cancelled_representative'=>['CrossChAPP – Vertretung storniert',"Hallo {{representative_first_name}},\n\ndie vereinbarte Vertretung am {{requested_date}} für {{chapter}} wurde von {{cancelled_by}} storniert. Der Termin ist wieder für neue Vertretungen freigegeben.\n\nDiese Nachricht wurde automatisch versendet. Bitte antworte nicht auf diese E-Mail."],
+        ];
+        foreach ($assignmentTemplates as $key=>$template) $statement->execute([':key'=>$key,':subject'=>$template[0],':body'=>$template[1],':updated_at'=>gmdate('Y-m-d\TH:i:s\Z')]);
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS auth_attempts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -454,6 +463,39 @@ final class Database
             SQL);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_anonymous_request_contact_rate ON representation_anonymous_request_contact_log(ip_hash, sent_at)');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_anonymous_request_contact_duplicate ON representation_anonymous_request_contact_log(request_id, sender_email_hash, sent_at)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_assignments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, request_id INTEGER, offer_id INTEGER,
+                chapter_org_id INTEGER NOT NULL, representation_date TEXT NOT NULL,
+                requester_user_id INTEGER NOT NULL, representative_user_id INTEGER NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('active','cancelled')), active_slot_key TEXT UNIQUE,
+                accepted_at TEXT NOT NULL, accepted_by_user_id INTEGER NOT NULL,
+                cancelled_at TEXT, cancelled_by_user_id INTEGER, cancellation_reason TEXT,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+                FOREIGN KEY(request_id) REFERENCES representation_requests(id) ON DELETE SET NULL,
+                FOREIGN KEY(offer_id) REFERENCES representation_offers(id) ON DELETE SET NULL,
+                FOREIGN KEY(chapter_org_id) REFERENCES organizations(org_id),
+                FOREIGN KEY(requester_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(representative_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_assignment_requester ON representation_assignments(requester_user_id,status,representation_date)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_assignment_representative ON representation_assignments(representative_user_id,status,representation_date)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS representation_acceptance_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, token_hash TEXT NOT NULL UNIQUE,
+                direction TEXT NOT NULL CHECK(direction IN ('request_contact','offer_contact')),
+                request_id INTEGER, offer_id INTEGER, contact_log_id INTEGER,
+                representation_date TEXT NOT NULL, requester_user_id INTEGER NOT NULL,
+                representative_user_id INTEGER NOT NULL, created_at TEXT NOT NULL,
+                used_at TEXT, invalidated_at TEXT,
+                FOREIGN KEY(request_id) REFERENCES representation_requests(id) ON DELETE CASCADE,
+                FOREIGN KEY(offer_id) REFERENCES representation_offers(id) ON DELETE CASCADE,
+                FOREIGN KEY(requester_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(representative_user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_acceptance_token_context ON representation_acceptance_tokens(direction,request_id,offer_id,representation_date)');
         $this->migrateRepresentationOffersToSingleChapter();
     }
 

@@ -66,7 +66,7 @@
             });
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Anmeldung fehlgeschlagen.');
-            const allowedReturnViews = new Set(['crosschaptern', 'vertretung', 'vertretung-finden']);
+            const allowedReturnViews = new Set(['crosschaptern', 'vertretung', 'vertretung-finden', 'representation-accept']);
             const returnView = allowedReturnViews.has(form.return_view?.value) ? form.return_view.value : 'crosschaptern';
             window.location.assign(payload.role === 'admin' ? '/?view=admin' : `/?view=${encodeURIComponent(returnView)}`);
         } catch (error) {
@@ -487,6 +487,7 @@
             const person = authenticated ? item.displayName : `Gesuch ${currentNumber}`; text.textContent = `${formatDateOnly(item.requestDate)} · ${person}`; row.append(text);if(item.isVerified){const verified=document.createElement('span');verified.className='verified-badge';verified.textContent='Verifiziert';row.append(verified);}
             if (item.canContact && item.requestId) { const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary request-contact-button'; button.textContent = 'Kontaktieren'; button.dataset.requestId = item.requestId; row.append(button); }
             else if (item.isOwn) { const own = document.createElement('span'); own.className = 'offer-meta'; own.textContent = 'Dein Gesuch'; row.append(own); }
+            else if (item.isAssigned) { const assigned = document.createElement('span'); assigned.className = 'status-badge'; assigned.textContent = 'Vergeben'; row.append(assigned); }
             section.append(row);
         }); return section;
     }
@@ -505,7 +506,7 @@
         const setFieldError = (input, id, text) => { input.setAttribute('aria-invalid', String(Boolean(text))); document.querySelector(`#${id}`).textContent = text; return !text; };
         const validateIdentity = () => { if(authenticated)return true; const firstOk=setFieldError(firstName,'request-contact-first-name-error',firstName.value.trim()?'':'Bitte gib deinen Vornamen ein.'); const lastOk=setFieldError(lastName,'request-contact-last-name-error',lastName.value.trim()?'':'Bitte gib deinen Nachnamen ein.'); const mailOk=setFieldError(email,'request-contact-email-error',/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())?'':'Bitte gib eine gültige E-Mail-Adresse ein.'); return firstOk&&lastOk&&mailOk; };
         [firstName,lastName,email].forEach(input => { input.addEventListener('blur', () => { validateIdentity(); window.clearTimeout(previewTimer); previewTimer=window.setTimeout(loadPreview,150); }); input.addEventListener('input', () => { window.clearTimeout(previewTimer); previewTimer=window.setTimeout(loadPreview,350); }); });
-        form.addEventListener('submit', async event => { event.preventDefault(); if(!validateIdentity()){form.querySelector('[aria-invalid="true"]')?.focus();return;} const submit=form.querySelector('button[type=submit]');submit.disabled=true;error.textContent='';try{const response=await fetch('/api/representation/request-contact.php',{method:'POST',headers:jsonHeaders,body:JSON.stringify(payload('send'))});const data=await response.json();if(!response.ok)throw new Error(data.error);document.querySelector('#request-contact-content').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Deine Rückmeldung wurde gesendet.'}));}catch(cause){error.textContent=cause.message||'Die Rückmeldung konnte nicht gesendet werden.';error.className='message error';submit.disabled=false;}});
+        form.addEventListener('submit', async event => { event.preventDefault(); if(!validateIdentity()){form.querySelector('[aria-invalid="true"]')?.focus();return;} const submit=form.querySelector('button[type=submit]');submit.disabled=true;error.textContent='';try{const response=await fetch('/api/representation/request-contact.php',{method:'POST',headers:jsonHeaders,body:JSON.stringify(payload('send'))});const data=await response.json();if(!response.ok)throw new Error(data.error);document.querySelector('#request-contact-content').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Deine Rückmeldung wurde gesendet.'}));}catch(cause){error.textContent=cause instanceof SyntaxError?'Die Rückmeldung konnte nicht gesendet werden.':(cause.message||'Die Rückmeldung konnte nicht gesendet werden.');error.className='message error';submit.disabled=false;}});
     }
 
     function resultDetailPanel(chapter) {

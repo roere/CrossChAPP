@@ -31,6 +31,7 @@ $tables = [
     'representation_offer_dates', 'representation_settings', 'representation_contact_log',
     'representation_requests', 'representation_request_contact_log',
     'representation_anonymous_request_contact_log',
+    'representation_assignments', 'representation_acceptance_tokens',
 ];
 
 try {

@@ -6,6 +6,7 @@
         <a class="button-link" href="/?view=login&amp;return_view=vertretung">Anmelden</a>
     </section>
 <?php else: ?>
+    <?php $assignmentRole='representative';require __DIR__.'/partials/representation-assignments.php'; ?>
     <div class="representation-content representation-steps">
     <section class="panel representation-step representation-step--chapter" aria-labelledby="representation-chapter-heading">
         <div class="representation-step-heading"><span class="representation-step-number" aria-hidden="true">1</span><h2 id="representation-chapter-heading">Für welches Chapter möchtest Du eine Vertretung anbieten?</h2></div>

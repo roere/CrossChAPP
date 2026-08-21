@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 $path=getenv('CROSSCHAPP_MAIL_CAPTURE_PATH');if(!is_string($path)||!is_file($path))throw new RuntimeException('Mock-Mail-Capture fehlt.');
-$lines=file($path,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES)?:[];if($lines===[])throw new RuntimeException('Smoke-Test hat keine Mock-Mail erzeugt.');
-foreach($lines as$line){$mail=json_decode($line,true,16,JSON_THROW_ON_ERROR);if(!str_ends_with((string)$mail['to'],'@example.test'))throw new RuntimeException('Mail ging nicht an eine Testadresse.');if(str_contains((string)$mail['subject'].(string)$mail['body'],'{{'))throw new RuntimeException('Mock-Mail enthält rohe Platzhalter.');}
-echo 'PASS Mail Guard: '.count($lines)." Mail(s) ausschließlich im lokalen Capture, keine Rohplatzhalter\n";
+$lines=file($path,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES)?:[];if($lines===[])throw new RuntimeException('Smoke-Test hat keine Mock-Mail erzeugt.');$acceptanceToken=null;
+foreach($lines as$line){$mail=json_decode($line,true,16,JSON_THROW_ON_ERROR);if(!str_ends_with((string)$mail['to'],'@example.test'))throw new RuntimeException('Mail ging nicht an eine Testadresse.');if(str_contains((string)$mail['subject'].(string)$mail['body'],'{{'))throw new RuntimeException('Mock-Mail enthält rohe Platzhalter.');if(preg_match('~[?&]accept_representation=([A-Za-z0-9_-]{40,100})~',(string)$mail['body'],$match))$acceptanceToken=$match[1];}
+if($acceptanceToken===null)throw new RuntimeException('Kontaktmail enthält keinen Annahmelink.');require_once '/var/www/html/src/Database.php';$db=(new Database())->connection();$hashes=$db->query('SELECT token_hash FROM representation_acceptance_tokens')->fetchAll(PDO::FETCH_COLUMN);foreach($hashes as$hash)if(!preg_match('/^[a-f0-9]{64}$/',(string)$hash)||hash_equals((string)$hash,$acceptanceToken))throw new RuntimeException('Annahmetoken wurde nicht ausschließlich als Hash gespeichert.');
+echo 'PASS Mail Guard: '.count($lines)." Mock-Mail(s), Annahmelink vorhanden, Roh-Token nur im Link\n";

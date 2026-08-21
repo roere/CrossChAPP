@@ -6,7 +6,8 @@ require_once __DIR__ . '/DatabaseDialect.php';
 final class RepresentationContactService
 {
     public function __construct(private readonly PDO $database, private readonly RepresentationOfferRepository $offers,
-        private readonly MailSettingsRepository $settings, private readonly MailService $mailer) {}
+        private readonly MailSettingsRepository $settings, private readonly MailService $mailer,
+        private readonly ?RepresentationAssignmentService $assignments = null) {}
 
     /** @return array{subject:string,before:string,after:string,customMessage:string} */
     public function preview(int $requesterId, int $offerId, string $requestedDate, string $customMessage = ''): array
@@ -20,10 +21,15 @@ final class RepresentationContactService
         [$context, $date, $mail] = $this->compose($requesterId, $offerId, $requestedDate, trim($customMessage));
         $logId = $this->reserve((int) $context['recipient_id'], $requesterId, $offerId, $requestedDate);
         $fullName = trim($context['requester_first_name'] . ' ' . $context['requester_last_name']);
+        $acceptance = $this->assignments?->issueForOffer($context, $requestedDate, $logId);
         try {
-            $this->mailer->send((string) $context['provider_email'], trim($context['provider_first_name'] . ' ' . $context['provider_last_name']), $mail['subject'], $mail['before'] . $mail['customMessage'] . $mail['after'], (string) $context['requester_email'], $fullName);
+            if ($acceptance !== null) {
+                $rendered=$this->settings->render('offer_contact_acceptance',['representative_first_name'=>(string)$context['provider_first_name'],'requester_full_name'=>$fullName,'requester_email'=>(string)$context['requester_email'],'chapter'=>(string)$context['requester_chapter'],'requested_date'=>self::formatDate($date),'acceptance_link'=>$acceptance['link'],'custom_message'=>$mail['customMessage'],'app_name'=>'CrossChAPP','base_url'=>(string)$this->settings->settings()['baseUrl']]);
+                $mail=['subject'=>$rendered['subject'],'before'=>$rendered['body'],'customMessage'=>'','after'=>''];
+            }
+            $this->mailer->send((string) $context['provider_email'], trim($context['provider_first_name'] . ' ' . $context['provider_last_name']), $mail['subject'], $mail['before'] . $mail['customMessage'] . $mail['after']);
             $this->finish($logId, 'success');
-        } catch (Throwable $exception) { $this->finish($logId, 'error'); throw new RuntimeException('Die Anfrage konnte nicht gesendet werden.'); }
+        } catch (Throwable $exception) { if($acceptance!==null)$this->assignments?->invalidate($acceptance['token']); $this->finish($logId, 'error'); throw new RuntimeException('Die Anfrage konnte nicht gesendet werden.'); }
     }
 
     /** @return array{0:array<string,mixed>,1:DateTimeImmutable,2:array{subject:string,before:string,after:string,customMessage:string}} */
@@ -37,6 +43,9 @@ final class RepresentationContactService
         if ((bool) $context['all_dates']) {
             if (self::weekday($date) !== self::normalizeWeekday((string) $context['meeting_day'])) throw new InvalidArgumentException('Der Termin passt nicht zum regulären Meeting-Wochentag.');
         } elseif (!$this->offers->offerHasDate($offerId, $requestedDate)) throw new InvalidArgumentException('Das Angebot gilt nicht für diesen Termin.');
+        $assigned=$this->database->prepare("SELECT COUNT(*) FROM representation_assignments WHERE requester_user_id=:requester AND chapter_org_id=:chapter AND representation_date=:date AND status='active'");
+        $assigned->execute([':requester'=>$requesterId,':chapter'=>$context['org_id'],':date'=>$requestedDate]);
+        if((int)$assigned->fetchColumn()>0)throw new DomainException('Dieser Termin ist bereits vergeben.');
         $fullName = trim($context['requester_first_name'] . ' ' . $context['requester_last_name']); $formattedDate = self::formatDate($date);
         $variables = ['provider_first_name' => (string) $context['provider_first_name'], 'requester_first_name' => (string) $context['requester_first_name'], 'requester_last_name' => (string) $context['requester_last_name'],
             'requester_full_name' => $fullName, 'requester_email' => (string) $context['requester_email'], 'requester_chapter' => (string) $context['requester_chapter'], 'requested_date' => $formattedDate, 'custom_message' => '{{custom_message}}', 'app_name' => 'CrossChAPP'];

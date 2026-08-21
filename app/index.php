@@ -15,6 +15,11 @@ require_once __DIR__ . '/src/InvitationFactory.php';
 require_once __DIR__ . '/src/LegalSettingsRepository.php';
 
 Auth::start();
+if (isset($_GET['accept_representation'])) {
+    $acceptanceToken=(string)$_GET['accept_representation'];
+    if (preg_match('/^[A-Za-z0-9_-]{40,100}$/',$acceptanceToken)) $_SESSION['representation_acceptance_token']=$acceptanceToken;
+    header('Location: /?view=representation-accept',true,303);exit;
+}
 if (isset($_GET['verify'])) {
     try {
         $_SESSION['verification_result'] = AccountFactory::create()['service']->verifyResult((string) $_GET['verify']);
@@ -36,7 +41,7 @@ $accountDisplayName = $currentUser === null ? '' : ((string) ($currentUser['user
     : trim((string) $currentUser['first_name'] . ' ' . (string) $currentUser['last_name']));
 $viewParameter = (string) ($_GET['view'] ?? '');
 $returnViewParameter = (string) ($_GET['return_view'] ?? '');
-$returnView = in_array($returnViewParameter, ['crosschaptern', 'vertretung', 'vertretung-finden'], true) ? $returnViewParameter : '';
+$returnView = in_array($returnViewParameter, ['crosschaptern', 'vertretung', 'vertretung-finden','representation-accept'], true) ? $returnViewParameter : '';
 $requestedView = isset($_GET['invite']) || isset($_GET['reset']) ? 'auth' : match ($viewParameter) {
     'about' => 'about',
     'impressum' => 'impressum',
@@ -45,6 +50,7 @@ $requestedView = isset($_GET['invite']) || isset($_GET['reset']) ? 'auth' : matc
     'login', 'register', 'forgot', 'reset', 'verified', 'invite' => 'auth',
     'vertretung' => 'vertretung',
     'vertretung-finden' => 'vertretung-finden',
+    'representation-accept' => 'representation-accept',
     default => 'crosschaptern',
 };
 $authMode = isset($_GET['invite']) ? 'invite' : (isset($_GET['reset']) ? 'reset' : (in_array($viewParameter, ['register', 'forgot', 'verified'], true) ? $viewParameter : 'login'));
@@ -60,6 +66,7 @@ $pageTitle = match ($requestedView) {
     'admin' => 'Admin | CrossChAPP',
     'vertretung' => 'Vertretung anbieten | CrossChAPP',
     'vertretung-finden' => 'Vertretung finden | CrossChAPP',
+    'representation-accept' => 'Vertretung annehmen | CrossChAPP',
     default => 'CrossChAPPtern | CrossChAPP',
 };
 $legalSettings=(new LegalSettingsRepository((new Database())->connection()))->settings();
@@ -87,6 +94,8 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $isAdmin)): ?><script src="/assets/sort-utils.js?v=<?= $assetVersion('sort-utils.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung'): ?><script src="/assets/representation.js?v=<?= $assetVersion('representation.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung-finden'): ?><script src="/assets/representation-find.js?v=<?= $assetVersion('representation-find.js') ?>" defer></script><?php endif; ?>
+    <?php if ($requestedView === 'representation-accept'): ?><script src="/assets/representation-accept.js?v=<?= $assetVersion('representation-accept.js') ?>" defer></script><?php endif; ?>
+    <?php if (($requestedView === 'vertretung' || $requestedView === 'vertretung-finden') && $currentUser !== null): ?><script src="/assets/representation-assignments.js?v=<?= $assetVersion('representation-assignments.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'admin' && $isAdmin): ?><script src="/assets/app.js?v=<?= $assetVersion('app.js') ?>" defer></script><?php endif; ?>
 </head>
 <body>
@@ -207,6 +216,8 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
         require __DIR__ . '/views/vertretung.php';
     } elseif ($requestedView === 'vertretung-finden') {
         require __DIR__ . '/views/vertretung-finden.php';
+    } elseif ($requestedView === 'representation-accept') {
+        require __DIR__ . '/views/representation-accept.php';
     } else {
         require __DIR__ . '/views/search.php';
     }

@@ -21,5 +21,6 @@ $requests = $requestRepository->forUser((int) $user['id'], $today);
 $offerRepository = new RepresentationOfferRepository($database);
 $offers = $offerRepository->findForHomeChapter((int) $user['home_chapter_org_id'], (int) $user['id'], $today);
 $overview = $offerRepository->overviewForHomeChapter((int) $user['home_chapter_org_id'], (int) $user['id'], $today);
+$assignedSlots=$database->prepare("SELECT offer_id,representation_date FROM representation_assignments WHERE requester_user_id=:user AND status='active' AND offer_id IS NOT NULL");$assignedSlots->execute([':user'=>$user['id']]);$assignedOfferSlots=array_map(static fn(array $row):string=>(int)$row['offer_id'].':'.(string)$row['representation_date'],$assignedSlots->fetchAll());
 JsonResponse::send(['chapter' => ['chapterName' => is_array($chapterRow) ? $chapterRow['chapter_name'] : '—', 'meetingDay' => is_array($chapterRow) ? $chapterRow['meeting_day'] : null],
-    'requests' => $requests, 'today' => $today, 'datedOffers' => $offers['datedOffers'], 'allDatesOffers' => $offers['allDatesOffers'], 'offers' => $overview, 'contactHint' => (new MailSettingsRepository($database))->contactHint()]);
+    'requests' => $requests, 'today' => $today, 'datedOffers' => $offers['datedOffers'], 'allDatesOffers' => $offers['allDatesOffers'], 'offers' => $overview, 'assignedOfferSlots'=>$assignedOfferSlots, 'contactHint' => (new MailSettingsRepository($database))->contactHint()]);

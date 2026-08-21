@@ -165,7 +165,7 @@ final class RepresentationOfferRepository
         $statement = $this->database->prepare(<<<'SQL'
             SELECT offers.id, offers.user_id AS recipient_id, offers.org_id, offers.all_dates,
                    provider.first_name AS provider_first_name, provider.last_name AS provider_last_name, provider.email AS provider_email,
-                   requester.first_name AS requester_first_name, requester.last_name AS requester_last_name, requester.email AS requester_email,
+                   requester.id AS requester_id, requester.first_name AS requester_first_name, requester.last_name AS requester_last_name, requester.email AS requester_email,
                    requester.home_chapter_org_id, chapter.chapter_name AS requester_chapter, chapter.meeting_day
             FROM representation_offers offers
             JOIN users provider ON provider.id = offers.user_id AND provider.status = 'active' AND provider.email_verified_at IS NOT NULL

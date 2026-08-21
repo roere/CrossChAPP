@@ -78,7 +78,7 @@ final class MailSettingsRepository
 
     public function saveTemplate(string $key, string $subject, string $body): void
     {
-        if (!in_array($key, ['verify_email', 'reset_password', 'representation_contact', 'representation_request_contact', 'user_invitation'], true) || trim($subject) === '' || trim($body) === '' || strlen($subject) > 250 || strlen($body) > 20000) throw new InvalidArgumentException('Die E-Mail-Vorlage ist ungültig.');
+        if (!in_array($key, self::templateKeys(), true) || trim($subject) === '' || trim($body) === '' || strlen($subject) > 250 || strlen($body) > 20000) throw new InvalidArgumentException('Die E-Mail-Vorlage ist ungültig.');
         $statement = $this->database->prepare('UPDATE email_templates SET subject = :subject, body = :body, updated_at = :updated_at WHERE template_key = :key');
         $statement->execute([':subject' => trim($subject), ':body' => trim($body), ':updated_at' => self::now(), ':key' => $key]);
     }
@@ -92,6 +92,13 @@ final class MailSettingsRepository
             'reset_password' => ['first_name', 'last_name', 'reset_link', 'app_name'],
             'representation_contact' => ['provider_first_name', 'requester_first_name', 'requester_last_name', 'requester_full_name', 'requester_email', 'requester_chapter', 'requested_date', 'custom_message', 'app_name'],
             'representation_request_contact' => ['request_owner_first_name', 'contact_first_name', 'contact_last_name', 'contact_full_name', 'contact_email', 'contact_chapter', 'requested_chapter', 'requested_date', 'custom_message', 'app_name'],
+            'request_contact_acceptance', 'offer_contact_acceptance',
+            'representation_assignment_confirmed_requester', 'representation_assignment_confirmed_representative',
+            'representation_assignment_cancelled_requester', 'representation_assignment_cancelled_representative' => [
+                'requester_first_name','requester_full_name','requester_email','representative_first_name',
+                'representative_full_name','representative_email','chapter','requested_date','acceptance_link',
+                'cancelled_by','custom_message','app_name','base_url'
+            ],
             'user_invitation' => ['first_name', 'last_name', 'email', 'chapter', 'invitation_link', 'app_name'],
             default => throw new RuntimeException('E-Mail-Vorlage fehlt.'),
         };
@@ -137,4 +144,13 @@ final class MailSettingsRepository
     }
 
     private static function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }
+
+    /** @return list<string> */
+    private static function templateKeys(): array
+    {
+        return ['verify_email','reset_password','representation_contact','representation_request_contact','user_invitation',
+            'request_contact_acceptance','offer_contact_acceptance','representation_assignment_confirmed_requester',
+            'representation_assignment_confirmed_representative','representation_assignment_cancelled_requester',
+            'representation_assignment_cancelled_representative'];
+    }
 }

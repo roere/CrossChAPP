@@ -5,7 +5,7 @@ require_once __DIR__ . '/DatabaseDialect.php';
 
 final class RepresentationRequestContactService
 {
-    public function __construct(private readonly PDO $database, private readonly RepresentationRequestRepository $requests, private readonly MailSettingsRepository $settings, private readonly MailService $mailer) {}
+    public function __construct(private readonly PDO $database, private readonly RepresentationRequestRepository $requests, private readonly MailSettingsRepository $settings, private readonly MailService $mailer, private readonly ?RepresentationAssignmentService $assignments = null) {}
 
     /** @return array{subject:string,before:string,after:string,customMessage:string,hint:string} */
     public function preview(int $contactUserId, int $requestId, string $customMessage = ''): array
@@ -17,8 +17,11 @@ final class RepresentationRequestContactService
     {
         [$context, $mail] = $this->compose($contactUserId, $requestId, trim($customMessage)); $logId = $this->reserve($contactUserId, $requestId, (int) $context['recipient_id']);
         $name = trim($context['contact_first_name'] . ' ' . $context['contact_last_name']);
-        try { $this->mailer->send((string) $context['owner_email'], trim($context['owner_first_name'] . ' ' . $context['owner_last_name']), $mail['subject'], $mail['before'] . $mail['customMessage'] . $mail['after'], (string) $context['contact_email'], $name); $this->finish($logId, 'success'); }
-        catch (Throwable) { $this->finish($logId, 'error'); throw new RuntimeException('Die Rückmeldung konnte nicht gesendet werden.'); }
+        $acceptance=$this->assignments?->issueForRequest($context,$logId);
+        try {
+            if($acceptance!==null){$rendered=$this->settings->render('request_contact_acceptance',['requester_first_name'=>(string)$context['owner_first_name'],'representative_full_name'=>$name,'representative_email'=>(string)$context['contact_email'],'chapter'=>(string)$context['requested_chapter'],'requested_date'=>self::formatDate(DateTimeImmutable::createFromFormat('!Y-m-d',(string)$context['request_date'])?:new DateTimeImmutable()),'acceptance_link'=>$acceptance['link'],'custom_message'=>$mail['customMessage'],'app_name'=>'CrossChAPP','base_url'=>(string)$this->settings->settings()['baseUrl']]);$mail=['subject'=>$rendered['subject'],'before'=>$rendered['body'],'customMessage'=>'','after'=>''];}
+            $this->mailer->send((string) $context['owner_email'], trim($context['owner_first_name'] . ' ' . $context['owner_last_name']), $mail['subject'], $mail['before'] . $mail['customMessage'] . $mail['after']); $this->finish($logId, 'success'); }
+        catch (Throwable) {if($acceptance!==null)$this->assignments?->invalidate($acceptance['token']); $this->finish($logId, 'error'); throw new RuntimeException('Die Rückmeldung konnte nicht gesendet werden.'); }
     }
 
     /** @return array{subject:string,before:string,after:string,customMessage:string,hint:string} */
@@ -44,6 +47,7 @@ final class RepresentationRequestContactService
     {
         $customMessage = trim($customMessage); if (strlen($customMessage) < 20 || strlen($customMessage) > 3000) throw new InvalidArgumentException('Die Rückmeldung ist unvollständig oder ungültig.');
         $context = $this->requests->contactContext($requestId, $contactUserId); if ($context === null) throw new DomainException('Dieses Vertretungsgesuch ist nicht verfügbar.');
+        $assigned=$this->database->prepare("SELECT COUNT(*) FROM representation_assignments WHERE request_id=:request AND status='active'");$assigned->execute([':request'=>$requestId]);if((int)$assigned->fetchColumn()>0)throw new DomainException('Dieses Vertretungsgesuch ist bereits vergeben.');
         return [$context, $this->composeContext($context, $customMessage, false)];
     }
 

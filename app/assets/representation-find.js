@@ -31,6 +31,7 @@
     });
 
     requestChips.addEventListener('click', deleteRequest);
+    document.addEventListener('crosschapp:assignment-changed',initialize);
     initialize();
 
     async function initialize() {
@@ -95,7 +96,7 @@
             const chip = document.createElement('span'); chip.className = 'date-chip';
             const label = document.createElement('span'); label.textContent = formatDate(item.requestDate);
             const remove = document.createElement('button'); remove.type = 'button'; remove.dataset.requestId = item.id; remove.textContent = '×'; remove.setAttribute('aria-label', `${formatDate(item.requestDate)} löschen`);
-            chip.append(label, remove); return chip;
+            chip.append(label);if(item.isAssigned){const assigned=document.createElement('span');assigned.className='status-badge';assigned.textContent='Vergeben';chip.append(assigned);remove.disabled=true;}chip.append(remove); return chip;
         }));
     }
 
@@ -136,7 +137,7 @@
         const name = document.createElement('strong'); name.textContent = provider.displayName; card.append(name);
         if (provider.isVerified) card.append(verifiedBadge());
         if (provider.isBniMember) { const member = document.createElement('span'); member.className = 'offer-meta'; member.textContent = 'BNI Mitglied'; card.append(member); }
-        card.append(contactButton(provider, date)); return card;
+        if(date&&payload?.assignedOfferSlots?.includes(`${provider.offerId}:${date}`)){const assigned=document.createElement('span');assigned.className='status-badge';assigned.textContent='Vergeben';card.append(assigned);}else card.append(contactButton(provider, date)); return card;
     }
     function contactButton(provider, date, label = 'Kontaktieren') { const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary contact-provider'; button.textContent = label; button.addEventListener('click', () => openContact(provider, date, button)); return button; }
 
