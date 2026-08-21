@@ -227,6 +227,40 @@ $manualService = new ChapterRefreshService($limitOrganizations, $limitAutomation
 })));
 $check($manualService->refresh(13, 'manual', null, true)['status'] === 'success' && $manualCalls === 1, 'Manueller Request bleibt trotz Tageslimit möglich.');
 $check($limitAutomation->statistics(1, 1, 2)['dailyUsed'] === 2, 'Manual zählt nicht zum Tageslimit.');
+
+// Limit 1: alle automatischen/nutzungsabhängigen Trigger sind gesperrt, ein manueller Batch bleibt limitfrei.
+$manualDatabase = (new Database(':memory:'))->connection();
+$manualOrganizations = new OrganizationRepository($manualDatabase); $manualAutomation = new AutomationRepository($manualDatabase);
+$manualAutomation->updateSettings(true, 1, true, 1, 1);
+$manualRows = [];
+foreach (range(41, 47) as $orgId) $manualRows[] = ['orgId'=>$orgId,'cmsSecurityHash'=>'manual-'.$orgId,'countryCode'=>'DE','orgType'=>'CHAPTER','longitude'=>7,'latitude'=>50];
+$manualOrganizations->upsertMapOrganizations($manualRows);
+foreach (range(41, 47) as $orgId) $manualOrganizations->saveDetails($orgId, ['chapterName'=>'Manual '.$orgId,'meetingDay'=>'Montag','meetingTime'=>'07:00','status'=>'CHAPTER']);
+$manualDatabase->exec("UPDATE organizations SET details_loaded_at='2020-01-01T00:00:00Z'");
+$manualBatchCalls=[];
+$manualBatchClient = new BniClient(new HttpClient(static function(string $url) use (&$manualBatchCalls,$detailsPayload):array {
+    preg_match('/manual-(\d+)/',$url,$match);$orgId=(int)($match[1]??0);$manualBatchCalls[]=$orgId;
+    return ['status'=>200,'headers'=>[],'body'=>$detailsPayload($orgId)];
+}));
+$manualBatchService = new ChapterRefreshService($manualOrganizations,$manualAutomation,$manualBatchClient);
+$check($manualBatchService->refresh(41,'automatic',1)['status']==='success','Automatic Request 1 ist bei Limit 1 erlaubt.');
+$check(($manualBatchService->refresh(42,'automatic',1)['reason']??null)==='daily_limit','Automatic Request 2 wird bei Limit 1 blockiert.');
+$check(($manualBatchService->refresh(43,'usage_search',1)['reason']??null)==='daily_limit','usage_search wird bei erreichtem Limit blockiert.');
+$check(($manualBatchService->refresh(44,'usage_detail',1)['reason']??null)==='daily_limit','usage_detail wird bei erreichtem Limit blockiert.');
+$beforeManualStats=$manualAutomation->statistics(1,1,1);$beforeManualLogs=(int)$manualDatabase->query('SELECT COUNT(*) FROM chapter_refresh_log')->fetchColumn();
+$manualResults=[];foreach([42,43,44] as $orgId)$manualResults[]=$manualBatchService->refresh($orgId,'manual',null,true);
+$check(array_column($manualResults,'status')===['success','success','success']&&$manualBatchCalls===[41,42,43,44],'Mehrere manuelle Chapter werden trotz ausgeschöpftem Tageslimit vollständig versucht.');
+$afterManualStats=$manualAutomation->statistics(1,1,1);$afterManualLogs=(int)$manualDatabase->query('SELECT COUNT(*) FROM chapter_refresh_log')->fetchColumn();
+$check($beforeManualStats['dailyUsed']===1&&$afterManualStats['dailyUsed']===1&&$afterManualStats['dailyRemaining']===0&&(float)$afterManualStats['dailyPercent']===100.0,'Manual verändert Requests heute, Restkontingent und Auslastung nicht.');
+$check($afterManualLogs===$beforeManualLogs+3&&(int)$manualDatabase->query("SELECT COUNT(*) FROM chapter_refresh_log WHERE trigger_type='manual' AND status='success'")->fetchColumn()===3,'Manuelle Requests bleiben im allgemeinen Refresh-Log sichtbar.');
+$manualRateService=new ChapterRefreshService($manualOrganizations,$manualAutomation,new BniClient(new HttpClient(static fn():array=>['status'=>429,'headers'=>['Retry-After: 90'],'body'=>'{}'])));
+$manualRate=$manualRateService->refresh(45,'manual',null,true);$check($manualRate['status']==='rate_limited'&&$manualRate['retryAfter']===90,'Manual respektiert 429 und Retry-After.');
+$manualForbiddenService=new ChapterRefreshService($manualOrganizations,$manualAutomation,new BniClient(new HttpClient(static fn():array=>['status'=>403,'headers'=>[],'body'=>'{}'])));
+$check($manualForbiddenService->refresh(46,'manual',null,true)['status']==='forbidden','Manual respektiert 403.');
+$manualLock='manual-lock';$check($manualAutomation->acquireLock(47,$manualLock),'Manual-Testlock erworben.');$manualLockedCalls=0;
+$manualLockedService=new ChapterRefreshService($manualOrganizations,$manualAutomation,new BniClient(new HttpClient(static function()use(&$manualLockedCalls):array{$manualLockedCalls++;return[];})));
+$manualLocked=$manualLockedService->refresh(47,'manual',null,true);$check($manualLocked['status']==='skipped'&&$manualLocked['reason']==='locked'&&$manualLockedCalls===0,'Manual respektiert den bestehenden Lock.');$manualAutomation->releaseLock(47,$manualLock);
+$check(BniRequestPolicy::DETAIL_DELAY_MS===1500,'Zentrale 1500-ms-Policy bleibt unverändert.');
 $limitAutomation->updateSettings(false, 1, false, 1, 50);
 $disabledCalls = 0;
 $disabledService = new ChapterRefreshService($limitOrganizations, $limitAutomation, new BniClient(new HttpClient(static function () use (&$disabledCalls): array {

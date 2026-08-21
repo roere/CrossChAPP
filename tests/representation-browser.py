@@ -41,7 +41,7 @@ try:
 
     assert cross["text"] == "Finde passende BNI-Chaptertreffen in deiner Nähe."
     assert offer["text"] == "Für welche Chapter und für welche Termine möchtest Du eine Vertretung anbieten?"
-    assert find["text"] == "Finde eine Vertretung"
+    assert find["text"] == "Finde einen Vertreter"
     comparable = ("fontFamily", "fontSize", "fontWeight", "color", "marginTop", "marginBottom")
     assert all(cross[key] == offer[key] == find[key] for key in comparable), (cross, offer, find)
     assert max(cross["top"], offer["top"], find["top"]) - min(cross["top"], offer["top"], find["top"]) < 1, (cross, offer, find)

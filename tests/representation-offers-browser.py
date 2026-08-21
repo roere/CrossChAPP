@@ -46,7 +46,7 @@ try:
     always_added=script(f"""const token=document.querySelector('meta[name="csrf-token"]').content;return fetch('/api/representation/offers.php',{{method:'POST',headers:{{'Content-Type':'application/json','X-CSRF-Token':token}},body:JSON.stringify({{orgIds:[{CHAPTER_IDS[0]}],allDates:true,dates:[]}})}}).then(async r=>({{status:r.status,payload:await r.json()}}));""")
     assert always_added['status']==201,always_added
     script("document.querySelector('#logout-button').click()");time.sleep(.4);login('representation-a@example.invalid')
-    assert 'Vertretung finden' in script("return [...document.querySelectorAll('nav a')].map(x=>x.textContent.trim());")
+    assert 'Vertreter finden' in script("return [...document.querySelectorAll('nav a')].map(x=>x.textContent.trim());")
     request('POST',f'/session/{session}/url',{'url':'http://localhost:8082/?view=vertretung-finden'});time.sleep(.7)
     found=script("const dated=document.querySelector('#dated-representations');return {dates:dated.querySelectorAll('.representation-date-group').length,cards:dated.querySelectorAll('.representation-provider-card').length,text:dated.textContent,email:document.body.textContent.includes('representation-b@example.invalid'),orgId:/orgId/i.test(document.body.textContent)};")
     assert found['dates']==2 and found['cards']==2 and 'Bernd B.' in found['text'] and not found['email'] and not found['orgId'],found

@@ -105,7 +105,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                         <a class="<?= $requestedView === 'about' ? 'active' : '' ?>" href="/?view=about">Was ist CrossChAPP?</a>
                         <a class="<?= $requestedView === 'crosschaptern' ? 'active' : '' ?>" href="/?view=crosschaptern">CrossChAPPtern</a>
                         <a class="<?= $requestedView === 'vertretung' ? 'active' : '' ?>" href="/?view=vertretung">Vertretung anbieten</a>
-                        <a class="<?= $requestedView === 'vertretung-finden' ? 'active' : '' ?>" href="/?view=vertretung-finden">Vertretung finden</a>
+                        <a class="<?= $requestedView === 'vertretung-finden' ? 'active' : '' ?>" href="/?view=vertretung-finden">Vertreter finden</a>
                         <?php if ($isAdmin): ?>
                             <a class="<?= $requestedView === 'admin' ? 'active' : '' ?>" href="/?view=admin">Admin</a>
                         <?php endif; ?>

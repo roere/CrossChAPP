@@ -1,9 +1,9 @@
 <?php if ($currentUser === null): ?>
-<main class="shell content no-hero-content"><h1 class="page-intro-title">Finde eine Vertretung</h1><section class="panel representation-access-hint"><p>Um Vertretungsangebote für dein Heimatchapter zu sehen, musst du angemeldet sein.</p><a class="button-link" href="/?view=login&amp;return_view=vertretung-finden">Anmelden</a></section></main>
+<main class="shell content no-hero-content"><h1 class="page-intro-title">Finde einen Vertreter</h1><section class="panel representation-access-hint"><p>Um Vertretungsangebote für dein Heimatchapter zu sehen, musst du angemeldet sein.</p><a class="button-link" href="/?view=login&amp;return_view=vertretung-finden">Anmelden</a></section></main>
 <?php elseif (!$hasRepresentationHomeChapter): ?>
-<main class="shell content no-hero-content"><h1 class="page-intro-title">Finde eine Vertretung</h1><section class="panel representation-access-hint"><p>Für dein Benutzerkonto ist noch kein Heimatchapter hinterlegt.</p><p>Ein Heimatchapter ist erforderlich, um passende Vertretungsangebote anzuzeigen.</p></section></main>
+<main class="shell content no-hero-content"><h1 class="page-intro-title">Finde einen Vertreter</h1><section class="panel representation-access-hint"><p>Für dein Benutzerkonto ist noch kein Heimatchapter hinterlegt.</p><p>Ein Heimatchapter ist erforderlich, um passende Vertretungsangebote anzuzeigen.</p></section></main>
 <?php else: ?>
-<main class="shell content no-hero-content"><h1 class="page-intro-title">Finde eine Vertretung</h1>
+<main class="shell content no-hero-content"><h1 class="page-intro-title">Finde einen Vertreter</h1>
     <p id="representation-home-chapter" class="page-meta" hidden></p>
     <section class="panel representation-find-block representation-find-block--requests representation-requests" aria-labelledby="representation-requests-heading">
         <h2 id="representation-requests-heading">Meine Vertretungsgesuche</h2>
