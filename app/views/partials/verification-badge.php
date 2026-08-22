@@ -1,0 +1,1 @@
+<span class="verification-badge" role="img" aria-label="Verifiziert" title="Verifiziert"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 1.7 12.2 4l3-.3.4 3 2.6 1.5-1.5 2.6.8 2.9-2.9.8-1.5 2.6-2.6-1.5-2.6 1.5-1.5-2.6-2.9-.8.8-2.9-1.5-2.6 2.6-1.5.4-3 3 .3z"/><path class="verification-badge-check" d="m6.5 10 2.2 2.1 4.5-4.5"/></svg></span>

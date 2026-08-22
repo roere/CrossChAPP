@@ -5,7 +5,7 @@
         <div id="representation-accept-message" class="message" role="alert" aria-live="polite"></div>
         <div id="representation-accept-actions" class="registration-actions" hidden>
             <button id="confirm-representation-accept" type="button">Annehmen</button>
-            <a class="button-link secondary" href="/?view=crosschaptern">Abbrechen</a>
+            <a id="cancel-representation-accept" class="button-link secondary" href="/?view=crosschaptern">Abbrechen</a>
         </div>
     </section>
 </main>

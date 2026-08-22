@@ -61,13 +61,23 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .representation-access-hint { display: grid; justify-items: start; gap: .8rem; }
 .representation-access-hint p { margin: 0; }
 .panel.representation-find-block { margin-top: 1.25rem; padding: 1.5rem; border-radius: 6px; box-shadow: 0 8px 24px rgb(28 29 31 / 6%); }
-.representation-assignments { margin: 0 0 1.25rem; padding: 0; overflow: hidden; background: #f7f9fa; }
-.representation-assignments summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; cursor: pointer; font-weight: 900; list-style: none; }
-.representation-assignments summary::-webkit-details-marker { display: none; }
-.representation-assignments[open] .assignment-chevron { transform: rotate(180deg); }
-.representation-assignments > [data-assignment-list] { padding: 0 1.25rem 1.25rem; }
-.assignment-card { margin-top: .75rem; padding: 1rem; border: 1px solid var(--border); border-radius: 6px; background: white; }
-.assignment-card h3 { margin: 0 0 .5rem; }.assignment-card p { margin: .35rem 0; }.assignment-card button { margin-top: .75rem; }
+.representation-assignments { margin: 0 0 1.25rem; background: #f7f9fa; }
+.representation-assignments > [data-assignment-list] { padding-top: 1rem; }
+.representation-assignments [data-assignment-list] { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; }
+.representation-assignments [data-assignment-list] > p { grid-column: 1/-1; }
+.assignment-card { margin: 0; min-width: 0; align-content: start; }
+.assignment-card .assignment-heading { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+.assignment-card .assignment-person { margin: 0; font-size: 1.2rem; font-weight: 800; line-height: 1.25; }
+.assignment-card .assignment-heading .verification-badge { flex: 0 0 auto; }
+.assignment-card .assignment-detail { margin: .15rem 0; line-height: 1.4; overflow-wrap: anywhere; }
+.assignment-card .assignment-chapter a { color: var(--bni-red-dark); font-weight: 700; text-underline-offset: .16em; }
+.assignment-card .assignment-contact { margin: .15rem 0; color: #555a61; font-size: .86rem; overflow-wrap: anywhere; }
+.assignment-card .assignment-contact a { color: inherit; }
+.assignment-card .assignment-verification { width: fit-content; }
+.nav-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; margin-left: .35rem; padding: 0 .3rem; border-radius: 999px; color: white; background: #596d78; font-size: .68rem; font-weight: 900; line-height: 1; }
+.nav-count-badge[hidden] { display: none; }
+.contact-fixed-date { font-weight: 800; }
+.registration-actions[hidden],#representation-contact-date-label[hidden],#representation-contact-date-options[hidden] { display: none !important; }
 .representation-find-block > h2 { margin-bottom: .75rem; }
 .panel.representation-find-block--requests { background: #fffaf7; }
 .panel.representation-find-block--dates { background: #f6f9fb; }
@@ -516,6 +526,7 @@ button.danger:hover { border-color: #8f101d; background: #8f101d; }
     .result-list { grid-template-columns: 1fr; }
     .representation-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .representation-offer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .representation-assignments [data-assignment-list] { grid-template-columns: repeat(2,minmax(0,1fr)); }
     .users-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .users-column-contacts, .users-column-created { display: none; }
 }
@@ -583,6 +594,7 @@ button.danger:hover { border-color: #8f101d; background: #8f101d; }
     .representation-actions strong { width: 100%; margin-left: 0; }
     .representation-list-actions { padding: .75rem 1rem; }
     .representation-offer-grid { grid-template-columns: 1fr; }
+    .representation-assignments [data-assignment-list] { grid-template-columns: 1fr; }
     .panel.representation-find-block { margin-top: 1rem; padding: 1rem; }
     .panel.representation-step { padding: 1rem; }
     .representation-step-heading { align-items: flex-start; }

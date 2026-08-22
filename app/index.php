@@ -80,6 +80,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <title><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
     <meta name="csrf-token" content="<?= htmlspecialchars(Auth::csrfToken(), ENT_QUOTES, 'UTF-8') ?>">
     <meta name="auth-status" content="<?= $currentUser !== null ? 'authenticated' : 'anonymous' ?>">
+    <meta name="auth-role" content="<?= htmlspecialchars((string)($currentUser['role']??''),ENT_QUOTES,'UTF-8') ?>">
     <?php if (getenv('CROSSCHAPP_TEST_MODE') === '1'): ?><meta name="crosschapp-test-mode" content="1"><?php endif; ?>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23cf2030'/%3E%3Cpath d='M21 10a8 8 0 1 0 0 12l-3-3a4 4 0 1 1 0-6z' fill='white'/%3E%3C/svg%3E">
     <?php if ($requestedView === 'crosschaptern' || $requestedView === 'vertretung'): ?>
@@ -99,6 +100,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <?php if ($requestedView === 'admin' && $isAdmin): ?><script src="/assets/app.js?v=<?= $assetVersion('app.js') ?>" defer></script><?php endif; ?>
 </head>
 <body>
+    <template id="verification-badge-template"><?php require __DIR__.'/views/partials/verification-badge.php'; ?></template>
     <header class="site-header">
         <div class="topbar">
             <div class="shell topbar-inner"><strong>CrossChAPP</strong></div>
@@ -113,8 +115,8 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <nav aria-label="Hauptnavigation">
                         <a class="<?= $requestedView === 'about' ? 'active' : '' ?>" href="/?view=about">Was ist CrossChAPP?</a>
                         <a class="<?= $requestedView === 'crosschaptern' ? 'active' : '' ?>" href="/?view=crosschaptern">CrossChAPPtern</a>
-                        <a class="<?= $requestedView === 'vertretung' ? 'active' : '' ?>" href="/?view=vertretung">Vertretung anbieten</a>
-                        <a class="<?= $requestedView === 'vertretung-finden' ? 'active' : '' ?>" href="/?view=vertretung-finden">Vertreter finden</a>
+                        <a id="nav-representation-offer" class="<?= $requestedView === 'vertretung' ? 'active' : '' ?>" href="/?view=vertretung"><span>Vertretung anbieten</span><?php if ($currentUser !== null): ?><span class="nav-count-badge" data-assignment-nav-count="representative" hidden></span><?php endif; ?></a>
+                        <a id="nav-representation-find" class="<?= $requestedView === 'vertretung-finden' ? 'active' : '' ?>" href="/?view=vertretung-finden"><span>Vertreter finden</span><?php if ($currentUser !== null): ?><span class="nav-count-badge" data-assignment-nav-count="requester" hidden></span><?php endif; ?></a>
                         <?php if ($isAdmin): ?>
                             <a class="<?= $requestedView === 'admin' ? 'active' : '' ?>" href="/?view=admin">Admin</a>
                         <?php endif; ?>
@@ -122,7 +124,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <div class="account-actions">
                         <?php if ($currentUser !== null): ?>
                             <div id="account-menu" class="account-menu">
-                                <button id="account-menu-trigger" type="button" class="account-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="account-dropdown"><span class="account-menu-name"><?= htmlspecialchars($accountDisplayName, ENT_QUOTES, 'UTF-8') ?></span><?php if (($currentDatabaseUser['bni_verification_status'] ?? '') === 'manual_verified'): ?><span class="verification-badge" role="img" aria-label="Verifiziert" title="Verifiziert"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 1.7 12.2 4l3-.3.4 3 2.6 1.5-1.5 2.6.8 2.9-2.9.8-1.5 2.6-2.6-1.5-2.6 1.5-1.5-2.6-2.9-.8.8-2.9-1.5-2.6 2.6-1.5.4-3 3 .3z"/><path class="verification-badge-check" d="m6.5 10 2.2 2.1 4.5-4.5"/></svg></span><?php endif; ?><span aria-hidden="true">▼</span></button>
+                                <button id="account-menu-trigger" type="button" class="account-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="account-dropdown"><span class="account-menu-name"><?= htmlspecialchars($accountDisplayName, ENT_QUOTES, 'UTF-8') ?></span><?php if (($currentDatabaseUser['bni_verification_status'] ?? '') === 'manual_verified'): ?><?php require __DIR__.'/views/partials/verification-badge.php'; ?><?php endif; ?><span aria-hidden="true">▼</span></button>
                                 <div id="account-dropdown" class="account-dropdown" role="menu" hidden>
                                     <button id="open-my-account" type="button" role="menuitem">Mein Konto</button>
                                     <button id="open-change-password" type="button" role="menuitem">Passwort ändern</button>

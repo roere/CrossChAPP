@@ -3,7 +3,28 @@
 
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const authenticated = document.querySelector('meta[name="auth-status"]')?.content === 'authenticated';
+    const authRole = document.querySelector('meta[name="auth-role"]')?.content || '';
     const jsonHeaders = { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken };
+    window.CrossChappVerificationBadge = () => document.querySelector('#verification-badge-template')?.content.firstElementChild?.cloneNode(true) || null;
+    let assignmentPromise = null;
+    const updateAssignmentCounts = assignments => {
+        for (const role of ['requester', 'representative']) {
+            const badge = document.querySelector(`[data-assignment-nav-count="${role}"]`), link = badge?.closest('a'); if (!badge || !link) continue;
+            const total = assignments.filter(item => item.role === role).length, title = role === 'requester' ? 'Vertreter finden' : 'Vertretung anbieten';
+            const description = role === 'requester' ? (total === 1 ? 'gefundener Vertreter' : 'gefundene Vertreter') : (total === 1 ? 'angenommene Vertretung' : 'angenommene Vertretungen');
+            badge.hidden = total === 0; badge.textContent = total === 0 ? '' : total > 99 ? '99+' : String(total); link.setAttribute('aria-label', total ? `${title}, ${total} ${description}` : title);
+        }
+    };
+    const clearAssignmentCounts = () => { assignmentPromise = null; updateAssignmentCounts([]); };
+    const loadAssignments = async (force = false) => {
+        if (!authenticated || authRole !== 'user') { clearAssignmentCounts(); return []; }
+        if (force) assignmentPromise = null;
+        if (!assignmentPromise) assignmentPromise = fetch('/api/representation/assignments.php').then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Vereinbarungen konnten nicht geladen werden.'); return data.assignments || []; });
+        try { const assignments = await assignmentPromise; updateAssignmentCounts(assignments); return assignments; }
+        catch { clearAssignmentCounts(); return []; }
+    };
+    window.CrossChappAssignments = { load: loadAssignments, clear: clearAssignmentCounts, updateCounts: updateAssignmentCounts };
+    if (authenticated && authRole === 'user') loadAssignments(); else clearAssignmentCounts();
 
     document.querySelector('#login-form')?.addEventListener('submit', login);
     const registerForm = document.querySelector('#register-form');
@@ -80,6 +101,7 @@
     async function logout() {
         const button = document.querySelector('#logout-button');
         button.disabled = true;
+        clearAssignmentCounts();
         try {
             await fetch('/api/auth/logout.php', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
         } finally {
@@ -163,9 +185,8 @@
                     if (key === 'verificationStatus') {
                         output.replaceChildren();
                         if (value === 'manual_verified') {
-                            const badge = document.createElement('span'); badge.className = 'verification-badge'; badge.setAttribute('role', 'img'); badge.setAttribute('aria-label', 'Verifiziert'); badge.title = 'Verifiziert';
-                            badge.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 1.7 12.2 4l3-.3.4 3 2.6 1.5-1.5 2.6.8 2.9-2.9.8-1.5 2.6-2.6-1.5-2.6 1.5-1.5-2.6-2.9-.8.8-2.9-1.5-2.6 2.6-1.5.4-3 3 .3z"/><path class="verification-badge-check" d="m6.5 10 2.2 2.1 4.5-4.5"/></svg>';
-                            output.append(document.createTextNode(`${verificationLabels[value]} `), badge);
+                            const badge = window.CrossChappVerificationBadge();
+                            output.append(document.createTextNode(`${verificationLabels[value]} `)); if (badge) output.append(badge);
                         } else output.textContent = verificationLabels[value] || 'Nicht verifiziert';
                     } else output.textContent = value === null || String(value).trim() === '' ? '—' : String(value);
             }
@@ -485,7 +506,7 @@
         requests.forEach(item => { const row = document.createElement('div'); row.className = 'result-representation-request'; const text = document.createElement('span');
             const currentNumber = (anonymousNumbers.get(item.requestDate) || 0) + 1; anonymousNumbers.set(item.requestDate, currentNumber);
             const person = authenticated ? item.displayName : `Gesuch ${currentNumber}`; text.textContent = `${formatDateOnly(item.requestDate)} · ${person}`; row.append(text);if(item.isVerified){const verified=document.createElement('span');verified.className='verified-badge';verified.textContent='Verifiziert';row.append(verified);}
-            if (item.canContact && item.requestId) { const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary request-contact-button'; button.textContent = 'Kontaktieren'; button.dataset.requestId = item.requestId; row.append(button); }
+            if (item.canContact && item.requestId) { const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary request-contact-button'; button.textContent = 'Kontaktieren'; button.dataset.requestId = item.requestId; button.dataset.requestDate=item.requestDate; row.append(button); }
             else if (item.isOwn) { const own = document.createElement('span'); own.className = 'offer-meta'; own.textContent = 'Dein Gesuch'; row.append(own); }
             else if (item.isAssigned) { const assigned = document.createElement('span'); assigned.className = 'status-badge'; assigned.textContent = 'Vergeben'; row.append(assigned); }
             section.append(row);
@@ -495,10 +516,10 @@
     function initializeRequestContact() {
         const dialog = document.querySelector('#request-contact-dialog'); if (!dialog) return;
         const form = document.querySelector('#request-contact-form'), message = document.querySelector('#request-contact-message'), error = document.querySelector('#request-contact-error');
-        const identityFields = document.querySelector('#anonymous-request-contact-fields'), firstName = document.querySelector('#request-contact-first-name'), lastName = document.querySelector('#request-contact-last-name'), email = document.querySelector('#request-contact-email'); let requestId = null; let previewTimer = null;
+        const identityFields = document.querySelector('#anonymous-request-contact-fields'), firstName = document.querySelector('#request-contact-first-name'), lastName = document.querySelector('#request-contact-last-name'), email = document.querySelector('#request-contact-email'), fixedDate=document.querySelector('#request-contact-fixed-date'); let requestId = null; let previewTimer = null;
         identityFields.hidden = authenticated; [firstName,lastName,email].forEach(input => input.disabled = authenticated);
-        const openContact = async id => { requestId = Number(id); error.textContent = ''; dialog.showModal(); await loadPreview(); };
-        document.querySelector('#result-list')?.addEventListener('click', async event => { const button = event.target.closest('.request-contact-button'); if (!button) return; await openContact(Number(button.dataset.requestId)); });
+        const openContact = async button => { requestId = Number(button.dataset.requestId);fixedDate.textContent=`Termin: ${formatDateOnly(button.dataset.requestDate)}`; error.textContent = ''; dialog.showModal(); await loadPreview(); };
+        document.querySelector('#result-list')?.addEventListener('click', async event => { const button = event.target.closest('.request-contact-button'); if (!button) return; await openContact(button); });
         const close = () => { if (dialog.open) dialog.close(); requestId = null; };
         document.querySelector('#close-request-contact').addEventListener('click', close); document.querySelector('#cancel-request-contact').addEventListener('click', close); dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
         const payload = action => ({ action, request_id:requestId, custom_message:message.value, ...(authenticated ? {} : { contact_first_name:firstName.value, contact_last_name:lastName.value, contact_email:email.value }) });

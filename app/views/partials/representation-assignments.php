@@ -1,6 +1,6 @@
 <?php $assignmentRole=$assignmentRole??'requester';$assignmentTitle=$assignmentRole==='requester'?'Gefundene Vertreter':'Angenommene Vertretungen'; ?>
-<details class="panel representation-assignments" data-assignment-role="<?= $assignmentRole ?>">
-    <summary><span><?= htmlspecialchars($assignmentTitle,ENT_QUOTES,'UTF-8') ?> <span data-assignment-count>(0)</span></span><span aria-hidden="true" class="assignment-chevron">▾</span></summary>
+<details class="panel misc-panel representation-assignments" data-assignment-role="<?= $assignmentRole ?>" hidden>
+    <summary><?= htmlspecialchars($assignmentTitle,ENT_QUOTES,'UTF-8') ?> <span data-assignment-count>(0)</span></summary>
     <div data-assignment-list><p>Vereinbarungen werden geladen …</p></div>
 </details>
 <dialog class="account-dialog assignment-cancel-dialog" aria-labelledby="assignment-cancel-heading"><div class="account-dialog-card">
