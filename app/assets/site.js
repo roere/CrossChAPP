@@ -89,7 +89,7 @@
             if (!response.ok) throw new Error(payload.error || 'Anmeldung fehlgeschlagen.');
             const allowedReturnViews = new Set(['crosschaptern', 'vertretung', 'vertretung-finden', 'representation-accept']);
             const returnView = allowedReturnViews.has(form.return_view?.value) ? form.return_view.value : 'crosschaptern';
-            window.location.assign(payload.role === 'admin' ? '/?view=admin' : `/?view=${encodeURIComponent(returnView)}`);
+            window.location.assign(['admin','user_manager'].includes(payload.role) ? '/?view=admin' : `/?view=${encodeURIComponent(returnView)}`);
         } catch (error) {
             message.textContent = error.message; message.className = 'message error';
             form.password.value = ''; form.password.focus();

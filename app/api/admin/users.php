@@ -12,11 +12,10 @@ require_once dirname(__DIR__, 2) . '/src/MailSettingsRepository.php';
 require_once dirname(__DIR__, 2) . '/src/UserRepository.php';
 
 if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'DELETE'], true)) JsonResponse::send(['error' => 'Nur GET und DELETE sind erlaubt.'], 405);
-$identity = Auth::user();
-if ($identity === null) JsonResponse::send(['error' => 'Admin-Anmeldung erforderlich.'], 401);
-if (!Auth::isAdmin()) JsonResponse::send(['error' => 'Admin-Berechtigung erforderlich.'], 403);
+$identity = Auth::requireUserManagementJson();
 
 if ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+    if (!Auth::isFullAdmin()) JsonResponse::send(['error' => 'Admin-Berechtigung erforderlich.'], 403);
     Auth::requireCsrfJson();
     try {
         $payload = json_decode(file_get_contents('php://input') ?: '', true, 8, JSON_THROW_ON_ERROR);
@@ -33,6 +32,9 @@ try {
     $timezone = new DateTimeZone('Europe/Berlin');
     $now = new DateTimeImmutable('now', $timezone);
     $users = (new UserRepository((new Database())->connection()))->adminUsersOverview($now->format('Y-m-d'), $now->modify('-30 days')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z'));
+    if (($identity['role'] ?? null) === 'user_manager') {
+        $users = array_values(array_filter($users, static fn(array $user): bool => $user['role'] === 'user'));
+    }
     $stats = [
         'total' => count($users),
         'active' => count(array_filter($users, static fn(array $user): bool => $user['status'] === 'active')),

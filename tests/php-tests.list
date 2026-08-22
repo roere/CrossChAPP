@@ -1,8 +1,12 @@
 # Sichere lokale PHP-Tests. Fixtures und Live-BNI-Tests stehen bewusst nicht hier.
 account-auth.php
 legal-settings.php
+text-template-editor.php
 admin-users-overview.php
 admin-user-verification.php
+admin-user-role.php
+user-manager.php
+mysql-schema-v4.php
 login-rate-limit.php
 bni-verification-invitations.php
 chapter-search.php

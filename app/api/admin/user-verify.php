@@ -8,9 +8,7 @@ require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 require_once dirname(__DIR__, 2) . '/src/UserRepository.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405);
-$identity = Auth::user();
-if ($identity === null) JsonResponse::send(['error' => 'Admin-Anmeldung erforderlich.'], 401);
-if (!Auth::isAdmin()) JsonResponse::send(['error' => 'Admin-Berechtigung erforderlich.'], 403);
+$identity = Auth::requireUserManagementJson();
 Auth::requireCsrfJson();
 try {
     $payload = json_decode(file_get_contents('php://input') ?: '', true, 8, JSON_THROW_ON_ERROR);

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class MysqlSchema
 {
-    public const LATEST_VERSION = 3;
+    public const LATEST_VERSION = 4;
 
     public static function migrate(PDO $db): void
     {
@@ -28,6 +28,14 @@ final class MysqlSchema
             $db->exec("CREATE TABLE IF NOT EXISTS representation_acceptance_tokens(id BIGINT AUTO_INCREMENT PRIMARY KEY,token_hash CHAR(64) NOT NULL UNIQUE,direction VARCHAR(32) NOT NULL CHECK(direction IN ('request_contact','offer_contact')),request_id BIGINT NULL,offer_id BIGINT NULL,contact_log_id BIGINT NULL,representation_date CHAR(10) NOT NULL,requester_user_id BIGINT NOT NULL,representative_user_id BIGINT NOT NULL,created_at VARCHAR(32) NOT NULL,used_at VARCHAR(32) NULL,invalidated_at VARCHAR(32) NULL,INDEX idx_acceptance_token_context(direction,request_id,offer_id,representation_date),FOREIGN KEY(request_id) REFERENCES representation_requests(id) ON DELETE CASCADE,FOREIGN KEY(offer_id) REFERENCES representation_offers(id) ON DELETE CASCADE,FOREIGN KEY(requester_user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(representative_user_id) REFERENCES users(id) ON DELETE CASCADE)$engine");
             $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(3,UTC_TIMESTAMP())");
         }
+        if ($version <= 4) {
+            self::ensureUserRoleConstraint($db);
+            $grantExists=(int)$db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='user_invitations' AND COLUMN_NAME='verification_grant'")->fetchColumn();
+            if($grantExists===0)$db->exec("ALTER TABLE user_invitations ADD COLUMN verification_grant VARCHAR(32) NOT NULL DEFAULT 'manual_verified' CHECK(verification_grant IN ('manual_verified')) AFTER created_by_user_id");
+            if ($version < 4) {
+                $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(4,UTC_TIMESTAMP())");
+            }
+        }
         if (getenv('CROSSCHAPP_DB_SKIP_SEED') === '1') {
             return;
         }
@@ -38,6 +46,69 @@ final class MysqlSchema
         $legal=$db->prepare('INSERT IGNORE INTO legal_settings(id,imprint_text,privacy_text,updated_at)VALUES(1,:imprint,:privacy,:updated)');
         $legal->execute([':imprint'=>LegalSettingsRepository::DEFAULT_IMPRINT,':privacy'=>LegalSettingsRepository::DEFAULT_PRIVACY,':updated'=>gmdate('Y-m-d\TH:i:s\Z')]);
         self::seed($db);
+    }
+
+    private static function ensureUserRoleConstraint(PDO $db, string $table = 'users'): void
+    {
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+            throw new InvalidArgumentException('Invalid table name.');
+        }
+        $quotedTable = '`' . $table . '`';
+        $invalidRoles = $db->query("SELECT COUNT(*) FROM {$quotedTable} WHERE role NOT IN ('user','user_manager','admin')")->fetchColumn();
+        if ((int) $invalidRoles > 0) {
+            throw new RuntimeException('The users table contains unsupported roles.');
+        }
+
+        $query = $db->prepare(<<<'SQL'
+            SELECT tc.CONSTRAINT_NAME, cc.LEVEL, cc.CHECK_CLAUSE
+            FROM information_schema.TABLE_CONSTRAINTS tc
+            INNER JOIN information_schema.CHECK_CONSTRAINTS cc
+                ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+               AND cc.TABLE_NAME = tc.TABLE_NAME
+               AND cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+            WHERE tc.CONSTRAINT_SCHEMA = DATABASE()
+              AND tc.TABLE_NAME = :table_name
+              AND tc.CONSTRAINT_TYPE = 'CHECK'
+            SQL);
+        $query->execute([':table_name' => $table]);
+        $roleConstraints = [];
+        foreach ($query->fetchAll() as $constraint) {
+            $clause = strtolower((string) $constraint['CHECK_CLAUSE']);
+            if (preg_match('/(?:`role`|\brole\b)\s+in\s*\(/', $clause) === 1) {
+                $roleConstraints[] = $constraint;
+            }
+        }
+
+        if (count($roleConstraints) === 1) {
+            $constraint = $roleConstraints[0];
+            $clause = strtolower((string) $constraint['CHECK_CLAUSE']);
+            if (
+                (string) $constraint['CONSTRAINT_NAME'] === 'chk_users_role'
+                && str_contains($clause, 'user_manager')
+                && str_contains($clause, 'admin')
+                && str_contains($clause, 'user')
+            ) {
+                return;
+            }
+        }
+
+        $columnCheckPresent = false;
+        foreach ($roleConstraints as $constraint) {
+            if (strcasecmp((string) $constraint['LEVEL'], 'Column') === 0) {
+                $columnCheckPresent = true;
+                continue;
+            }
+            $name = str_replace('`', '``', (string) $constraint['CONSTRAINT_NAME']);
+            $db->exec("ALTER TABLE {$quotedTable} DROP CONSTRAINT `{$name}`");
+        }
+        if ($columnCheckPresent) {
+            // MariaDB exposes an inline column CHECK in information_schema, but it
+            // cannot be removed with DROP CONSTRAINT. MODIFY removes only that
+            // inline CHECK and preserves the column values and table identity.
+            $db->exec("ALTER TABLE {$quotedTable} MODIFY COLUMN role VARCHAR(20) NOT NULL DEFAULT 'user'");
+        }
+
+        $db->exec("ALTER TABLE {$quotedTable} ADD CONSTRAINT chk_users_role CHECK(role IN ('user','user_manager','admin'))");
     }
 
     /** @return list<string> */
@@ -52,7 +123,7 @@ final class MysqlSchema
             "CREATE TABLE IF NOT EXISTS chapter_refresh_locks(org_id BIGINT PRIMARY KEY,owner_token VARCHAR(128) NOT NULL,lock_until VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,INDEX idx_refresh_locks_until(lock_until))$engine",
             "CREATE TABLE IF NOT EXISTS automation_runtime(id INT PRIMARY KEY,worker_last_seen_at VARCHAR(32),last_check_at VARCHAR(32),next_check_at VARCHAR(32),last_map_refresh_at VARCHAR(32),map_lock_token VARCHAR(128),map_lock_until VARCHAR(32),map_retry_after_until VARCHAR(32),updated_at VARCHAR(32) NOT NULL)$engine",
             "CREATE TABLE IF NOT EXISTS map_refresh_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,trigger_type VARCHAR(32) NOT NULL,started_at VARCHAR(32) NOT NULL,finished_at VARCHAR(32),status VARCHAR(32) NOT NULL,http_status INT,error_category VARCHAR(64),INDEX idx_map_refresh_log_time(started_at,trigger_type,status))$engine",
-            "CREATE TABLE IF NOT EXISTS users(id BIGINT AUTO_INCREMENT PRIMARY KEY,first_name VARCHAR(120) NOT NULL,last_name VARCHAR(120) NOT NULL,username VARCHAR(190) UNIQUE,email VARCHAR(254) NOT NULL UNIQUE,password_hash VARCHAR(255) NOT NULL,home_chapter_org_id BIGINT,role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK(role IN ('user','admin')),status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','active','disabled')),email_verified_at VARCHAR(32),created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,last_login_at VARCHAR(32),bni_verification_status VARCHAR(32) NOT NULL DEFAULT 'unverified' CHECK(bni_verification_status IN ('unverified','directory_match','manual_verified')),bni_verified_at VARCHAR(32),bni_verified_by_user_id BIGINT,bni_external_member_ref VARCHAR(255),INDEX idx_users_home_chapter(home_chapter_org_id),CONSTRAINT fk_users_home FOREIGN KEY(home_chapter_org_id) REFERENCES organizations(org_id) ON DELETE SET NULL,CONSTRAINT fk_users_verifier FOREIGN KEY(bni_verified_by_user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS users(id BIGINT AUTO_INCREMENT PRIMARY KEY,first_name VARCHAR(120) NOT NULL,last_name VARCHAR(120) NOT NULL,username VARCHAR(190) UNIQUE,email VARCHAR(254) NOT NULL UNIQUE,password_hash VARCHAR(255) NOT NULL,home_chapter_org_id BIGINT,role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK(role IN ('user','user_manager','admin')),status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','active','disabled')),email_verified_at VARCHAR(32),created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,last_login_at VARCHAR(32),bni_verification_status VARCHAR(32) NOT NULL DEFAULT 'unverified' CHECK(bni_verification_status IN ('unverified','directory_match','manual_verified')),bni_verified_at VARCHAR(32),bni_verified_by_user_id BIGINT,bni_external_member_ref VARCHAR(255),INDEX idx_users_home_chapter(home_chapter_org_id),CONSTRAINT fk_users_home FOREIGN KEY(home_chapter_org_id) REFERENCES organizations(org_id) ON DELETE SET NULL,CONSTRAINT fk_users_verifier FOREIGN KEY(bni_verified_by_user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
             "CREATE TABLE IF NOT EXISTS email_verification_tokens(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT,token_hash CHAR(64) NOT NULL UNIQUE,expires_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,used_at VARCHAR(32),INDEX idx_email_verification_tokens_user_expiry(user_id,expires_at),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
             "CREATE TABLE IF NOT EXISTS password_reset_tokens(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT,token_hash CHAR(64) NOT NULL UNIQUE,expires_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,used_at VARCHAR(32),INDEX idx_password_reset_tokens_user_expiry(user_id,expires_at),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
             "CREATE TABLE IF NOT EXISTS mail_settings(id INT PRIMARY KEY,smtp_host VARCHAR(255),smtp_port INT NOT NULL DEFAULT 587,smtp_username VARCHAR(255),smtp_password TEXT,encryption VARCHAR(20) NOT NULL DEFAULT 'starttls',sender_email VARCHAR(254),sender_name VARCHAR(255) NOT NULL DEFAULT 'CrossChAPP',base_url VARCHAR(512) NOT NULL DEFAULT 'http://localhost:8082',updated_at VARCHAR(32) NOT NULL)$engine",
@@ -61,7 +132,7 @@ final class MysqlSchema
             "CREATE TABLE IF NOT EXISTS bni_member_check_attempts(id BIGINT AUTO_INCREMENT PRIMARY KEY,ip_hash CHAR(64) NOT NULL,attempted_at VARCHAR(32) NOT NULL,INDEX idx_bni_member_check_rate(ip_hash,attempted_at))$engine",
             "CREATE TABLE IF NOT EXISTS bni_member_directory_configs(org_id BIGINT PRIMARY KEY,endpoint TEXT NOT NULL,parameters LONGTEXT NOT NULL,languages LONGTEXT NOT NULL,website_type VARCHAR(32) NOT NULL,website_id VARCHAR(64) NOT NULL,mapped_widget_settings LONGTEXT NOT NULL,referer TEXT NOT NULL,updated_at VARCHAR(32) NOT NULL,FOREIGN KEY(org_id) REFERENCES organizations(org_id) ON DELETE CASCADE)$engine",
             "CREATE TABLE IF NOT EXISTS bni_member_check_lock(id INT PRIMARY KEY,owner_token VARCHAR(128) NOT NULL,lock_until VARCHAR(32) NOT NULL)$engine",
-            "CREATE TABLE IF NOT EXISTS user_invitations(id BIGINT AUTO_INCREMENT PRIMARY KEY,first_name VARCHAR(120) NOT NULL,last_name VARCHAR(120) NOT NULL,email VARCHAR(254) NOT NULL,home_chapter_org_id BIGINT NOT NULL,token_hash CHAR(64) NOT NULL UNIQUE,expires_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,sent_at VARCHAR(32),accepted_at VARCHAR(32),created_by_user_id BIGINT NOT NULL,status VARCHAR(32) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','expired','cancelled')),pending_email VARCHAR(254) AS (CASE WHEN status='pending' THEN LOWER(email) ELSE NULL END) PERSISTENT,UNIQUE KEY uq_user_invitations_pending_email(pending_email),INDEX idx_user_invitations_email_status(email,status,expires_at),FOREIGN KEY(home_chapter_org_id) REFERENCES organizations(org_id),FOREIGN KEY(created_by_user_id) REFERENCES users(id))$engine",
+            "CREATE TABLE IF NOT EXISTS user_invitations(id BIGINT AUTO_INCREMENT PRIMARY KEY,first_name VARCHAR(120) NOT NULL,last_name VARCHAR(120) NOT NULL,email VARCHAR(254) NOT NULL,home_chapter_org_id BIGINT NOT NULL,token_hash CHAR(64) NOT NULL UNIQUE,expires_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,sent_at VARCHAR(32),accepted_at VARCHAR(32),created_by_user_id BIGINT NOT NULL,verification_grant VARCHAR(32) NOT NULL DEFAULT 'manual_verified' CHECK(verification_grant IN ('manual_verified')),status VARCHAR(32) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','expired','cancelled')),pending_email VARCHAR(254) AS (CASE WHEN status='pending' THEN LOWER(email) ELSE NULL END) PERSISTENT,UNIQUE KEY uq_user_invitations_pending_email(pending_email),INDEX idx_user_invitations_email_status(email,status,expires_at),FOREIGN KEY(home_chapter_org_id) REFERENCES organizations(org_id),FOREIGN KEY(created_by_user_id) REFERENCES users(id))$engine",
             "CREATE TABLE IF NOT EXISTS representation_offers(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT NOT NULL,org_id BIGINT NOT NULL,all_dates TINYINT(1) NOT NULL DEFAULT 0 CHECK(all_dates IN (0,1)),date_signature VARCHAR(255) NOT NULL,created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,INDEX idx_representation_offers_user(user_id),INDEX idx_representation_offers_chapter(org_id,user_id),UNIQUE KEY uq_representation_offer(user_id,org_id,all_dates,date_signature),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(org_id) REFERENCES organizations(org_id) ON DELETE CASCADE)$engine",
             "CREATE TABLE IF NOT EXISTS representation_offer_chapters(id BIGINT AUTO_INCREMENT PRIMARY KEY,offer_id BIGINT,org_id BIGINT NOT NULL,UNIQUE KEY uq_offer_chapter(offer_id,org_id),INDEX idx_representation_chapters_org(org_id,offer_id),FOREIGN KEY(offer_id) REFERENCES representation_offers(id) ON DELETE SET NULL,FOREIGN KEY(org_id) REFERENCES organizations(org_id) ON DELETE CASCADE)$engine",
             "CREATE TABLE IF NOT EXISTS representation_offer_dates(id BIGINT AUTO_INCREMENT PRIMARY KEY,offer_id BIGINT NOT NULL,offer_date CHAR(10) NOT NULL,UNIQUE KEY uq_offer_date(offer_id,offer_date),INDEX idx_representation_dates_offer_date(offer_id,offer_date),FOREIGN KEY(offer_id) REFERENCES representation_offers(id) ON DELETE CASCADE)$engine",

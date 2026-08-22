@@ -6,6 +6,7 @@ $check=static function(bool $condition,string $message):void{if(!$condition)thro
 $db=(new Database(':memory:'))->connection();$users=new UserRepository($db);$now=gmdate('Y-m-d\TH:i:s\Z');
 $db->exec("INSERT INTO organizations(org_id,org_type,chapter_name,created_at,updated_at)VALUES(801,'CHAPTER','Verify Chapter','$now','$now')");
 $admin=$users->findByLogin('admin');$check($admin!==null,'Testadmin vorhanden.');
+$manager=$users->create('Mara','Manager','manager@example.test',password_hash('password-123',PASSWORD_DEFAULT),801);$db->exec("UPDATE users SET role='user_manager',status='active',email_verified_at='$now' WHERE id=".(int)$manager['id']);$manager=$users->findById((int)$manager['id']);
 $eligible=$users->create('Vera','Verify','verify@example.test',password_hash('password-123',PASSWORD_DEFAULT),801,'unverified','existing-ref');
 $missing=$users->create('Ohne','Chapter','missing@example.test',password_hash('password-123',PASSWORD_DEFAULT),null);
 $directory=$users->create('Directory','Match','directory@example.test',password_hash('password-123',PASSWORD_DEFAULT),801,'directory_match','directory-ref');
@@ -17,5 +18,7 @@ $users->manuallyVerify((int)$directory['id'],(int)$admin['id']);$directoryVerifi
 $check($directoryVerified['bni_verification_status']==='manual_verified'&&$directoryVerified['bni_verified_at']!==null&&(int)$directoryVerified['bni_verified_by_user_id']===(int)$admin['id']&&$directoryVerified['bni_external_member_ref']==='directory-ref','Directory-Match wird manuell verifiziert und behält die externe Referenz.');
 $check($reason(fn()=> $users->manuallyVerify((int)$missing['id'],(int)$admin['id']))==='home_chapter_missing','Fehlendes Heimatchapter blockiert.');
 $check($reason(fn()=> $users->manuallyVerify((int)$admin['id'],(int)$admin['id']))==='invalid_role','Adminziel blockiert.');
+$managerTarget=$users->create('Manager','Target','manager-target@example.test',password_hash('password-123',PASSWORD_DEFAULT),801,'directory_match','manager-ref');$users->manuallyVerify((int)$managerTarget['id'],(int)$manager['id']);$managerVerified=$users->findById((int)$managerTarget['id']);$check($managerVerified['bni_verification_status']==='manual_verified'&&(int)$managerVerified['bni_verified_by_user_id']===(int)$manager['id']&&$managerVerified['bni_external_member_ref']==='manager-ref','Anwenderbetreuer verifiziert normalen Benutzer mit Audit und erhaltener Referenz.');
+$check($reason(fn()=> $users->manuallyVerify((int)$manager['id'],(int)$admin['id']))==='invalid_role','Anwenderbetreuer kann nicht als Ziel verifiziert werden.');
 $check($reason(fn()=> $users->manuallyVerify(999999,(int)$admin['id']))==='user_not_found','Fehlender Anwender klar unterschieden.');
 echo "PASS Admin-Verifizierung: Regeln und Auditfelder\n";

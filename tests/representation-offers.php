@@ -41,8 +41,19 @@ try {
     assert([(int) $database->query('SELECT COUNT(*) FROM representation_offers')->fetchColumn(), (int) $database->query('SELECT COUNT(*) FROM representation_offer_dates')->fetchColumn()] === $beforeMismatch);
 
     $matches = $offers->findForHomeChapter(101, (int) $a['id'], '2099-08-20');
-    assert(count($matches['allDatesOffers']) === 1 && $matches['allDatesOffers'][0]['displayName'] === 'Bernd B.' && !array_key_exists('email', $matches['allDatesOffers'][0]));
+    assert(count($matches['allDatesOffers']) === 1 && $matches['allDatesOffers'][0]['displayName'] === 'Bernd B.' && $matches['allDatesOffers'][0]['verificationStatus']==='unverified' && !array_key_exists('email', $matches['allDatesOffers'][0]));
     assert($offers->findForHomeChapter(101, (int) $b['id'], '2099-08-20') === ['datedOffers' => [], 'allDatesOffers' => []]);
+    $unverified=$users->create('Aaron','Ohne','priority-unverified@example.invalid',password_hash('password3',PASSWORD_DEFAULT),202);
+    $manualA=$users->create('Zed','Verifiziert','priority-manual-z@example.invalid',password_hash('password4',PASSWORD_DEFAULT),202,'manual_verified');
+    $directory=$users->create('Mia','Directory','priority-directory@example.invalid',password_hash('password5',PASSWORD_DEFAULT),202,'directory_match');
+    $manualB=$users->create('Yara','Verifiziert','priority-manual-y@example.invalid',password_hash('password6',PASSWORD_DEFAULT),202,'manual_verified');
+    $database->exec("UPDATE users SET status='active',email_verified_at='$now'");
+    foreach([$unverified,$manualA,$directory,$manualB]as$provider)$offers->createMany((int)$provider['id'],[101],false,['2099-08-28']);
+    $prioritized=$offers->findForHomeChapter(101,(int)$a['id'],'2099-08-20');$providers=$prioritized['datedOffers'][0]['providers'];
+    assert(array_column($providers,'displayName')===['Yara V.','Zed V.','Mia D.','Aaron O.','Bernd B.']);
+    assert(array_column($providers,'verificationStatus')===['manual_verified','manual_verified','directory_match','unverified','unverified']);
+    assert(array_column($prioritized['datedOffers'],'date')===['2099-08-28']);
+    $overview=$offers->overviewForHomeChapter(101,(int)$a['id'],'2099-08-20');assert(array_slice(array_column($overview,'verificationStatus'),0,3)===['manual_verified','manual_verified','directory_match']);
     assert(!$offers->deleteForUser($alwaysIds[0], (int) $a['id']));
     assert($offers->deleteForUser($alwaysIds[0], (int) $b['id']));
 

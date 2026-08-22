@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/TextTemplateCatalog.php';
+
 final class MailSettingsRepository
 {
     public function __construct(private readonly PDO $database) {}
@@ -78,7 +80,9 @@ final class MailSettingsRepository
 
     public function saveTemplate(string $key, string $subject, string $body): void
     {
-        if (!in_array($key, self::templateKeys(), true) || trim($subject) === '' || trim($body) === '' || strlen($subject) > 250 || strlen($body) > 20000) throw new InvalidArgumentException('Die E-Mail-Vorlage ist ungültig.');
+        $definition = TextTemplateCatalog::definitions()[$key] ?? null;
+        if ($definition === null || $definition['storage'] !== 'email' || trim($subject) === '' || trim($body) === '' || strlen($subject) > 250 || strlen($body) > 20000) throw new InvalidArgumentException('Die E-Mail-Vorlage ist ungültig.');
+        self::assertAllowedPlaceholders($subject . "\n" . $body, $definition['allowedPlaceholders']);
         $statement = $this->database->prepare('UPDATE email_templates SET subject = :subject, body = :body, updated_at = :updated_at WHERE template_key = :key');
         $statement->execute([':subject' => trim($subject), ':body' => trim($body), ':updated_at' => self::now(), ':key' => $key]);
     }
@@ -87,21 +91,9 @@ final class MailSettingsRepository
     public function render(string $key, array $variables): array
     {
         $templates = $this->templates(); if (!isset($templates[$key])) throw new RuntimeException('E-Mail-Vorlage fehlt.');
-        $allowed = match ($key) {
-            'verify_email' => ['first_name', 'last_name', 'email', 'verification_link', 'app_name'],
-            'reset_password' => ['first_name', 'last_name', 'reset_link', 'app_name'],
-            'representation_contact' => ['provider_first_name', 'requester_first_name', 'requester_last_name', 'requester_full_name', 'requester_email', 'requester_chapter', 'requested_date', 'custom_message', 'app_name'],
-            'representation_request_contact' => ['request_owner_first_name', 'contact_first_name', 'contact_last_name', 'contact_full_name', 'contact_email', 'contact_chapter', 'requested_chapter', 'requested_date', 'custom_message', 'app_name'],
-            'request_contact_acceptance', 'offer_contact_acceptance',
-            'representation_assignment_confirmed_requester', 'representation_assignment_confirmed_representative',
-            'representation_assignment_cancelled_requester', 'representation_assignment_cancelled_representative' => [
-                'requester_first_name','requester_full_name','requester_email','representative_first_name',
-                'representative_full_name','representative_email','chapter','requested_date','acceptance_link',
-                'cancelled_by','custom_message','app_name','base_url'
-            ],
-            'user_invitation' => ['first_name', 'last_name', 'email', 'chapter', 'invitation_link', 'app_name'],
-            default => throw new RuntimeException('E-Mail-Vorlage fehlt.'),
-        };
+        $definition = TextTemplateCatalog::definitions()[$key] ?? null;
+        if ($definition === null || $definition['storage'] !== 'email') throw new RuntimeException('E-Mail-Vorlage fehlt.');
+        $allowed = $definition['allowedPlaceholders'];
         $replace = [];
         foreach ($allowed as $name) $replace['{{' . $name . '}}'] = $variables[$name] ?? '';
         $clean = static function (string $text): string {
@@ -143,14 +135,49 @@ final class MailSettingsRepository
         $statement->execute([':offer' => $offerMessage, ':request' => $requestMessage, ':updated' => self::now()]);
     }
 
+    /** @return list<array<string,mixed>> */
+    public function textBlocks(): array
+    {
+        $templates = $this->templates();
+        $settings = ['contact_hint'=>$this->contactHint(),'request_contact_hint'=>$this->requestContactHint(),'offer_custom_message'=>$this->offerCustomMessage(),'request_custom_message'=>$this->requestCustomMessage()];
+        $result = [];
+        foreach (TextTemplateCatalog::definitions() as $key => $definition) {
+            $content = $definition['storage'] === 'email' ? ($templates[$key] ?? ['subject'=>'','body'=>'']) : ['subject'=>'','body'=>$settings[$key]];
+            $result[] = ['key'=>$key] + $definition + ['subject'=>(string)$content['subject'],'body'=>(string)$content['body']];
+        }
+        return $result;
+    }
+
+    public function saveTextBlock(string $key, ?string $subject, string $body): void
+    {
+        $definition = TextTemplateCatalog::definitions()[$key] ?? null;
+        if ($definition === null) throw new InvalidArgumentException('Der Textbaustein ist unbekannt.');
+        if ($definition['storage'] === 'email') { $this->saveTemplate($key, (string)$subject, $body); return; }
+        if ($subject !== null) throw new InvalidArgumentException('Dieser Textbaustein besitzt keinen Betreff.');
+        self::assertAllowedPlaceholders($body, $definition['allowedPlaceholders']);
+        switch ($key) {
+            case 'contact_hint': $this->saveContactHint($body); break;
+            case 'request_contact_hint': $this->saveRequestContactHint($body); break;
+            case 'offer_custom_message': $this->saveSingleCustomMessage('offer_custom_message', $body); break;
+            case 'request_custom_message': $this->saveSingleCustomMessage('request_custom_message', $body); break;
+            default: throw new InvalidArgumentException('Der Textbaustein ist unbekannt.');
+        }
+    }
+
+    private function saveSingleCustomMessage(string $column, string $message): void
+    {
+        $message=trim($message);if(strlen($message)<20||strlen($message)>3000)throw new InvalidArgumentException('Die Standardnachricht ist ungültig.');
+        $statement=$this->database->prepare("UPDATE representation_settings SET {$column}=:message,updated_at=:updated WHERE id=1");
+        $statement->execute([':message'=>$message,':updated'=>self::now()]);
+    }
+
+    /** @param list<string> $allowed */
+    private static function assertAllowedPlaceholders(string $text, array $allowed): void
+    {
+        preg_match_all('/{{\s*([a-zA-Z0-9_]+)\s*}}/', $text, $matches);
+        foreach (array_unique($matches[1] ?? []) as $placeholder) if (!in_array($placeholder,$allowed,true)) throw new InvalidArgumentException('Der Platzhalter {{'.$placeholder.'}} ist für diesen Textbaustein nicht erlaubt.');
+    }
+
     private static function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }
 
-    /** @return list<string> */
-    private static function templateKeys(): array
-    {
-        return ['verify_email','reset_password','representation_contact','representation_request_contact','user_invitation',
-            'request_contact_acceptance','offer_contact_acceptance','representation_assignment_confirmed_requester',
-            'representation_assignment_confirmed_representative','representation_assignment_cancelled_requester',
-            'representation_assignment_cancelled_representative'];
-    }
 }

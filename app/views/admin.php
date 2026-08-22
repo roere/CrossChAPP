@@ -2,7 +2,9 @@
 require_once __DIR__ . '/../src/BniRequestPolicy.php';
 ?>
 <main class="shell content no-hero-content" data-detail-delay-ms="<?= BniRequestPolicy::DETAIL_DELAY_MS ?>">
-    <p class="page-intro-title">Administration</p>
+    <p class="page-intro-title"><?= $isAdmin ? 'Administration' : 'Anwenderverwaltung' ?></p>
+    <?php if (!$isAdmin): ?><p class="page-meta">Rolle: Anwenderbetreuer</p><?php endif; ?>
+    <?php if ($isAdmin): ?>
     <section class="panel admin-local-heading" aria-labelledby="local-heading">
         <div>
             <p class="section-kicker">Gespeicherter Bestand</p>
@@ -145,6 +147,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
         </form>
         <div id="message" class="message" role="status" aria-live="polite"></div>
     </section>
+    <?php endif; ?>
     <details id="users-panel" class="panel misc-panel">
         <summary>Anwender</summary>
         <div class="misc-content">
@@ -177,15 +180,15 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                     </table>
                 </div>
                 <div id="users-actions" class="users-actions" aria-describedby="users-selection-hint">
-                    <button id="reset-selected-user" type="button" disabled>Passwort zurücksetzen</button>
+                    <?php if ($isAdmin): ?><button id="reset-selected-user" type="button" disabled>Passwort zurücksetzen</button><?php endif; ?>
                     <button id="verify-selected-user" type="button" disabled>Verifizieren</button>
-                    <button id="delete-selected-user" type="button" class="danger" disabled>Konto löschen</button>
+                    <?php if ($isAdmin): ?><button id="delete-selected-user" type="button" class="danger" disabled>Konto löschen</button><?php endif; ?>
                     <p id="users-selection-hint">Bitte wähle zuerst einen Anwender aus.</p>
                 </div>
             </section>
         </div>
     </details>
-    <dialog id="admin-reset-password-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-reset-password-heading">
+    <?php if ($isAdmin): ?><dialog id="admin-reset-password-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-reset-password-heading">
         <div class="account-dialog-card">
             <button id="close-admin-reset-password-icon" type="button" class="dialog-close" aria-label="Passwortreset schließen">×</button>
             <h2 id="admin-reset-password-heading">Passwort zurücksetzen</h2>
@@ -193,7 +196,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div id="admin-reset-password-message" class="message" role="status" aria-live="polite"></div>
             <div class="registration-actions"><button id="confirm-admin-reset-password" type="button">Reset-Link senden</button><button id="cancel-admin-reset-password" type="button" class="secondary">Abbrechen</button></div>
         </div>
-    </dialog>
+    </dialog><?php endif; ?>
     <dialog id="admin-verify-user-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-verify-user-heading">
         <div class="account-dialog-card">
             <button id="close-admin-verify-user-icon" type="button" class="dialog-close" aria-label="Verifizierungsdialog schließen">×</button>
@@ -203,7 +206,16 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div class="registration-actions"><button id="confirm-admin-verify-user" type="button">Verifizieren</button><button id="cancel-admin-verify-user" type="button" class="secondary">Abbrechen</button></div>
         </div>
     </dialog>
-    <dialog id="admin-delete-user-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-delete-user-heading">
+    <?php if ($isAdmin): ?><dialog id="admin-user-role-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-user-role-heading">
+        <div class="account-dialog-card">
+            <button id="close-admin-user-role-icon" type="button" class="dialog-close" aria-label="Rollendialog schließen">×</button>
+            <h2 id="admin-user-role-heading">Rolle ändern?</h2>
+            <div id="admin-user-role-confirmation"><p></p></div>
+            <div id="admin-user-role-message" class="message" role="status" aria-live="polite"></div>
+            <div class="registration-actions"><button id="confirm-admin-user-role" type="button">Rolle ändern</button><button id="cancel-admin-user-role" type="button" class="secondary">Abbrechen</button></div>
+        </div>
+    </dialog><?php endif; ?>
+    <?php if ($isAdmin): ?><dialog id="admin-delete-user-dialog" class="account-dialog" aria-modal="true" aria-labelledby="admin-delete-user-heading">
         <div class="account-dialog-card">
             <button id="close-admin-delete-user-icon" type="button" class="dialog-close" aria-label="Anwenderlöschung schließen">×</button>
             <h2 id="admin-delete-user-heading">Anwender löschen</h2>
@@ -211,11 +223,11 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div id="admin-delete-user-message" class="message" role="status" aria-live="polite"></div>
             <div class="registration-actions"><button id="confirm-admin-delete-user" type="button" class="danger">Anwender endgültig löschen</button><button id="cancel-admin-delete-user" type="button" class="secondary">Abbrechen</button></div>
         </div>
-    </dialog>
+    </dialog><?php endif; ?>
     <details id="invitations-panel" class="panel misc-panel">
         <summary>Einladungen</summary>
         <div class="misc-content">
-            <section><p class="section-kicker">Manuell geprüft</p><h2>Person einladen</h2>
+            <section><p class="section-kicker">Personen, die Du persönlich einlädst, bekommen den Status ‚verifiziert‘.</p><h2>Person einladen</h2>
                 <form id="invitation-form" class="invitation-form">
                     <div class="auth-name-row"><label>Vorname *<input name="first_name" required maxlength="120"></label><label>Nachname *<input name="last_name" required maxlength="120"></label></div>
                     <label>E-Mail-Adresse *<input name="email" type="email" required maxlength="254"></label>
@@ -223,19 +235,26 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                     <button type="submit">Einladung senden</button>
                 </form><div id="invitation-message" class="message" role="status"></div>
             </section>
-            <section><h2>Einladungstext</h2><form id="invitation-template-form" class="invitation-form"><label>Betreff<input name="subject" required></label><label>Einladungstext<textarea name="body" rows="10" required></textarea></label><p>Erlaubte Platzhalter: {{first_name}}, {{last_name}}, {{email}}, {{chapter}}, {{invitation_link}}, {{app_name}}</p><button type="submit">Einladungstext speichern</button></form><div id="invitation-template-message" class="message" role="status"></div></section>
-            <section><h2>Offene Einladungen</h2><div class="table-scroll"><table><thead><tr><th>Name</th><th>E-Mail</th><th>Chapter</th><th>Gesendet</th><th>Gültig bis</th><th>Status</th><th>Aktion</th></tr></thead><tbody id="invitation-list"></tbody></table></div></section>
+            <section><h2>Offene Einladungen</h2><div class="table-scroll"><table><thead><tr><th>Name</th><th>E-Mail</th><th>Chapter</th><th>Gesendet</th><th>Gültig bis</th><th>Status</th><?php if ($isAdmin): ?><th>Aktion</th><?php endif; ?></tr></thead><tbody id="invitation-list"></tbody></table></div></section>
         </div>
     </details>
-    <dialog id="cancel-invitation-dialog" aria-labelledby="cancel-invitation-title">
+    <dialog id="invitation-verification-dialog" class="account-dialog" aria-modal="true" aria-labelledby="invitation-verification-heading">
+        <div class="account-dialog-card">
+            <h2 id="invitation-verification-heading">Chapter-Prüfung</h2>
+            <p id="invitation-verification-detail"></p>
+            <p><strong>Trotzdem einladen?</strong></p>
+            <div class="registration-actions"><button id="confirm-invitation-override" type="button">Ja</button><button id="cancel-invitation-override" type="button" class="secondary">Nein</button></div>
+        </div>
+    </dialog>
+    <?php if ($isAdmin): ?><dialog id="cancel-invitation-dialog" aria-labelledby="cancel-invitation-title">
         <form method="dialog" class="auth-card">
             <h2 id="cancel-invitation-title">Einladung widerrufen</h2>
             <p>Möchtest du diese Einladung wirklich widerrufen?</p>
             <div id="cancel-invitation-message" class="message" role="status"></div>
             <div class="auth-actions"><button id="confirm-cancel-invitation" type="button">Widerrufen</button><button type="submit" class="secondary">Abbrechen</button></div>
         </form>
-    </dialog>
-    <details id="misc-panel" class="panel misc-panel">
+    </dialog><?php endif; ?>
+    <?php if ($isAdmin): ?><details id="misc-panel" class="panel misc-panel">
         <summary>Sonstiges</summary>
         <div class="misc-content">
             <section><p class="section-kicker">Konfiguration</p><h2>E-Mail-Versand</h2>
@@ -248,16 +267,27 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                 </form><div id="mail-settings-message" class="message" role="status"></div>
                 <div class="test-mail-row"><label>Test-E-Mail-Adresse<input id="test-mail-address" type="email"></label><button id="send-test-mail" type="button" class="secondary">Test-E-Mail senden</button></div><div id="test-mail-message" class="message" role="status"></div>
             </section>
-            <section><p class="section-kicker">Inhalte</p><h2>E-Mail-Vorlagen</h2><form id="email-templates-form">
-                <fieldset><legend>E-Mail-Adresse bestätigen</legend><label>Betreff<input name="verify_subject"></label><label>Text<textarea name="verify_body" rows="10"></textarea></label><p>{{first_name}}, {{last_name}}, {{email}}, {{verification_link}}, {{app_name}}</p></fieldset>
-                <fieldset><legend>Passwort zurücksetzen</legend><label>Betreff<input name="reset_subject"></label><label>Text<textarea name="reset_body" rows="10"></textarea></label><p>{{first_name}}, {{last_name}}, {{reset_link}}, {{app_name}}</p></fieldset>
-                <fieldset><legend>Vertretungsangebot anfragen</legend><label>Hinweis bei Vertretungsanfrage<textarea name="contact_hint" rows="5"></textarea></label><label>Standardnachricht – Vertretungsangebot anfragen<textarea name="offer_custom_message" rows="7"></textarea></label><label>E-Mail-Betreff<input name="contact_subject"></label><label>E-Mail-Text<textarea name="contact_body" rows="12"></textarea></label><p>{{provider_first_name}}, {{requester_first_name}}, {{requester_last_name}}, {{requester_full_name}}, {{requester_email}}, {{requester_chapter}}, {{requested_date}}, {{custom_message}}, {{app_name}}</p></fieldset>
-                <fieldset><legend>Vertretungsgesuch beantworten</legend><label>Hinweis Vertretungsgesuch annehmen<textarea name="request_contact_hint" rows="5"></textarea></label><label>Standardnachricht – Vertretungsgesuch beantworten<textarea name="request_custom_message" rows="7"></textarea></label><label>E-Mail-Betreff<input name="request_contact_subject"></label><label>E-Mail-Text<textarea name="request_contact_body" rows="12"></textarea></label><p>{{request_owner_first_name}}, {{contact_first_name}}, {{contact_last_name}}, {{contact_full_name}}, {{contact_email}}, {{contact_chapter}}, {{requested_chapter}}, {{requested_date}}, {{custom_message}}, {{app_name}}</p></fieldset>
-                <?php foreach (['request_contact_acceptance'=>'Kontaktmail Gesuch mit Annahmelink','offer_contact_acceptance'=>'Kontaktmail Angebot mit Annahmelink','representation_assignment_confirmed_requester'=>'Vereinbarung – Suchender','representation_assignment_confirmed_representative'=>'Vereinbarung – Vertreter','representation_assignment_cancelled_requester'=>'Storno – Suchender','representation_assignment_cancelled_representative'=>'Storno – Vertreter'] as $templateKey=>$templateLabel): ?>
-                <fieldset data-assignment-mail-template="<?= htmlspecialchars($templateKey,ENT_QUOTES,'UTF-8') ?>"><legend><?= htmlspecialchars($templateLabel,ENT_QUOTES,'UTF-8') ?></legend><label>Betreff<input name="<?= $templateKey ?>_subject"></label><label>Text<textarea name="<?= $templateKey ?>_body" rows="10"></textarea></label><p>{{requester_first_name}}, {{requester_full_name}}, {{requester_email}}, {{representative_first_name}}, {{representative_full_name}}, {{representative_email}}, {{chapter}}, {{requested_date}}, {{acceptance_link}}, {{cancelled_by}}, {{custom_message}}, {{app_name}}, {{base_url}}</p></fieldset>
-                <?php endforeach; ?>
-                <div class="email-template-actions"><button type="submit">E-Mail-Vorlagen speichern</button></div>
-            </form><div id="email-templates-message" class="message" role="status"></div></section>
+            <section id="text-template-section"><p class="section-kicker">Inhalte</p><h2>Textbausteine</h2>
+                <div class="text-template-layout">
+                    <div class="text-template-selection">
+                        <label class="text-template-search">Textbaustein suchen<input id="text-template-search" type="search"></label>
+                        <div class="text-template-headings" aria-hidden="true"><span>Textbaustein</span><span>Verwendung</span></div>
+                        <div id="text-template-list" class="text-template-list" role="listbox" aria-label="Textbaustein auswählen"></div>
+                    </div>
+                    <form id="email-templates-form" class="text-template-editor" aria-labelledby="text-template-editor-heading">
+                        <p id="text-template-category" class="section-kicker"></p>
+                        <h3 id="text-template-editor-heading">Textbaustein auswählen</h3>
+                        <code id="text-template-editor-key"></code>
+                        <label id="text-template-subject-label">Betreff<input id="text-template-subject" name="subject" maxlength="250"></label>
+                        <label>Text<textarea id="text-template-body" name="body" rows="16" required maxlength="20000"></textarea></label>
+                        <div><strong>Verfügbare Platzhalter</strong><div id="text-template-placeholders" class="text-template-placeholders"></div></div>
+                        <p id="text-template-dirty" class="page-meta" hidden>Geändert</p>
+                        <button type="submit">Speichern</button>
+                        <div id="email-templates-message" class="message" role="status" aria-live="polite"></div>
+                    </form>
+                </div>
+            </section>
+            <dialog id="text-template-dirty-dialog" aria-labelledby="text-template-dirty-heading"><div class="account-dialog-card"><h2 id="text-template-dirty-heading">Ungespeicherte Änderungen</h2><p>Der aktuelle Textbaustein enthält ungespeicherte Änderungen.</p><div class="registration-actions"><button id="text-template-save-switch" type="button">Speichern und wechseln</button><button id="text-template-discard-switch" type="button" class="secondary">Verwerfen</button><button id="text-template-cancel-switch" type="button" class="secondary">Abbrechen</button></div></div></dialog>
             <section><p class="section-kicker">Inhalte</p><h2>Rechtliche Texte</h2>
                 <form id="legal-settings-form" class="legal-settings-form">
                     <label>Impressum<textarea name="imprintText" rows="14" required></textarea></label>
@@ -266,5 +296,5 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                 </form><div id="legal-settings-message" class="message" role="status" aria-live="polite"></div>
             </section>
         </div>
-    </details>
+    </details><?php endif; ?>
 </main>

@@ -130,10 +130,10 @@ final class RepresentationOfferRepository
         $datedOffers = [];
         foreach ($dated as $date => $providers) {
             foreach ($always as $userId => $provider) if (!isset($providers[$userId])) $providers[$userId] = $provider;
-            uasort($providers, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
+            uasort($providers, self::compareProviders(...));
             $datedOffers[] = ['date' => $date, 'providers' => array_values($providers)];
         }
-        uasort($always, static fn (array $a, array $b): int => strcasecmp($a['displayName'], $b['displayName']));
+        uasort($always, self::compareProviders(...));
         return ['datedOffers' => $datedOffers, 'allDatesOffers' => array_values($always)];
     }
 
@@ -153,10 +153,12 @@ final class RepresentationOfferRepository
             ORDER BY offers.all_dates, next_date, LOWER(users.first_name), offers.id
             SQL);
         $statement->execute([':dates_today' => $today, ':minimum_today' => $today, ':org_id' => $orgId, ':user_id' => $currentUserId]);
-        return array_map(static function (array $row): array {
+        $result=array_map(static function (array $row): array {
             $provider = self::publicProvider($row); $dates = self::splitValues($row['offer_dates']);
             return $provider + ['allDates' => (bool) $row['all_dates'], 'dates' => $dates];
         }, $statement->fetchAll());
+        usort($result,static fn(array $a,array $b):int=>self::verificationPriority($a['verificationStatus'])<=>self::verificationPriority($b['verificationStatus']));
+        return $result;
     }
 
     /** @return array<string,mixed>|null */
@@ -186,7 +188,18 @@ final class RepresentationOfferRepository
     private static function publicProvider(array $row): array
     {
         $initial = function_exists('mb_substr') ? mb_substr((string) $row['last_name'], 0, 1) : substr((string) $row['last_name'], 0, 1);
-        return ['offerId' => (int) $row['id'], 'displayName' => trim((string) $row['first_name'] . ' ' . $initial . '.'), 'isBniMember' => $row['home_chapter_org_id'] !== null, 'isVerified' => ($row['bni_verification_status'] ?? '') === 'manual_verified'];
+        $status=(string)($row['bni_verification_status']??'unverified');
+        return ['offerId' => (int) $row['id'], 'displayName' => trim((string) $row['first_name'] . ' ' . $initial . '.'), 'isBniMember' => $row['home_chapter_org_id'] !== null, 'isVerified' => $status === 'manual_verified','verificationStatus'=>$status];
+    }
+
+    private static function compareProviders(array $a,array $b):int
+    {
+        return (self::verificationPriority((string)$a['verificationStatus'])<=>self::verificationPriority((string)$b['verificationStatus']))?:strcasecmp((string)$a['displayName'],(string)$b['displayName']);
+    }
+
+    private static function verificationPriority(string $status):int
+    {
+        return match($status){'manual_verified'=>0,'directory_match'=>1,default=>2};
     }
 
     /** @return list<string> */

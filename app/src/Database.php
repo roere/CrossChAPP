@@ -186,7 +186,7 @@ final class Database
                 email TEXT NOT NULL COLLATE NOCASE UNIQUE,
                 password_hash TEXT NOT NULL,
                 home_chapter_org_id INTEGER,
-                role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+                role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'user_manager', 'admin')),
                 status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'disabled')),
                 email_verified_at TEXT,
                 created_at TEXT NOT NULL,
@@ -200,6 +200,7 @@ final class Database
         $this->addTableColumnIfMissing('users', 'bni_verified_at', 'TEXT');
         $this->addTableColumnIfMissing('users', 'bni_verified_by_user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
         $this->addTableColumnIfMissing('users', 'bni_external_member_ref', 'TEXT');
+        $this->migrateUserManagerRole();
         $this->connection->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_users_home_chapter ON users(home_chapter_org_id)');
         $now = gmdate('Y-m-d\TH:i:s\Z');
@@ -338,14 +339,51 @@ final class Database
                 sent_at TEXT,
                 accepted_at TEXT,
                 created_by_user_id INTEGER NOT NULL,
+                verification_grant TEXT NOT NULL DEFAULT 'manual_verified' CHECK (verification_grant IN ('manual_verified')),
                 status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','accepted','expired','cancelled')),
                 FOREIGN KEY (home_chapter_org_id) REFERENCES organizations(org_id),
                 FOREIGN KEY (created_by_user_id) REFERENCES users(id)
             )
             SQL);
+        $this->addTableColumnIfMissing('user_invitations', 'verification_grant', "TEXT NOT NULL DEFAULT 'manual_verified' CHECK (verification_grant IN ('manual_verified'))");
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_user_invitations_email_status ON user_invitations(email, status, expires_at)');
         $this->connection->exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_invitations_pending_email ON user_invitations(LOWER(email)) WHERE status = 'pending'");
         $this->createRepresentationSchema();
+    }
+
+    private function migrateUserManagerRole(): void
+    {
+        $sql=(string)$this->connection->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")->fetchColumn();
+        if(str_contains($sql,"'user_manager'"))return;
+        $foreignKeys=(int)$this->connection->query('PRAGMA foreign_keys')->fetchColumn();
+        $this->connection->exec('PRAGMA foreign_keys = OFF');
+        try {
+            $this->connection->beginTransaction();
+            $this->connection->exec(<<<'SQL'
+                CREATE TABLE users_user_manager_migration (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    first_name TEXT NOT NULL,last_name TEXT NOT NULL,username TEXT COLLATE NOCASE,
+                    email TEXT NOT NULL COLLATE NOCASE UNIQUE,password_hash TEXT NOT NULL,
+                    home_chapter_org_id INTEGER,
+                    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','user_manager','admin')),
+                    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','disabled')),
+                    email_verified_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,last_login_at TEXT,
+                    bni_verification_status TEXT NOT NULL DEFAULT 'unverified' CHECK (bni_verification_status IN ('unverified','directory_match','manual_verified')),
+                    bni_verified_at TEXT,bni_verified_by_user_id INTEGER,bni_external_member_ref TEXT,
+                    FOREIGN KEY (home_chapter_org_id) REFERENCES organizations(org_id) ON DELETE SET NULL,
+                    FOREIGN KEY (bni_verified_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+                )
+                SQL);
+            $this->connection->exec('INSERT INTO users_user_manager_migration(id,first_name,last_name,username,email,password_hash,home_chapter_org_id,role,status,email_verified_at,created_at,updated_at,last_login_at,bni_verification_status,bni_verified_at,bni_verified_by_user_id,bni_external_member_ref) SELECT id,first_name,last_name,username,email,password_hash,home_chapter_org_id,role,status,email_verified_at,created_at,updated_at,last_login_at,bni_verification_status,bni_verified_at,bni_verified_by_user_id,bni_external_member_ref FROM users');
+            $this->connection->exec('DROP TABLE users');
+            $this->connection->exec('ALTER TABLE users_user_manager_migration RENAME TO users');
+            $this->connection->commit();
+        } catch(Throwable $exception) {
+            if($this->connection->inTransaction())$this->connection->rollBack();
+            throw $exception;
+        } finally {
+            $this->connection->exec('PRAGMA foreign_keys = '.($foreignKeys===1?'ON':'OFF'));
+        }
     }
 
     private function createRepresentationSchema(): void

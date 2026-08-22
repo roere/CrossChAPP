@@ -30,6 +30,7 @@ if (isset($_GET['verify'])) {
     exit;
 }
 $isAdmin = Auth::isAdmin();
+$canManageUsers = Auth::canManageUsers();
 $currentUser = Auth::user();
 $currentDatabaseUser = null;
 if ($currentUser !== null) {
@@ -92,12 +93,12 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <?php if ($requestedView === 'crosschaptern' || $requestedView === 'vertretung'): ?><script src="/assets/map.js?v=<?= $assetVersion('map.js') ?>" defer></script><?php endif; ?>
     <script src="/assets/site.js?v=<?= $assetVersion('site.js') ?>" defer></script>
     <?php if ($requestedView === 'vertretung' || $requestedView === 'vertretung-finden'): ?><script src="/assets/date-picker.js?v=<?= $assetVersion('date-picker.js') ?>" defer></script><?php endif; ?>
-    <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $isAdmin)): ?><script src="/assets/sort-utils.js?v=<?= $assetVersion('sort-utils.js') ?>" defer></script><?php endif; ?>
+    <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $canManageUsers)): ?><script src="/assets/sort-utils.js?v=<?= $assetVersion('sort-utils.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung'): ?><script src="/assets/representation.js?v=<?= $assetVersion('representation.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung-finden'): ?><script src="/assets/representation-find.js?v=<?= $assetVersion('representation-find.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'representation-accept'): ?><script src="/assets/representation-accept.js?v=<?= $assetVersion('representation-accept.js') ?>" defer></script><?php endif; ?>
     <?php if (($requestedView === 'vertretung' || $requestedView === 'vertretung-finden') && $currentUser !== null): ?><script src="/assets/representation-assignments.js?v=<?= $assetVersion('representation-assignments.js') ?>" defer></script><?php endif; ?>
-    <?php if ($requestedView === 'admin' && $isAdmin): ?><script src="/assets/app.js?v=<?= $assetVersion('app.js') ?>" defer></script><?php endif; ?>
+    <?php if ($requestedView === 'admin' && $canManageUsers): ?><script src="/assets/app.js?v=<?= $assetVersion('app.js') ?>" defer></script><?php endif; ?>
 </head>
 <body>
     <template id="verification-badge-template"><?php require __DIR__.'/views/partials/verification-badge.php'; ?></template>
@@ -117,7 +118,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                         <a class="<?= $requestedView === 'crosschaptern' ? 'active' : '' ?>" href="/?view=crosschaptern">CrossChAPPtern</a>
                         <a id="nav-representation-offer" class="<?= $requestedView === 'vertretung' ? 'active' : '' ?>" href="/?view=vertretung"><span>Vertretung anbieten</span><?php if ($currentUser !== null): ?><span class="nav-count-badge" data-assignment-nav-count="representative" hidden></span><?php endif; ?></a>
                         <a id="nav-representation-find" class="<?= $requestedView === 'vertretung-finden' ? 'active' : '' ?>" href="/?view=vertretung-finden"><span>Vertreter finden</span><?php if ($currentUser !== null): ?><span class="nav-count-badge" data-assignment-nav-count="requester" hidden></span><?php endif; ?></a>
-                        <?php if ($isAdmin): ?>
+                        <?php if ($canManageUsers): ?>
                             <a class="<?= $requestedView === 'admin' ? 'active' : '' ?>" href="/?view=admin">Admin</a>
                         <?php endif; ?>
                     </nav>
@@ -211,7 +212,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
         $legalContent=$requestedView==='impressum'?$legalSettings['imprintText']:$legalSettings['privacyText'];
         require __DIR__ . '/views/legal.php';
     } elseif ($requestedView === 'admin') {
-        require $isAdmin ? __DIR__ . '/views/admin.php' : __DIR__ . '/views/login.php';
+        require $canManageUsers ? __DIR__ . '/views/admin.php' : __DIR__ . '/views/login.php';
     } elseif ($requestedView === 'auth') {
         require __DIR__ . '/views/login.php';
     } elseif ($requestedView === 'vertretung') {

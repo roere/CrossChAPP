@@ -51,8 +51,34 @@ final class Auth
 
     public static function isAdmin(): bool
     {
+        return self::isFullAdmin();
+    }
+
+    public static function isFullAdmin(): bool
+    {
+        return self::role() === 'admin';
+    }
+
+    public static function canManageUsers(): bool
+    {
+        return in_array(self::role(), ['admin', 'user_manager'], true);
+    }
+
+    public static function canVerifyUsers(): bool
+    {
+        return self::canManageUsers();
+    }
+
+    public static function canInviteUsers(): bool
+    {
+        return self::canManageUsers();
+    }
+
+    public static function role(): ?string
+    {
         self::start();
-        return ($_SESSION[self::IDENTITY_KEY]['role'] ?? null) === 'admin';
+        $role = $_SESSION[self::IDENTITY_KEY]['role'] ?? null;
+        return is_string($role) ? $role : null;
     }
 
     /** @return array<string, mixed>|null */
@@ -82,14 +108,19 @@ final class Auth
 
     public static function requireAdminJson(): void
     {
-        if (self::isAdmin()) {
-            return;
-        }
-
-        http_response_code(401);
+        if (self::isFullAdmin()) return;
+        http_response_code(self::user() === null ? 401 : 403);
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['error' => 'Admin-Anmeldung erforderlich.'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['error' => self::user() === null ? 'Admin-Anmeldung erforderlich.' : 'Admin-Berechtigung erforderlich.'], JSON_UNESCAPED_UNICODE);
         exit;
+    }
+
+    public static function requireUserManagementJson(): array
+    {
+        $user = self::user();
+        if ($user === null) self::denyJson('Anmeldung erforderlich.', 401);
+        if (!self::canManageUsers()) self::denyJson('Berechtigung zur Anwenderverwaltung erforderlich.', 403);
+        return $user;
     }
 
     /** @return array<string, mixed> */
@@ -107,5 +138,11 @@ final class Auth
         if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== '' && $_SERVER['HTTPS'] !== 'off') return true;
         require_once __DIR__ . '/ClientIp.php';
         return ClientIp::isTrustedProxy() && strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+    }
+
+    private static function denyJson(string $message, int $status): never
+    {
+        http_response_code($status); header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => $message], JSON_UNESCAPED_UNICODE); exit;
     }
 }

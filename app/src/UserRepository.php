@@ -121,7 +121,7 @@ final class UserRepository
         if ($user['home_chapter_org_id'] === null) throw new AdminUserVerificationException('home_chapter_missing', 'Dieser Anwender kann erst verifiziert werden, wenn ein Heimatchapter hinterlegt ist.');
         if (($user['bni_verification_status'] ?? '') === 'manual_verified') throw new AdminUserVerificationException('already_verified', 'Dieser Anwender ist bereits verifiziert.');
         $admin = $this->findById($adminUserId);
-        if ($admin === null || ($admin['role'] ?? null) !== 'admin') throw new AdminUserVerificationException('invalid_verifier', 'Die Admin-Berechtigung konnte nicht bestätigt werden.');
+        if ($admin === null || !in_array(($admin['role'] ?? null), ['admin','user_manager'], true)) throw new AdminUserVerificationException('invalid_verifier', 'Die Berechtigung zur Anwenderbetreuung konnte nicht bestätigt werden.');
         $now = self::now();
         $statement = $this->database->prepare(<<<'SQL'
             UPDATE users
@@ -134,6 +134,22 @@ final class UserRepository
             SQL);
         $statement->execute([':verified_at' => $now, ':admin_id' => $adminUserId, ':updated_at' => $now, ':id' => $userId]);
         if ($statement->rowCount() !== 1) throw new AdminUserVerificationException('verification_conflict', 'Der Verifikationsstatus hat sich zwischenzeitlich geändert.');
+    }
+
+    public function updateRole(int $userId, string $role): void
+    {
+        if (!in_array($role, ['user', 'user_manager'], true)) {
+            throw new AdminUserRoleException('invalid_role', 'Die ausgewählte Rolle ist nicht zulässig.');
+        }
+        $user = $this->findById($userId);
+        if ($user === null) throw new AdminUserRoleException('user_not_found', 'Der ausgewählte Anwender wurde nicht gefunden.');
+        if (!in_array(($user['role'] ?? null), ['user', 'user_manager'], true)) {
+            throw new AdminUserRoleException('protected_role', 'Administratorkonten können nicht geändert werden.');
+        }
+        if ($user['role'] === $role) return;
+        $statement = $this->database->prepare("UPDATE users SET role=:role,updated_at=:updated_at WHERE id=:id AND role IN ('user','user_manager')");
+        $statement->execute([':role' => $role, ':updated_at' => self::now(), ':id' => $userId]);
+        if ($statement->rowCount() !== 1) throw new AdminUserRoleException('role_conflict', 'Die Rolle hat sich zwischenzeitlich geändert.');
     }
 
     public function deleteAccount(int $userId): bool
@@ -159,7 +175,7 @@ final class UserRepository
     public function adminUsersOverview(string $today, string $contactsSince): array
     {
         $statement = $this->database->prepare(<<<'SQL'
-            SELECT users.id AS userId, users.first_name AS firstName, users.last_name AS lastName, users.email,
+            SELECT users.id AS userId, users.first_name AS firstName, users.last_name AS lastName, users.email, users.role,
                    users.home_chapter_org_id AS homeChapterOrgId, organizations.chapter_name AS homeChapterName, users.status,
                    users.bni_verification_status AS verificationStatus, users.created_at AS createdAt,
                    users.email_verified_at AS emailVerifiedAt,
@@ -195,7 +211,7 @@ final class UserRepository
                 ) contact_activity
                 GROUP BY contact_user_id
             ) contacts ON contacts.contact_user_id = users.id
-            WHERE users.role = 'user'
+            WHERE users.role IN ('user','user_manager')
             ORDER BY LOWER(users.last_name), LOWER(users.first_name), LOWER(users.email)
             SQL);
         $statement->execute([':offer_today' => $today, ':request_today' => $today, ':offer_contact_since' => $contactsSince, ':request_contact_since' => $contactsSince]);
@@ -331,6 +347,11 @@ final class UserRepository
 }
 
 final class AdminUserVerificationException extends DomainException
+{
+    public function __construct(public readonly string $reason, string $message) { parent::__construct($message); }
+}
+
+final class AdminUserRoleException extends DomainException
 {
     public function __construct(public readonly string $reason, string $message) { parent::__construct($message); }
 }
