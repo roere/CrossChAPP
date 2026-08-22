@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 final class MysqlSchema
 {
+    public const LATEST_VERSION = 3;
+
     public static function migrate(PDO $db): void
     {
         $statements = self::statements();

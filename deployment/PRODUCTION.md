@@ -192,6 +192,31 @@ Danach im Adminbereich „Hintergrunddienst aktiv“ kontrollieren. Dieser Start
 
 ## Update
 
+Der Standardweg für künftige Updates ist das versionierte Update-Skript. Es wird im sauberen Git-Arbeitsverzeichnis unter `/opt/crosschapp` mit einem exakten Tag oder dem Remote-Branch `main` gestartet:
+
+```bash
+cd /opt/crosschapp
+./deployment/update-production.sh v0.13.0
+# alternativ, bewusst der aktuelle Stand von origin/main:
+./deployment/update-production.sh main
+```
+
+Voraussetzungen sind eine vorhandene geschützte `.env.production`, gültige Produktions-Compose-Dateien, ein sauberer Worktree sowie eine laufende und gesunde MariaDB. Das Skript validiert zunächst Compose und Git-Ref, holt Tags, checkt den Ref detached aus und erstellt vor Build, Webersatz und Schemamigration einen komprimierten konsistenten Dump unter `/opt/crosschapp/backups/`. Passwörter werden dabei nur aus den Umgebungsvariablen des DB-Containers gelesen und nicht ausgegeben.
+
+Danach baut es Web und Worker, ersetzt zunächst ausschließlich Web, prüft den öffentlichen Health-Endpunkt mit Retries, startet die additive Migration und vergleicht `schema_migrations` mit `MysqlSchema::LATEST_VERSION`. Erst nach diesen erfolgreichen Prüfungen wird der Worker ersetzt. Ein frischer `automation_runtime.worker_last_seen_at` muss innerhalb von 90 Sekunden vorliegen. Abschließend werden DB- und Web-Gesundheit, Schema, Worker-Heartbeat und Git-Commit erneut ausgegeben.
+
+Ein nichtmutierender Vorabcheck ist möglich, sofern der Ref bereits lokal vorhanden ist:
+
+```bash
+./deployment/update-production.sh --dry-run v0.13.0
+```
+
+Der Dry-run prüft Voraussetzungen, sauberen Worktree, Compose-Konfiguration und lokalen Git-Ref. Er führt weder Fetch/Checkout noch Backup, Build, Neustart oder Migration aus.
+
+Bei Buildfehlern bleiben die laufenden Container unberührt. Bei einem Fehler nach dem Webersatz zeigt das Skript Schritt, Zeile, Exit-Code, vorherigen Commit, Backup-Pfad und Containerstatus; der Worker wird erst nach erfolgreichem Web-, Migrations- und Schemacheck aktualisiert. Es erfolgt bewusst weder ein automatischer Git- noch Datenbank-Rollback. Vor einem manuellen Rollback müssen Code-/Schema-Kompatibilität und das erzeugte Backup geprüft werden.
+
+Der bisherige manuelle Ablauf bleibt als Diagnose- und Notfallreferenz erhalten:
+
 1. Worker stoppen.
 2. MariaDB mit `mariadb-dump --single-transaction` sichern und Dump prüfen.
 3. Eindeutigen neuen Commit/Tag auschecken oder Code mit den Ausschlüssen synchronisieren.

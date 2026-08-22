@@ -50,6 +50,7 @@ php_group() {
 }
 
 printf 'CrossChAPP Check Suite\n'
+run "Production Update Script" bash tests/production-update-script.sh
 run "Test Container" "${COMPOSE[@]}" up -d --build
 run "Container Health" bash -c "for i in {1..40}; do curl -fsS http://127.0.0.1:$CROSSCHAPP_TEST_PORT/api/health.php && exit 0; sleep .25; done; exit 1"
 run "PHP Syntax" compose_exec sh -lc 'find /var/www/html /var/www/tests -type f -name "*.php" -print0 | xargs -0 -n1 php -l'
