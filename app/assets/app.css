@@ -69,10 +69,10 @@ nav a.active::after { position: absolute; right: 1.15rem; bottom: 0; left: 1.15r
 .assignment-card .assignment-heading { display: flex; align-items: center; gap: .4rem; min-width: 0; }
 .assignment-card .assignment-person { margin: 0; font-size: 1.2rem; font-weight: 800; line-height: 1.25; }
 .assignment-card .assignment-heading .verification-badge { flex: 0 0 auto; }
+.assignment-card .assignment-person-link { color: inherit; font: inherit; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: .16em; transition: color .15s ease, text-decoration-color .15s ease; }
+.assignment-card .assignment-person-link:hover, .assignment-card .assignment-person-link:focus-visible { color: var(--bni-red-dark); text-decoration-color: currentColor; }
 .assignment-card .assignment-detail { margin: .15rem 0; line-height: 1.4; overflow-wrap: anywhere; }
 .assignment-card .assignment-chapter a { color: var(--bni-red-dark); font-weight: 700; text-underline-offset: .16em; }
-.assignment-card .assignment-contact { margin: .15rem 0; color: #555a61; font-size: .86rem; overflow-wrap: anywhere; }
-.assignment-card .assignment-contact a { color: inherit; }
 .assignment-card .assignment-verification { width: fit-content; }
 .nav-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; margin-left: .35rem; padding: 0 .3rem; border-radius: 999px; color: white; background: #596d78; font-size: .68rem; font-weight: 900; line-height: 1; }
 .nav-count-badge[hidden] { display: none; }

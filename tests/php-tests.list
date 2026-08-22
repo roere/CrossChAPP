@@ -8,6 +8,7 @@ bni-verification-invitations.php
 chapter-search.php
 representation-offers.php
 representation-assignments.php
+representation-cancellation-mysql.php
 representation-routing.php
 representation-requests.php
 representation-cleanup.php

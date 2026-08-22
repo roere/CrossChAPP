@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/DatabaseDialect.php';
+require_once __DIR__ . '/RepresentationAssignmentException.php';
 
 final class RepresentationAssignmentService
 {
@@ -89,16 +90,17 @@ final class RepresentationAssignmentService
         try {
             $suffix=DatabaseDialect::isMysql($this->database)?' FOR UPDATE':'';
             $statement=$this->database->prepare($this->assignmentSelect().' WHERE a.id=:id'.$suffix);$statement->execute([':id'=>$assignmentId]);$row=$statement->fetch();
-            if(!is_array($row)||(int)$row['requester_user_id']!==$userId&&(int)$row['representative_user_id']!==$userId)throw new DomainException('Diese Vereinbarung wurde nicht gefunden.');
+            if(!is_array($row))throw new RepresentationAssignmentException('Diese Vereinbarung wurde nicht gefunden.','assignment_not_found',404);
+            if((int)$row['requester_user_id']!==$userId&&(int)$row['representative_user_id']!==$userId)throw new RepresentationAssignmentException('Du darfst diese Vereinbarung nicht stornieren.','assignment_forbidden',403);
             $row=$this->withFullNames($row);
-            if($row['status']!=='active')throw new DomainException('Diese Vertretung ist bereits storniert.');
-            $now=gmdate('Y-m-d\TH:i:s\Z');$update=$this->database->prepare("UPDATE representation_assignments SET status='cancelled',active_slot_key=NULL,cancelled_at=:now,cancelled_by_user_id=:user,updated_at=:now WHERE id=:id AND status='active'");
-            $update->execute([':now'=>$now,':user'=>$userId,':id'=>$assignmentId]);if($update->rowCount()!==1)throw new DomainException('Diese Vertretung ist bereits storniert.');
+            if($row['status']!=='active')throw new RepresentationAssignmentException('Diese Vertretung ist bereits storniert.','assignment_already_cancelled',409);
+            $now=gmdate('Y-m-d\TH:i:s\Z');$update=$this->database->prepare("UPDATE representation_assignments SET status='cancelled',active_slot_key=NULL,cancelled_at=:cancelled_at,cancelled_by_user_id=:user,updated_at=:updated_at WHERE id=:id AND status='active'");
+            $update->execute([':cancelled_at'=>$now,':user'=>$userId,':updated_at'=>$now,':id'=>$assignmentId]);if($update->rowCount()!==1)throw new RepresentationAssignmentException('Diese Vertretung ist bereits storniert.','assignment_already_cancelled',409);
             $this->database->exec('COMMIT');
         } catch(Throwable $e){try{$this->database->exec('ROLLBACK');}catch(Throwable){}throw $e;}
         $row['cancelled_by_name']=$userId===(int)$row['requester_user_id']?$row['requester_full_name']:$row['representative_full_name'];
         $this->sendPair($row,'cancelled');
-        return $this->publicAssignment($row,$userId)+['status'=>'cancelled'];
+        return array_replace($this->publicAssignment($row,$userId),['status'=>'cancelled']);
     }
 
     private function issue(string $direction, ?int $requestId, ?int $offerId, int $logId, string $date, int $requesterId, int $representativeId): array
