@@ -95,6 +95,8 @@ try {
                 throw new RuntimeException("Anzahlabweichung in {$table}: SQLite={$expected}, MariaDB={$actual}.");
             }
         }
+        require_once dirname(__DIR__).'/src/ChapterShortLink.php';
+        $shortLinkBackfill=ChapterShortLink::backfill($target);
         $target->commit();
     } catch (Throwable $exception) {
         if ($target->inTransaction()) {
@@ -119,6 +121,7 @@ try {
     }
     echo "Königsforst (44628): " . ($koenigsforst === false ? 'nicht vorhanden' : $koenigsforst) . "\n";
     echo "Neutralisierte verwaiste Token-Benutzerreferenzen: {$neutralizedTokenOwners}\n";
+    echo "Nachversorgte Chapter-Kurzlinks: {$shortLinkBackfill}\n";
     echo "Migration und COUNT-Vergleich erfolgreich.\n";
 } catch (Throwable $exception) {
     fwrite(STDERR, 'Migration fehlgeschlagen: ' . $exception->getMessage() . "\n");

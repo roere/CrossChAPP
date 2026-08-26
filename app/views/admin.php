@@ -254,7 +254,8 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div class="auth-actions"><button id="confirm-cancel-invitation" type="button">Widerrufen</button><button type="submit" class="secondary">Abbrechen</button></div>
         </form>
     </dialog><?php endif; ?>
-    <?php if ($isAdmin): ?><details id="misc-panel" class="panel misc-panel">
+    <?php if ($isAdmin): ?><details id="reports-panel" class="panel misc-panel"><summary>Meldungen</summary><div class="misc-content"><p>Keine Meldungen vorhanden.</p></div></details>
+    <details id="misc-panel" class="panel misc-panel">
         <summary>Sonstiges</summary>
         <div class="misc-content">
             <section><p class="section-kicker">Konfiguration</p><h2>E-Mail-Versand</h2>

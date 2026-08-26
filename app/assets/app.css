@@ -420,6 +420,8 @@ tr.organization:hover { background: #faf7f7; }
 .account-details div { min-width: 0; padding: .8rem; border: 1px solid var(--border); background: #fafafa; }
 .account-details dt { margin-bottom: .25rem; color: var(--muted); font-size: .7rem; font-weight: 800; }
 .account-details dd { overflow-wrap: anywhere; margin: 0; font-weight: 800; }
+.account-home-chapter { display: flex; align-items: center; gap: .45rem; }
+.icon-button { min-width: 2rem; min-height: 2rem; padding: .25rem; line-height: 1; }
 button.danger { border-color: var(--bni-red-dark); color: white; background: var(--bni-red-dark); }
 button.danger:hover { border-color: #8f101d; background: #8f101d; }
 .registration-actions { display: flex; flex-wrap: wrap; gap: .65rem; }

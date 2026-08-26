@@ -29,6 +29,8 @@ $timeFilter = is_array($payload) ? (string) ($payload['time'] ?? 'any') : 'any';
 $sort = is_array($payload) ? (string) ($payload['sort'] ?? 'distance') : 'distance';
 $limitInput = is_array($payload) ? (string) ($payload['limit'] ?? '10') : '10';
 $hasRepresentationRequests = is_array($payload) ? ($payload['hasRepresentationRequests'] ?? false) : false;
+$organizationIdInput=is_array($payload)?($payload['organizationId']??null):null;
+$organizationId=$organizationIdInput===null?null:filter_var($organizationIdInput,FILTER_VALIDATE_INT);
 $allowedDays = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 $allowedLimits = ['5' => 5, '10' => 10, '20' => 20, '50' => 50, 'all' => null];
 
@@ -47,12 +49,15 @@ if (!array_key_exists($limitInput, $allowedLimits)) {
 if (!is_bool($hasRepresentationRequests)) {
     JsonResponse::send(['error' => 'Der Filter für Vertretungsgesuche ist ungültig.'], 400);
 }
+if($organizationId===false||(is_int($organizationId)&&$organizationId<1))JsonResponse::send(['error'=>'Der Chapterfilter ist ungültig.'],400);
 
 try {
-    $location = (new Geocoder())->geocode($locationInput);
     $database = (new Database())->connection();
     (new RepresentationCleanupService($database))->runCleanup();
     $repository = new OrganizationRepository($database);
+    $exactChapter=$organizationId===null?null:$repository->find((int)$organizationId);
+    if($organizationId!==null&&($exactChapter===null||$exactChapter['orgType']!=='CHAPTER'))JsonResponse::send(['error'=>'Das angeforderte Chapter wurde nicht gefunden.'],404);
+    $location=$exactChapter===null?(new Geocoder())->geocode($locationInput):['latitude'=>(float)$exactChapter['latitude'],'longitude'=>(float)$exactChapter['longitude'],'label'=>(string)$exactChapter['chapterName']];
     $automationSettings = (new AutomationRepository($database))->settings();
     $service = new ChapterSearchService($repository);
     $today = (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
@@ -65,9 +70,11 @@ try {
         $allowedLimits[$limitInput],
         $hasRepresentationRequests,
         $today,
+        $organizationId===null?null:(int)$organizationId,
     );
-    Auth::start(); $identity = Auth::user(); $viewerId = $identity !== null && ($identity['role'] ?? null) === 'user' ? (int) $identity['user_id'] : null;
-    $requestMap = (new RepresentationRequestRepository($database))->activeForOrganizations(array_column($search['results'], 'orgId'), $viewerId, $today);
+    Auth::start(); $identity = Auth::user(); $viewerId = $identity !== null ? (int) $identity['user_id'] : null;
+    $viewerCanContact = $identity === null || ($identity['role'] ?? null) === 'user';
+    $requestMap = (new RepresentationRequestRepository($database))->activeForOrganizations(array_column($search['results'], 'orgId'), $viewerId, $today, $viewerCanContact);
     foreach ($search['results'] as &$resultItem) $resultItem['representationRequests'] = $requestMap[(int) $resultItem['orgId']] ?? [];
     unset($resultItem);
     $searchLocation = [

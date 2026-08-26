@@ -65,7 +65,7 @@ final class RepresentationRequestRepository
     }
 
     /** @param list<int> $orgIds @return array<int,list<array<string,mixed>>> */
-    public function activeForOrganizations(array $orgIds, ?int $viewerUserId, string $today): array
+    public function activeForOrganizations(array $orgIds, ?int $viewerUserId, string $today, bool $viewerCanContact = true): array
     {
         $orgIds = array_values(array_unique(array_filter($orgIds, static fn ($id): bool => is_int($id) && $id > 0)));
         if ($orgIds === []) return [];
@@ -74,7 +74,7 @@ final class RepresentationRequestRepository
         $statement->execute([...$orgIds, $today]); $result = [];
         foreach ($statement->fetchAll() as $row) {
             $own = $viewerUserId !== null && (int) $row['user_id'] === $viewerUserId;
-            $assigned=(bool)$row['is_assigned'];$item = ['requestDate' => (string) $row['request_date'], 'isOwn' => $own, 'isAssigned'=>$assigned, 'canContact' => !$own&&!$assigned, 'isVerified' => ($row['bni_verification_status']??'') === 'manual_verified'];
+            $assigned=(bool)$row['is_assigned'];$item = ['requestDate' => (string) $row['request_date'], 'isOwn' => $own, 'isAssigned'=>$assigned, 'canContact' => $viewerCanContact&&!$own&&!$assigned, 'isVerified' => ($row['bni_verification_status']??'') === 'manual_verified'];
             if ($viewerUserId !== null) { $initial = function_exists('mb_substr') ? mb_substr((string) $row['last_name'], 0, 1) : substr((string) $row['last_name'], 0, 1); $item['displayName'] = trim((string) $row['first_name'] . ' ' . $initial . '.'); }
             if (!$own) $item['requestId'] = (int) $row['id'];
             $result[(int) $row['org_id']][] = $item;

@@ -13,8 +13,16 @@ require_once __DIR__ . '/src/InvitationRepository.php';
 require_once __DIR__ . '/src/InvitationService.php';
 require_once __DIR__ . '/src/InvitationFactory.php';
 require_once __DIR__ . '/src/LegalSettingsRepository.php';
+require_once __DIR__ . '/src/OrganizationRepository.php';
 
 Auth::start();
+$shortLinkChapter=null;$shortLinkNotFound=false;$requestPath=(string)(parse_url((string)($_SERVER['REQUEST_URI']??'/'),PHP_URL_PATH)??'/');
+if($requestPath!=='/'&&preg_match('#^/([a-z0-9_]+)$#',$requestPath,$pathMatch)===1){
+    $shortLinkChapter=(new OrganizationRepository((new Database())->connection()))->findByShortLinkSlug($pathMatch[1]);
+    if($shortLinkChapter===null){$shortLinkNotFound=true;http_response_code(404);}else{$_SESSION['short_link_return_slug']=$pathMatch[1];}
+}
+$returnShortLink=(string)($_SESSION['short_link_return_slug']??'');
+if(preg_match('/^[a-z0-9_]+$/',$returnShortLink)!==1)$returnShortLink='';
 if (isset($_GET['accept_representation'])) {
     $acceptanceToken=(string)$_GET['accept_representation'];
     if (preg_match('/^[A-Za-z0-9_-]{40,100}$/',$acceptanceToken)) $_SESSION['representation_acceptance_token']=$acceptanceToken;
@@ -82,6 +90,8 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <meta name="csrf-token" content="<?= htmlspecialchars(Auth::csrfToken(), ENT_QUOTES, 'UTF-8') ?>">
     <meta name="auth-status" content="<?= $currentUser !== null ? 'authenticated' : 'anonymous' ?>">
     <meta name="auth-role" content="<?= htmlspecialchars((string)($currentUser['role']??''),ENT_QUOTES,'UTF-8') ?>">
+    <?php if ($shortLinkChapter !== null): ?><meta name="short-link-org-id" content="<?= (int)$shortLinkChapter['orgId'] ?>"><meta name="short-link-chapter-name" content="<?= htmlspecialchars((string)$shortLinkChapter['chapterName'],ENT_QUOTES,'UTF-8') ?>"><?php endif; ?>
+    <?php if ($shortLinkNotFound): ?><meta name="short-link-not-found" content="1"><?php endif; ?>
     <?php if (getenv('CROSSCHAPP_TEST_MODE') === '1'): ?><meta name="crosschapp-test-mode" content="1"><?php endif; ?>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='3' fill='%23cf2030'/%3E%3Cpath d='M21 10a8 8 0 1 0 0 12l-3-3a4 4 0 1 1 0-6z' fill='white'/%3E%3C/svg%3E">
     <?php if ($requestedView === 'crosschaptern' || $requestedView === 'vertretung'): ?>
@@ -150,7 +160,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <div><dt>Vorname</dt><dd data-account-field="firstName">Wird geladen …</dd></div>
                     <div><dt>Nachname</dt><dd data-account-field="lastName">Wird geladen …</dd></div>
                     <div><dt>E-Mail-Adresse</dt><dd data-account-field="email">Wird geladen …</dd></div>
-                    <div><dt>Heimatchapter</dt><dd data-account-field="homeChapterName">Wird geladen …</dd></div>
+                    <div><dt>Heimatchapter</dt><dd class="account-home-chapter"><span data-account-field="homeChapterName">Wird geladen …</span><button id="copy-home-chapter-link" type="button" class="icon-button" title="Chapterlink kopieren" aria-label="Chapterlink kopieren" hidden>🔗</button></dd></div>
                     <div><dt>Verifikation</dt><dd data-account-field="verificationStatus">Wird geladen …</dd></div>
                 </dl>
                 <?php if (!$isAdmin): ?>

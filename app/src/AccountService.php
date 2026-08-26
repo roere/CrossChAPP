@@ -142,6 +142,8 @@ final class AccountService
             'email' => (string) $account['email'],
             'homeChapterOrgId' => $account['home_chapter_org_id'] === null ? null : (int) $account['home_chapter_org_id'],
             'homeChapterName' => $account['home_chapter_name'] === null ? null : (string) $account['home_chapter_name'],
+            'homeChapterShortLinkSlug'=>$account['home_chapter_short_link_slug']===null?null:(string)$account['home_chapter_short_link_slug'],
+            'homeChapterShortLinkUrl'=>$account['home_chapter_short_link_slug']===null?null:rtrim((string)$this->mailSettings->settings()['baseUrl'],'/').'/'.(string)$account['home_chapter_short_link_slug'],
             'verificationStatus' => (string) $account['bni_verification_status'],
             'canDelete' => $account['role'] !== 'admin',
         ];

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MysqlSchema.php';
+require_once __DIR__ . '/ChapterShortLink.php';
 
 final class Database
 {
@@ -66,6 +67,7 @@ final class Database
                 longitude REAL,
                 latitude REAL,
                 chapter_name TEXT,
+                short_link_slug TEXT,
                 region TEXT,
                 region_id INTEGER,
                 city TEXT,
@@ -92,6 +94,9 @@ final class Database
             )
             SQL);
         $this->addColumnIfMissing('status', 'TEXT');
+        $this->addTableColumnIfMissing('organizations', 'short_link_slug', 'TEXT');
+        $this->connection->exec('CREATE UNIQUE INDEX IF NOT EXISTS uq_organizations_short_link_slug ON organizations(short_link_slug)');
+        ChapterShortLink::backfill($this->connection);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_organizations_detail_status ON organizations(detail_status)');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_organizations_country_type ON organizations(country_code, org_type)');
         $this->connection->exec(<<<'SQL'

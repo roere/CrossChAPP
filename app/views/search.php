@@ -52,7 +52,7 @@
             <label class="representation-request-filter"><input type="checkbox" name="has_representation_requests"> <span>Nur Chapter mit Vertretungsgesuchen anzeigen</span></label>
             <button id="search-button" type="submit" class="search-submit">Treffen finden</button>
         </form>
-        <div id="search-message" class="message" role="status" aria-live="polite"></div>
+        <div id="search-message" class="message<?= $shortLinkNotFound ? ' error' : '' ?>" role="status" aria-live="polite"><?= $shortLinkNotFound ? 'Das angeforderte Chapter wurde nicht gefunden.' : '' ?></div>
     </section>
 
     <section id="search-results" class="search-results" aria-labelledby="results-heading" hidden>

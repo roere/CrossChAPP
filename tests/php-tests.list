@@ -10,6 +10,7 @@ mysql-schema-v4.php
 login-rate-limit.php
 bni-verification-invitations.php
 chapter-search.php
+chapter-short-links.php
 representation-offers.php
 representation-assignments.php
 representation-cancellation-mysql.php

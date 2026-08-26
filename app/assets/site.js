@@ -39,11 +39,19 @@
     initializePasswordChange();
     initializeGuideImages();
     document.querySelector('#chapter-search-form')?.addEventListener('submit', searchChapters);
+    initializeShortLinkSearch();
 
     const searchState = {
         payload: null, expanded: new Set(), map: null, markerLayer: null,
         refreshQueue: [], refreshQueued: new Set(), refreshCompleted: new Set(), refreshRunning: false, refreshGeneration: 0,
     };
+
+    function initializeShortLinkSearch() {
+        const form=document.querySelector('#chapter-search-form');if(!form)return;
+        if(document.querySelector('meta[name="short-link-not-found"]')){const message=document.querySelector('#search-message');message.textContent='Das angeforderte Chapter wurde nicht gefunden.';message.className='message error';return;}
+        const orgMeta=document.querySelector('meta[name="short-link-org-id"]'),nameMeta=document.querySelector('meta[name="short-link-chapter-name"]');if(!orgMeta||!nameMeta)return;
+        form.dataset.organizationId=orgMeta.content;form.location.value=nameMeta.content;form.requestSubmit();
+    }
     document.querySelector('#result-list')?.addEventListener('click', toggleResultDetails);
     document.querySelector('#map-toggle')?.addEventListener('click', toggleMap);
     document.querySelector('.result-limit-options')?.addEventListener('click', selectResultLimit);
@@ -83,13 +91,13 @@
         try {
             const response = await fetch('/api/auth/login.php', {
                 method: 'POST', headers: jsonHeaders,
-                body: JSON.stringify({ login: form.login.value, password: form.password.value }),
+                body: JSON.stringify({ login: form.login.value, password: form.password.value, returnShortLink: form.return_short_link?.value || null }),
             });
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Anmeldung fehlgeschlagen.');
             const allowedReturnViews = new Set(['crosschaptern', 'vertretung', 'vertretung-finden', 'representation-accept']);
             const returnView = allowedReturnViews.has(form.return_view?.value) ? form.return_view.value : 'crosschaptern';
-            window.location.assign(['admin','user_manager'].includes(payload.role) ? '/?view=admin' : `/?view=${encodeURIComponent(returnView)}`);
+            window.location.assign(payload.returnShortLink ? `/${encodeURIComponent(payload.returnShortLink)}` : (['admin','user_manager'].includes(payload.role) ? '/?view=admin' : `/?view=${encodeURIComponent(returnView)}`));
         } catch (error) {
             message.textContent = error.message; message.className = 'message error';
             form.password.value = ''; form.password.focus();
@@ -165,6 +173,7 @@
         const cancelEdit = document.querySelector('#cancel-account-edit');
         const skipOption = document.querySelector('#account-skip-chapter-verification-option');
         const skipCheckbox = skipOption?.querySelector('input') || null;
+        const copyChapterLink=document.querySelector('#copy-home-chapter-link');
         let accountData = null; let accountPicker = null; let chaptersLoaded = false; let accountEditActive = false;
         const setEditMode = active => {
             accountEditActive = active;
@@ -192,7 +201,9 @@
             }
             const headerBadge = document.querySelector('#account-menu-trigger .verification-badge');
             if (account.verificationStatus !== 'manual_verified') headerBadge?.remove();
+            if(copyChapterLink){copyChapterLink.hidden=!account.homeChapterShortLinkUrl;copyChapterLink.dataset.url=account.homeChapterShortLinkUrl||'';}
         };
+        copyChapterLink?.addEventListener('click',async()=>{const url=copyChapterLink.dataset.url;if(!url)return;try{await navigator.clipboard.writeText(url);message.textContent='Chapterlink kopiert.';message.className='message success';}catch{message.textContent='Der Chapterlink konnte nicht kopiert werden.';message.className='message error';}});
         const loadAccount = async () => {
             const response = await fetch('/api/auth/account.php'); const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Die Kontodaten konnten nicht geladen werden.');
@@ -427,6 +438,7 @@
             sort: form.sort.value,
             limit: form.limit.value,
             hasRepresentationRequests: form.elements.has_representation_requests.checked,
+            ...(form.dataset.organizationId ? { organizationId: Number(form.dataset.organizationId) } : {}),
         };
         message.textContent = 'Ort wird gesucht und Entfernung berechnet …'; message.className = 'message'; button.disabled = true;
         try {
@@ -505,7 +517,9 @@
         const anonymousNumbers = new Map();
         requests.forEach(item => { const row = document.createElement('div'); row.className = 'result-representation-request'; const text = document.createElement('span');
             const currentNumber = (anonymousNumbers.get(item.requestDate) || 0) + 1; anonymousNumbers.set(item.requestDate, currentNumber);
-            const person = authenticated ? item.displayName : `Gesuch ${currentNumber}`; text.textContent = `${formatDateOnly(item.requestDate)} · ${person}`; row.append(text);if(item.isVerified){const verified=document.createElement('span');verified.className='verified-badge';verified.textContent='Verifiziert';row.append(verified);}
+            const rawPerson = authenticated ? item.displayName : `Gesuch ${currentNumber}`;
+            const person = typeof rawPerson === 'string' ? rawPerson.trim() : '';
+            text.textContent = [formatDateOnly(item.requestDate), person].filter(Boolean).join(' · '); row.append(text);if(item.isVerified){const verified=document.createElement('span');verified.className='verified-badge';verified.textContent='Verifiziert';row.append(verified);}
             if (item.canContact && item.requestId) { const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary request-contact-button'; button.textContent = 'Kontaktieren'; button.dataset.requestId = item.requestId; button.dataset.requestDate=item.requestDate; row.append(button); }
             else if (item.isOwn) { const own = document.createElement('span'); own.className = 'offer-meta'; own.textContent = 'Dein Gesuch'; row.append(own); }
             else if (item.isAssigned) { const assigned = document.createElement('span'); assigned.className = 'status-badge'; assigned.textContent = 'Vergeben'; row.append(assigned); }

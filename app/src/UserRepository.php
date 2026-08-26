@@ -80,7 +80,8 @@ final class UserRepository
             SELECT users.id, users.first_name, users.last_name, users.email, users.role,
                    users.home_chapter_org_id,
                    users.bni_verification_status,
-                   organizations.chapter_name AS home_chapter_name
+                   organizations.chapter_name AS home_chapter_name,
+                   organizations.short_link_slug AS home_chapter_short_link_slug
             FROM users
             LEFT JOIN organizations ON organizations.org_id = users.home_chapter_org_id
             WHERE users.id = :id

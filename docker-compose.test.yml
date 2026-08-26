@@ -26,6 +26,7 @@ services:
       CROSSCHAPP_DB_USER: crosschapp_test
       CROSSCHAPP_DB_PASSWORD: test-only-password
       CROSSCHAPP_TEST_MODE: "1"
+      APP_BASE_URL: "http://127.0.0.1:${CROSSCHAPP_TEST_PORT:-18082}"
       CROSSCHAPP_DISABLE_EXTERNAL_HTTP: "1"
       CROSSCHAPP_MAIL_CAPTURE_PATH: /var/www/data/mail-capture.jsonl
     volumes:

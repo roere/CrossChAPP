@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/DatabaseDialect.php';
+require_once __DIR__ . '/ChapterShortLink.php';
 
 final class OrganizationRepository
 {
@@ -15,15 +16,15 @@ final class OrganizationRepository
     {
         $now = self::now();
         $upsert = DatabaseDialect::isMysql($this->database) ? <<<'SQL'
-            INSERT INTO organizations (org_id,cms_security_hash,country_code,org_type,longitude,latitude,detail_status,map_loaded_at,created_at,updated_at)
-            VALUES (:org_id,:cms_security_hash,:country_code,:org_type,:longitude,:latitude,'not_loaded',:map_loaded_at,:created_at,:updated_at)
-            ON DUPLICATE KEY UPDATE cms_security_hash=VALUES(cms_security_hash),country_code=VALUES(country_code),org_type=VALUES(org_type),longitude=VALUES(longitude),latitude=VALUES(latitude),map_loaded_at=VALUES(map_loaded_at),updated_at=VALUES(updated_at)
+            INSERT INTO organizations (org_id,cms_security_hash,country_code,org_type,longitude,latitude,chapter_name,detail_status,map_loaded_at,created_at,updated_at)
+            VALUES (:org_id,:cms_security_hash,:country_code,:org_type,:longitude,:latitude,:chapter_name,'not_loaded',:map_loaded_at,:created_at,:updated_at)
+            ON DUPLICATE KEY UPDATE cms_security_hash=VALUES(cms_security_hash),country_code=VALUES(country_code),org_type=VALUES(org_type),longitude=VALUES(longitude),latitude=VALUES(latitude),chapter_name=COALESCE(VALUES(chapter_name),chapter_name),map_loaded_at=VALUES(map_loaded_at),updated_at=VALUES(updated_at)
             SQL : <<<'SQL'
             INSERT INTO organizations (
-                org_id, cms_security_hash, country_code, org_type, longitude, latitude,
+                org_id, cms_security_hash, country_code, org_type, longitude, latitude, chapter_name,
                 detail_status, map_loaded_at, created_at, updated_at
             ) VALUES (
-                :org_id, :cms_security_hash, :country_code, :org_type, :longitude, :latitude,
+                :org_id, :cms_security_hash, :country_code, :org_type, :longitude, :latitude, :chapter_name,
                 'not_loaded', :map_loaded_at, :created_at, :updated_at
             )
             ON CONFLICT(org_id) DO UPDATE SET
@@ -32,6 +33,7 @@ final class OrganizationRepository
                 org_type = excluded.org_type,
                 longitude = excluded.longitude,
                 latitude = excluded.latitude,
+                chapter_name = COALESCE(excluded.chapter_name, organizations.chapter_name),
                 map_loaded_at = excluded.map_loaded_at,
                 updated_at = excluded.updated_at
             SQL;
@@ -50,6 +52,7 @@ final class OrganizationRepository
                     ':org_type' => $organization['orgType'] ?? null,
                     ':longitude' => $organization['longitude'] ?? null,
                     ':latitude' => $organization['latitude'] ?? null,
+                    ':chapter_name'=>$organization['chapterName']??null,
                     ':map_loaded_at' => $now,
                     ':created_at' => $now,
                     ':updated_at' => $now,
@@ -60,6 +63,7 @@ final class OrganizationRepository
             $this->database->rollBack();
             throw $exception;
         }
+        ChapterShortLink::backfill($this->database);
     }
 
     /** @return list<array<string, mixed>> */
@@ -106,7 +110,7 @@ final class OrganizationRepository
     }
 
     /** @return list<array<string, mixed>> */
-    public function searchableChapters(bool $hasRepresentationRequests = false, ?string $today = null): array
+    public function searchableChapters(bool $hasRepresentationRequests = false, ?string $today = null, ?int $organizationId = null): array
     {
         if ($hasRepresentationRequests && ($today === null || preg_match('/^\d{4}-\d{2}-\d{2}$/', $today) !== 1)) {
             throw new InvalidArgumentException('Für den Gesuchsfilter ist ein gültiges Datum erforderlich.');
@@ -119,6 +123,7 @@ final class OrganizationRepository
                     AND rr.request_date >= :today
               )
             SQL : '';
+        $organizationFilter=$organizationId===null?'':' AND org_id = :organization_id';
         $statement = $this->database->prepare(<<<SQL
             SELECT * FROM organizations
             WHERE detail_status = :detail_status
@@ -127,6 +132,7 @@ final class OrganizationRepository
               AND longitude IS NOT NULL
               AND meeting_day IS NOT NULL
               AND meeting_time IS NOT NULL
+              {$organizationFilter}
             {$requestFilter}
             ORDER BY org_id
             SQL);
@@ -134,6 +140,7 @@ final class OrganizationRepository
         if ($hasRepresentationRequests) {
             $parameters[':today'] = $today;
         }
+        if($organizationId!==null)$parameters[':organization_id']=$organizationId;
         $statement->execute($parameters);
 
         return array_map([$this, 'toApi'], $statement->fetchAll());
@@ -293,6 +300,16 @@ final class OrganizationRepository
         return is_array($row) ? $this->toApi($row) : null;
     }
 
+    /** @return array<string,mixed>|null */
+    public function findByShortLinkSlug(string $slug): ?array
+    {
+        if(preg_match('/^[a-z0-9_]+$/',$slug)!==1)return null;
+        $statement=$this->database->prepare("SELECT * FROM organizations WHERE short_link_slug=:slug AND org_type='CHAPTER'");
+        $statement->execute([':slug'=>$slug]);$row=$statement->fetch();return is_array($row)?$this->toApi($row):null;
+    }
+
+    public function ensureShortLinkSlug(int $orgId): ?string{return ChapterShortLink::ensure($this->database,$orgId);}
+
     /** @param array<string, mixed> $details */
     public function saveDetails(int $orgId, array $details): void
     {
@@ -345,6 +362,7 @@ final class OrganizationRepository
             ':details_loaded_at' => $now,
             ':updated_at' => $now,
         ]);
+        ChapterShortLink::ensure($this->database,$orgId);
     }
 
     public function markDetailError(int $orgId): void
@@ -379,6 +397,7 @@ final class OrganizationRepository
             'longitude' => $row['longitude'] !== null ? (float) $row['longitude'] : null,
             'latitude' => $row['latitude'] !== null ? (float) $row['latitude'] : null,
             'chapterName' => $row['chapter_name'],
+            'shortLinkSlug' => $row['short_link_slug'] ?? null,
             'region' => $row['region'],
             'regionId' => $row['region_id'] !== null ? (int) $row['region_id'] : null,
             'city' => $row['city'],

@@ -15,5 +15,7 @@ WORKDIR /var/www/html
 COPY app/ /var/www/html/
 COPY docker/entrypoint.sh /usr/local/bin/bni-dach-entrypoint
 COPY docker/worker-entrypoint.sh /usr/local/bin/crosschapp-worker-entrypoint
+COPY docker/apache-crosschapp.conf /etc/apache2/conf-available/crosschapp.conf
+RUN a2enconf crosschapp
 
 EXPOSE 80

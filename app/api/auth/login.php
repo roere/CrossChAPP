@@ -25,6 +25,8 @@ try {
 
 $username = is_array($payload) ? trim((string) ($payload['login'] ?? $payload['username'] ?? '')) : '';
 $password = is_array($payload) ? (string) ($payload['password'] ?? '') : '';
+$returnShortLink=is_array($payload)?trim((string)($payload['returnShortLink']??'')):'';$resolvedReturnShortLink=null;
+if($returnShortLink!==''&&preg_match('/^[a-z0-9_]+$/',$returnShortLink)===1){require_once dirname(__DIR__,2).'/src/OrganizationRepository.php';$chapter=(new OrganizationRepository((new Database())->connection()))->findByShortLinkSlug($returnShortLink);if($chapter!==null)$resolvedReturnShortLink=$returnShortLink;}
 $account = AccountFactory::create(); $ip = ClientIp::address();
 if ($account['users']->rateLimited('login', $username, $ip, 5, 900)) JsonResponse::send(['error' => 'Zu viele Anmeldeversuche. Bitte versuche es später erneut.'], 429);
 $result = $account['service']->authenticate($username, $password);
@@ -36,5 +38,5 @@ if ($result['status'] !== 'success') {
     $account['users']->recordAttempt('login', $username, $ip, false);
     JsonResponse::send(['error' => 'Benutzername oder Passwort ist nicht korrekt.'], 401);
 }
-$account['users']->recordAttempt('login', $username, $ip, true); Auth::loginUser($result['user']);
-JsonResponse::send(['authenticated' => true, 'role' => $result['user']['role']]);
+$account['users']->recordAttempt('login', $username, $ip, true); Auth::loginUser($result['user']);if($resolvedReturnShortLink!==null)unset($_SESSION['short_link_return_slug']);
+JsonResponse::send(['authenticated' => true, 'role' => $result['user']['role'],'returnShortLink'=>$resolvedReturnShortLink]);
