@@ -179,7 +179,7 @@ $temporaryRunner = new AutomaticRefreshRunner(
 );
 $temporaryResults = $temporaryRunner->run(1, 2);
 $check(count($temporaryResults) === 2 && $runnerCalls === 2, 'Y setzt nach 5xx mit dem nächsten Chapter fort.');
-$check($delays === [1500], 'Y verwendet zentralen 1500-ms-Abstand.');
+$check($delays === [], 'Y enthält keine redundante Runner-Wartezeit; der globale Transport-Throttle ist zuständig.');
 
 $statuses = $database->query("SELECT status FROM chapter_refresh_log WHERE status != 'started'")->fetchAll(PDO::FETCH_COLUMN);
 $check(in_array('success', $statuses, true), 'Success protokolliert.');

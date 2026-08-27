@@ -81,9 +81,6 @@ foreach ($items as $index => $item) {
         break;
     }
 
-    if ($index < count($items) - 1) {
-        usleep(BniRequestPolicy::DETAIL_DELAY_MS * 1000);
-    }
 }
 
 JsonResponse::send(['results' => $results, 'detail_delay_ms' => BniRequestPolicy::DETAIL_DELAY_MS]);

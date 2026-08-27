@@ -26,7 +26,7 @@ $tables = [
     'organizations', 'automation_settings', 'chapter_refresh_log', 'chapter_refresh_locks',
     'automation_runtime', 'map_refresh_log', 'users', 'email_verification_tokens',
     'password_reset_tokens', 'mail_settings', 'legal_settings', 'email_templates', 'auth_attempts',
-    'bni_member_check_attempts', 'bni_member_directory_configs', 'bni_member_check_lock',
+    'bni_member_check_attempts', 'bni_member_directory_configs', 'bni_member_check_lock', 'bni_request_throttle',
     'user_invitations', 'representation_offers', 'representation_offer_chapters',
     'representation_offer_dates', 'representation_settings', 'representation_contact_log',
     'representation_requests', 'representation_request_contact_log',
@@ -41,6 +41,7 @@ try {
     ]);
     putenv('CROSSCHAPP_DB_SKIP_SEED=1');
     $target = (new Database())->connection();
+    $target->exec('DELETE FROM bni_request_throttle WHERE id=1 AND last_reserved_start_ms=0');
 
     foreach ($tables as $table) {
         if ((int) $target->query('SELECT COUNT(*) FROM `' . $table . '`')->fetchColumn() !== 0) {

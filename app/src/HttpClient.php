@@ -10,6 +10,18 @@ final class HttpClient
     {
     }
 
+    public function usesExternalTransport(): bool
+    {
+        return $this->transport === null;
+    }
+
+    public function assertExternalAllowed(): void
+    {
+        if ($this->usesExternalTransport() && getenv('CROSSCHAPP_DISABLE_EXTERNAL_HTTP') === '1') {
+            throw new RuntimeException('Externe HTTP-Requests sind im sicheren Testmodus deaktiviert.');
+        }
+    }
+
     /** @return array<string, mixed> */
     public function getJson(string $url, int $timeout = 25): array
     {
@@ -19,9 +31,7 @@ final class HttpClient
             $headers = is_array($response['headers'] ?? null) ? $response['headers'] : [];
             $status = isset($response['status']) ? (int) $response['status'] : $this->statusCode($headers);
         } else {
-            if (getenv('CROSSCHAPP_DISABLE_EXTERNAL_HTTP') === '1') {
-                throw new RuntimeException('Externe HTTP-Requests sind im sicheren Testmodus deaktiviert.');
-            }
+            $this->assertExternalAllowed();
             $context = stream_context_create([
                 'http' => [
                     'method' => 'GET',

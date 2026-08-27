@@ -657,9 +657,6 @@
                     searchState.refreshQueued.clear();
                     break;
                 }
-                if (searchState.refreshQueue.length && generation === searchState.refreshGeneration) {
-                    await new Promise(resolve => window.setTimeout(resolve, searchState.payload.refresh_policy.detail_delay_ms));
-                }
             }
         } finally {
             searchState.refreshRunning = false;

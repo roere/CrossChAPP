@@ -124,10 +124,6 @@ $transport = static function (string $method, string $url, array $data, array $h
     }
     return ['status' => $status, 'body' => $body === false ? '' : $body, 'headers' => $responseHeaders];
 };
-$delay = static function (int $milliseconds): void {
-    usleep(max(1500, $milliseconds) * 1000);
-};
-
 $results = [];
 foreach ($selection as $orgId) {
     if ($stopStatus !== null) {
@@ -135,7 +131,7 @@ foreach ($selection as $orgId) {
     }
     $currentOrgId = $orgId;
     $currentPhase = 'discovery';
-    $resolver = new BniMemberDirectoryConfigResolver($database, $transport, $delay);
+    $resolver = new BniMemberDirectoryConfigResolver($database, $transport, null, null, true);
     $resolved = $resolver->resolve($orgId);
     $discoveryStatus = (string) $resolved['status'];
     if ($discoveryStatus !== 'configured') {
@@ -159,7 +155,7 @@ foreach ($selection as $orgId) {
     $configCount = (int) $configCountStatement->fetchColumn();
 
     $currentPhase = 'memberlist';
-    $client = new BniMemberListClient($database, $transport, $delay);
+    $client = new BniMemberListClient($database, $transport, null, null, true);
     $memberResult = $client->fetch($orgId);
     $memberStatus = (string) $memberResult['status'];
     $memberResult['body'] = '';

@@ -235,7 +235,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                     <button type="submit">Einladung senden</button>
                 </form><div id="invitation-message" class="message" role="status"></div>
             </section>
-            <section><h2>Offene Einladungen</h2><div class="table-scroll"><table><thead><tr><th>Name</th><th>E-Mail</th><th>Chapter</th><th>Gesendet</th><th>Gültig bis</th><th>Status</th><?php if ($isAdmin): ?><th>Aktion</th><?php endif; ?></tr></thead><tbody id="invitation-list"></tbody></table></div></section>
+            <section><h2>Offene Einladungen</h2><div class="table-scroll"><table><thead><tr><th>Name</th><th>E-Mail</th><th>Chapter</th><th>Gesendet</th><th>Gültig bis</th><th>Status</th><th>Aktion</th></tr></thead><tbody id="invitation-list"></tbody></table></div></section>
         </div>
     </details>
     <dialog id="invitation-verification-dialog" class="account-dialog" aria-modal="true" aria-labelledby="invitation-verification-heading">
@@ -244,6 +244,14 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <p id="invitation-verification-detail"></p>
             <p><strong>Trotzdem einladen?</strong></p>
             <div class="registration-actions"><button id="confirm-invitation-override" type="button">Ja</button><button id="cancel-invitation-override" type="button" class="secondary">Nein</button></div>
+        </div>
+    </dialog>
+    <dialog id="resend-invitation-dialog" class="account-dialog" aria-modal="true" aria-labelledby="resend-invitation-heading">
+        <div class="account-dialog-card">
+            <h2 id="resend-invitation-heading">Einladung erneut senden?</h2>
+            <p id="resend-invitation-confirmation"></p>
+            <div id="resend-invitation-message" class="message" role="status" aria-live="polite"></div>
+            <div class="registration-actions"><button id="confirm-resend-invitation" type="button">Erneut senden</button><button id="cancel-resend-invitation" type="button" class="secondary">Abbrechen</button></div>
         </div>
     </dialog>
     <?php if ($isAdmin): ?><dialog id="cancel-invitation-dialog" aria-labelledby="cancel-invitation-title">

@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/AutomationRepository.php';
 require_once __DIR__ . '/BniClient.php';
 require_once __DIR__ . '/BniRequestPolicy.php';
+require_once __DIR__ . '/BniRequestNotStartedException.php';
 require_once __DIR__ . '/OrganizationRepository.php';
 
 final class ChapterRefreshService
@@ -51,35 +52,36 @@ final class ChapterRefreshService
             return ['orgId' => $orgId, 'status' => 'skipped', 'reason' => 'locked'];
         }
 
-        $logId = $triggerType === 'manual'
-            ? $this->automation->startLog($orgId, $triggerType)
-            : $this->automation->startLimitedLog($orgId, $triggerType, (int) $settings['automaticRefreshDailyLimit']);
-        if ($logId === null) {
-            $this->automation->releaseLock($orgId, $ownerToken);
-            return ['orgId' => $orgId, 'status' => 'skipped', 'reason' => 'daily_limit'];
-        }
+        $logId = null;
         try {
-            $details = $this->client->getChapterDetails((string) $organization['cmsSecurityHash']);
+            $details = $this->client->getChapterDetails((string) $organization['cmsSecurityHash'], function () use (&$logId, $orgId, $triggerType, $settings): void {
+                $logId = $triggerType === 'manual'
+                    ? $this->automation->startLog($orgId, $triggerType)
+                    : $this->automation->startLimitedLog($orgId, $triggerType, (int) $settings['automaticRefreshDailyLimit']);
+                if ($logId === null) throw new BniRequestNotStartedException('daily_limit');
+            });
             if (($details['orgId'] ?? null) !== $orgId) {
                 throw new RuntimeException('Die BNI-Detailantwort gehört zu einer anderen Organisation.');
             }
             $this->organizations->saveDetails($orgId, $details);
             $this->automation->finishLog($logId, 'success');
             return ['orgId' => $orgId, 'status' => 'success', 'details' => $this->organizations->find($orgId)];
+        } catch (BniRequestNotStartedException) {
+            return ['orgId' => $orgId, 'status' => 'skipped', 'reason' => 'daily_limit'];
         } catch (HttpException $exception) {
             $stopReason = BniRequestPolicy::stopReason($exception->statusCode);
             if ($stopReason !== null) {
-                $this->automation->finishLog($logId, $stopReason, $exception->statusCode, $stopReason);
+                if ($logId !== null) $this->automation->finishLog($logId, $stopReason, $exception->statusCode, $stopReason);
                 error_log(sprintf('CrossChAPP refresh stopped: org_id=%d http_status=%d reason=%s trigger=%s', $orgId, $exception->statusCode, $stopReason, $triggerType));
                 return ['orgId' => $orgId, 'status' => $stopReason, 'retryAfter' => $exception->retryAfterSeconds];
             }
             $this->organizations->preserveLoadedOrMarkError($orgId);
-            $this->automation->finishLog($logId, 'error', $exception->statusCode, 'temporary_http_error');
+            if ($logId !== null) $this->automation->finishLog($logId, 'error', $exception->statusCode, 'temporary_http_error');
             error_log(sprintf('CrossChAPP refresh failed: org_id=%d http_status=%d trigger=%s', $orgId, $exception->statusCode, $triggerType));
             return ['orgId' => $orgId, 'status' => 'error'];
         } catch (Throwable) {
             $this->organizations->preserveLoadedOrMarkError($orgId);
-            $this->automation->finishLog($logId, 'error', null, 'network_or_response_error');
+            if ($logId !== null) $this->automation->finishLog($logId, 'error', null, 'network_or_response_error');
             error_log(sprintf('CrossChAPP refresh failed: org_id=%d http_status=0 trigger=%s', $orgId, $triggerType));
             return ['orgId' => $orgId, 'status' => 'error'];
         } finally {

@@ -98,6 +98,13 @@ final class Database
         $this->connection->exec('CREATE UNIQUE INDEX IF NOT EXISTS uq_organizations_short_link_slug ON organizations(short_link_slug)');
         ChapterShortLink::backfill($this->connection);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_organizations_detail_status ON organizations(detail_status)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS bni_request_throttle (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                last_reserved_start_ms INTEGER NOT NULL
+            )
+            SQL);
+        $this->connection->exec('INSERT OR IGNORE INTO bni_request_throttle(id,last_reserved_start_ms) VALUES(1,0)');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_organizations_country_type ON organizations(country_code, org_type)');
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS automation_settings (

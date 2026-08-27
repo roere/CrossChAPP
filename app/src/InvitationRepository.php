@@ -25,6 +25,36 @@ final class InvitationRepository
     public function open(): array { $this->expire(); return $this->database->query("SELECT i.id,i.first_name AS firstName,i.last_name AS lastName,i.email,o.chapter_name AS chapterName,i.sent_at AS sentAt,i.expires_at AS expiresAt,i.status FROM user_invitations i JOIN organizations o ON o.org_id=i.home_chapter_org_id WHERE i.status='pending' ORDER BY i.created_at DESC")->fetchAll(); }
     public function cancel(int $id): bool { $s=$this->database->prepare("UPDATE user_invitations SET status='cancelled' WHERE id=:id AND status='pending'");$s->execute([':id'=>$id]);return $s->rowCount()===1; }
 
+    /** @return array<string,mixed> */
+    public function beginResend(int $id, int $cooldownSeconds = 60): array
+    {
+        if($id<=0)throw new InvalidArgumentException('Ungültige Einladungs-ID.');
+        $mysql=(string)$this->database->getAttribute(PDO::ATTR_DRIVER_NAME)==='mysql';
+        try{
+            if($mysql)$this->database->beginTransaction();else$this->database->exec('BEGIN IMMEDIATE');
+            $sql="SELECT i.*,o.chapter_name FROM user_invitations i JOIN organizations o ON o.org_id=i.home_chapter_org_id WHERE i.id=:id".($mysql?' FOR UPDATE':'');
+            $statement=$this->database->prepare($sql);$statement->execute([':id'=>$id]);$row=$statement->fetch();
+            if(!is_array($row))throw new DomainException('Die Einladung wurde nicht gefunden.');
+            if($row['status']!=='pending'||strtotime((string)$row['expires_at'])<=time())throw new DomainException('Diese Einladung kann nicht erneut gesendet werden.');
+            if(trim((string)$row['email'])===''||filter_var($row['email'],FILTER_VALIDATE_EMAIL)===false)throw new DomainException('Für diese Einladung ist keine gültige Empfängeradresse hinterlegt.');
+            if($this->emailExists((string)$row['email']))throw new DomainException('Für diese Einladung besteht bereits ein Benutzerkonto.');
+            $sentAt=strtotime((string)($row['sent_at']??''));
+            if($sentAt!==false&&$sentAt>time()-$cooldownSeconds)throw new DomainException('Die Einladung wurde gerade erst gesendet. Bitte warte kurz.');
+            return$row;
+        }catch(Throwable $exception){$this->rollbackResend();throw$exception;}
+    }
+
+    public function finishResend(int $id,string $tokenHash,string $expiresAt):void
+    {
+        try{$statement=$this->database->prepare("UPDATE user_invitations SET token_hash=:hash,expires_at=:expires,sent_at=:sent WHERE id=:id AND status='pending'");$statement->execute([':hash'=>$tokenHash,':expires'=>$expiresAt,':sent'=>self::now(),':id'=>$id]);if($statement->rowCount()!==1)throw new RuntimeException('Die Einladung wurde parallel verändert.');$this->database->exec('COMMIT');}
+        catch(Throwable $exception){$this->rollbackResend();throw$exception;}
+    }
+
+    public function rollbackResend():void
+    {
+        try{if($this->database->inTransaction())$this->database->rollBack();else$this->database->exec('ROLLBACK');}catch(Throwable){}
+    }
+
     /** @return array<string,mixed>|null */
     public function byToken(string $token): ?array
     {

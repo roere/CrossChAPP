@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/BniRequestPolicy.php';
 require_once __DIR__ . '/ChapterRefreshService.php';
 require_once __DIR__ . '/OrganizationRepository.php';
 
@@ -27,19 +26,7 @@ final class AutomaticRefreshRunner
                 || (($result['status'] ?? '') === 'skipped' && in_array(($result['reason'] ?? ''), ['daily_limit', 'disabled'], true))) {
                 break;
             }
-            if ($index < count($chapters) - 1) {
-                $this->pause();
-            }
         }
         return $results;
-    }
-
-    private function pause(): void
-    {
-        if ($this->delay !== null) {
-            ($this->delay)(BniRequestPolicy::DETAIL_DELAY_MS);
-            return;
-        }
-        usleep(BniRequestPolicy::DETAIL_DELAY_MS * 1000);
     }
 }

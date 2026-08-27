@@ -22,3 +22,4 @@ representation-request-contact.php
 automation-refresh.php
 bni-request-policy.php
 pending-chapters.php
+bni-global-throttle.php
