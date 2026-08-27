@@ -14,11 +14,11 @@ final class BniMemberListClient
     {
         $statement=$this->database->prepare('SELECT * FROM bni_member_directory_configs WHERE org_id=:org');$statement->execute([':org'=>$orgId]);$config=$statement->fetch();
         if(!is_array($config))return['status'=>'unavailable','body'=>'','httpStatus'=>0];
-        $this->awaitRealRequest();
+        $throttleMeasurement=$this->awaitRealRequest();
         if(str_contains((string)$config['endpoint'],'/chapterdetail/display')){parse_str((string)$config['parameters'],$data);$data['website_type']=$config['website_type'];$data['website_id']=$config['website_id'];$data['mappedWidgetSettings']=$config['mapped_widget_settings'];}
         else $data=['parameters'=>$config['parameters'],'languages'=>$config['languages'],'cmsv3'=>'true','website_type'=>$config['website_type'],'website_id'=>$config['website_id'],'mappedWidgetSettings'=>$config['mapped_widget_settings'],'pageMode'=>'Live_Site'];
         $headers=['Content-Type: application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With: XMLHttpRequest','Referer: '.$config['referer'],'User-Agent: Mozilla/5.0'];
-        $external=$this->transport===null||$this->transportIsExternal;$eventId=null;if($external){$this->events??=new BniRequestEventRepository($this->database);$eventId=$this->events->start('member_list','verification');}
+        $external=$this->transport===null||$this->transportIsExternal;$eventId=null;if($external){$this->events??=new BniRequestEventRepository($this->database);$eventId=$this->events->start('member_list','verification',null,$throttleMeasurement['reserved_at_ms']??null);}
         try{if($this->transport!==null)$result=($this->transport)('POST',(string)$config['endpoint'],$data,$headers);
         else{$context=stream_context_create(['http'=>['method'=>'POST','header'=>implode("\r\n",$headers),'content'=>http_build_query($data),'ignore_errors'=>true,'timeout'=>25]]);$body=@file_get_contents((string)$config['endpoint'],false,$context);$responseHeaders=$http_response_header??[];$status=0;foreach(array_reverse($responseHeaders)as$header)if(preg_match('/^HTTP\/\S+\s+(\d{3})/',$header,$match)){ $status=(int)$match[1];break;}$result=['status'=>$status,'body'=>$body===false?'':$body,'headers'=>$responseHeaders];}}
         catch(Throwable $exception){if($eventId!==null)$this->events?->finish($eventId,null,'network_error');throw$exception;}
@@ -26,11 +26,12 @@ final class BniMemberListClient
         if($eventId!==null)$this->events?->finish($eventId,$http?:null,$http===0?'network_error':($status==='ok'?'success':($status==='rate_limited'?'rate_limited':($status==='forbidden'?'forbidden':'http_error'))));return['status'=>$status,'body'=>$body,'httpStatus'=>$http];
     }
 
-    private function awaitRealRequest():void
+    /** @return array{reserved_at_ms:int,slot_ms:int}|null */
+    private function awaitRealRequest():?array
     {
-        if($this->transport!==null&&!$this->transportIsExternal)return;
+        if($this->transport!==null&&!$this->transportIsExternal)return null;
         if(getenv('CROSSCHAPP_DISABLE_EXTERNAL_HTTP')==='1')throw new RuntimeException('Externer HTTP-Zugriff ist im sicheren Testmodus deaktiviert.');
         $this->throttle??=new BniGlobalThrottle($this->database);
-        $this->throttle->awaitStartSlot('member_list');
+        return $this->throttle->awaitStartSlotMeasurement('member_list');
     }
 }

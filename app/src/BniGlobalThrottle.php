@@ -17,6 +17,13 @@ final class BniGlobalThrottle
 
     public function awaitStartSlot(string $requestType = 'bni'): int
     {
+        return $this->awaitStartSlotMeasurement($requestType)['slot_ms'];
+    }
+
+    /** @return array{reserved_at_ms:int,slot_ms:int} */
+    public function awaitStartSlotMeasurement(string $requestType = 'bni'): array
+    {
+        $reservedAt = $this->nowMs();
         $slot = $this->reserveStartSlot();
         $wait = max(0, $slot - $this->nowMs());
         $totalWait = 0;
@@ -32,7 +39,7 @@ final class BniGlobalThrottle
         if (getenv('CROSSCHAPP_BNI_THROTTLE_DEBUG') === '1') {
             error_log(sprintf('CrossChAPP BNI throttle: type=%s slot_ms=%d wait_ms=%d', $requestType, $slot, $totalWait));
         }
-        return $slot;
+        return ['reserved_at_ms' => $reservedAt, 'slot_ms' => $slot];
     }
 
     public function reserveStartSlot(): int

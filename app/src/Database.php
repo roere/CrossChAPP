@@ -116,6 +116,8 @@ final class Database
             )
             SQL);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_bni_request_events_started ON bni_request_events(started_at_ms)');
+        $this->addTableColumnIfMissing('bni_request_events', 'throttle_reserved_at_ms', 'INTEGER');
+        $this->addTableColumnIfMissing('bni_request_events', 'throttle_wait_ms', 'INTEGER');
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS user_error_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

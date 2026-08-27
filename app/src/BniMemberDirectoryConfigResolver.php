@@ -18,7 +18,7 @@ final class BniMemberDirectoryConfigResolver
         if(!is_array($row))return['status'=>'unavailable'];
         $url=$this->validatedChapterUrl((string)($row['chapter_url']??''));$chapterId=rawurldecode(trim((string)($row['cms_security_hash']??'')));
         if($url===null||$chapterId==='')return['status'=>'unavailable'];
-        $this->awaitRealRequest();$external=$this->transport===null||$this->transportIsExternal;$eventId=null;if($external){$this->events??=new BniRequestEventRepository($this->database);$eventId=$this->events->start('member_discovery','verification');}try{$response=$this->request($url);}catch(Throwable $exception){if($eventId!==null)$this->events?->finish($eventId,null,'network_error');throw$exception;}$http=(int)($response['status']??0);if($eventId!==null)$this->events?->finish($eventId,$http?:null,$http===0?'network_error':($http>=200&&$http<300?'success':($http===429?'rate_limited':($http===403?'forbidden':'http_error'))));
+        $throttleMeasurement=$this->awaitRealRequest();$external=$this->transport===null||$this->transportIsExternal;$eventId=null;if($external){$this->events??=new BniRequestEventRepository($this->database);$eventId=$this->events->start('member_discovery','verification',null,$throttleMeasurement['reserved_at_ms']??null);}try{$response=$this->request($url);}catch(Throwable $exception){if($eventId!==null)$this->events?->finish($eventId,null,'network_error');throw$exception;}$http=(int)($response['status']??0);if($eventId!==null)$this->events?->finish($eventId,$http?:null,$http===0?'network_error':($http>=200&&$http<300?'success':($http===429?'rate_limited':($http===403?'forbidden':'http_error'))));
         if($http===403)return['status'=>'forbidden'];if($http===429)return['status'=>'rate_limited'];if($http<200||$http>=300)return['status'=>'upstream_error'];
         $body=(string)($response['body']??'');
         if(!preg_match('/id=["\']website_type["\'][^>]*value=["\']([^"\']+)["\']/i',$body,$type)||!preg_match('/id=["\']website_id["\'][^>]*value=["\']([0-9]+)["\']/i',$body,$website)||!preg_match('/var\s+mappedWidgetSettings\s*=\s*(["\'])(.*?)\1\s*;/s',$body,$mapped))return['status'=>'unavailable'];
@@ -37,11 +37,12 @@ final class BniMemberDirectoryConfigResolver
         $context=stream_context_create(['http'=>['method'=>'GET','header'=>'User-Agent: Mozilla/5.0','ignore_errors'=>true,'timeout'=>25]]);$body=@file_get_contents($url,false,$context);$headers=$http_response_header??[];$status=0;foreach(array_reverse($headers)as$header)if(preg_match('/^HTTP\/\S+\s+(\d{3})/',$header,$match)){$status=(int)$match[1];break;}return['status'=>$status,'body'=>$body===false?'':$body,'headers'=>$headers];
     }
     private function validatedChapterUrl(string $url):?string{$parts=parse_url(trim($url));$host=strtolower(rtrim((string)($parts['host']??''),'.'));if(!in_array(strtolower((string)($parts['scheme']??'')),['http','https'],true)||$host===''||isset($parts['user'])||isset($parts['pass'])||!preg_match('/(^|\.)bni[^.]*\.(de|at|com|hamburg)$/',$host))return null;$parts['scheme']='https';return'https://'.$host.(string)($parts['path']??'/').(isset($parts['query'])?'?'.$parts['query']:'');}
-    private function awaitRealRequest():void
+    /** @return array{reserved_at_ms:int,slot_ms:int}|null */
+    private function awaitRealRequest():?array
     {
-        if($this->transport!==null&&!$this->transportIsExternal)return;
+        if($this->transport!==null&&!$this->transportIsExternal)return null;
         if(getenv('CROSSCHAPP_DISABLE_EXTERNAL_HTTP')==='1')throw new RuntimeException('Externer HTTP-Zugriff ist im sicheren Testmodus deaktiviert.');
         $this->throttle??=new BniGlobalThrottle($this->database);
-        $this->throttle->awaitStartSlot('member_directory_discovery');
+        return $this->throttle->awaitStartSlotMeasurement('member_directory_discovery');
     }
 }

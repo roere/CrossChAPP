@@ -140,15 +140,16 @@ final class BniClient
     private function getJson(string $url, string $requestType, ?Closure $beforeRequest,?string $triggerType): array
     {
         $external=$this->http->usesExternalTransport()||$this->transportIsExternal;
+        $throttleMeasurement=null;
         if ($external) {
             $this->http->assertExternalAllowed();
             if($this->throttle===null||$this->events===null){$database=(new Database())->connection();$this->throttle??=new BniGlobalThrottle($database);$this->events??=new BniRequestEventRepository($database);}
-            $this->throttle->awaitStartSlot($requestType);
+            $throttleMeasurement=$this->throttle->awaitStartSlotMeasurement($requestType);
         }
         if ($beforeRequest !== null) {
             $beforeRequest();
         }
-        $eventId=$external?$this->events?->start($requestType,$triggerType):null;
+        $eventId=$external?$this->events?->start($requestType,$triggerType,null,$throttleMeasurement['reserved_at_ms']??null):null;
         try{$result=$this->http->getJson($url);if($eventId!==null)$this->events?->finish($eventId,200,'success');return$result;}
         catch(HttpException $exception){if($eventId!==null)$this->events?->finish($eventId,$exception->statusCode,$exception->statusCode===429?'rate_limited':($exception->statusCode===403?'forbidden':'http_error'));throw$exception;}
         catch(Throwable $exception){if($eventId!==null)$this->events?->finish($eventId,null,'network_error');throw$exception;}

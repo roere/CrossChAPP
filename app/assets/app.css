@@ -442,6 +442,9 @@ tr.organization:hover { background: #faf7f7; }
 .performance-chart-wrap svg { display: block; width: 100%; height: auto; min-height: 220px; }
 .chart-axis { stroke: #8b8d91; stroke-width: 1; }
 .performance-line { fill: none; stroke: var(--bni-red); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.throttle-monitor { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.throttle-maximum-line { stroke: #777b80; stroke-width: 1.5; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 1rem; color: var(--muted); font-size: .85rem; }
 .performance-chart-wrap text { fill: var(--muted); font-size: 11px; }
 button.danger { border-color: var(--bni-red-dark); color: white; background: var(--bni-red-dark); }
 button.danger:hover { border-color: #8f101d; background: #8f101d; }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class MysqlSchema
 {
-    public const LATEST_VERSION = 10;
+    public const LATEST_VERSION = 11;
 
     public static function migrate(PDO $db): void
     {
@@ -65,6 +65,7 @@ final class MysqlSchema
             $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(9,UTC_TIMESTAMP())");
         }
         if($version<10){$engine=' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';$db->exec("CREATE TABLE IF NOT EXISTS user_keywords(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT NOT NULL,keyword VARCHAR(40) NOT NULL,normalized_keyword VARCHAR(40) NOT NULL,created_at VARCHAR(32) NOT NULL,UNIQUE KEY uq_user_keywords_normalized(user_id,normalized_keyword),INDEX idx_user_keywords_user(user_id),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)$engine");$db->exec("INSERT INTO schema_migrations(version,applied_at)VALUES(10,UTC_TIMESTAMP())");}
+        if($version<11){foreach(['throttle_reserved_at_ms BIGINT NULL','throttle_wait_ms BIGINT NULL']as$definition){[$column]=explode(' ',$definition,2);$exists=(int)$db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='bni_request_events' AND COLUMN_NAME='{$column}'")->fetchColumn();if($exists===0)$db->exec("ALTER TABLE bni_request_events ADD COLUMN {$definition}");}$db->exec("INSERT INTO schema_migrations(version,applied_at)VALUES(11,UTC_TIMESTAMP())");}
         if (getenv('CROSSCHAPP_DB_SKIP_SEED') === '1') {
             return;
         }
@@ -147,7 +148,7 @@ final class MysqlSchema
         return [
             "CREATE TABLE IF NOT EXISTS schema_migrations(version INT PRIMARY KEY,applied_at VARCHAR(32) NOT NULL)$engine",
             "CREATE TABLE IF NOT EXISTS bni_request_throttle(id INT PRIMARY KEY,last_reserved_start_ms BIGINT NOT NULL)$engine",
-            "CREATE TABLE IF NOT EXISTS bni_request_events(id BIGINT AUTO_INCREMENT PRIMARY KEY,started_at_ms BIGINT NOT NULL,request_type VARCHAR(40) NOT NULL,trigger_type VARCHAR(40),http_status INT,result_type VARCHAR(40),INDEX idx_bni_request_events_started(started_at_ms))$engine",
+            "CREATE TABLE IF NOT EXISTS bni_request_events(id BIGINT AUTO_INCREMENT PRIMARY KEY,started_at_ms BIGINT NOT NULL,request_type VARCHAR(40) NOT NULL,trigger_type VARCHAR(40),http_status INT,result_type VARCHAR(40),throttle_reserved_at_ms BIGINT NULL,throttle_wait_ms BIGINT NULL,INDEX idx_bni_request_events_started(started_at_ms))$engine",
             "CREATE TABLE IF NOT EXISTS organizations(id BIGINT AUTO_INCREMENT PRIMARY KEY,org_id BIGINT NOT NULL UNIQUE,cms_security_hash VARCHAR(255),country_code VARCHAR(8),org_type VARCHAR(64),longitude DOUBLE,latitude DOUBLE,chapter_name VARCHAR(255),short_link_slug VARCHAR(255),region VARCHAR(255),region_id BIGINT,city VARCHAR(255),postal_code VARCHAR(32),street VARCHAR(255),venue VARCHAR(255),meeting_day VARCHAR(32),meeting_time VARCHAR(32),meeting_type VARCHAR(64),meeting_duration INT,member_count INT,chapter_url TEXT,visitor_registration_url TEXT,online_meeting_link TEXT,timezone VARCHAR(128),status VARCHAR(64),description TEXT,detail_status VARCHAR(32) NOT NULL DEFAULT 'not_loaded' CHECK(detail_status IN ('not_loaded','loaded','error')),map_loaded_at VARCHAR(32),details_loaded_at VARCHAR(32),created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,UNIQUE KEY uq_organizations_short_link_slug(short_link_slug),INDEX idx_organizations_detail_status(detail_status),INDEX idx_organizations_country_type(country_code,org_type))$engine",
             "CREATE TABLE IF NOT EXISTS automation_settings(id INT PRIMARY KEY,usage_refresh_enabled TINYINT(1) NOT NULL DEFAULT 0,usage_refresh_days INT NOT NULL DEFAULT 7,automatic_refresh_enabled TINYINT(1) NOT NULL DEFAULT 0,automatic_refresh_days INT NOT NULL DEFAULT 30,automatic_refresh_batch_size INT NOT NULL DEFAULT 10,automatic_refresh_interval_minutes INT NOT NULL DEFAULT 60,automatic_refresh_daily_limit INT NOT NULL DEFAULT 50,map_refresh_enabled TINYINT(1) NOT NULL DEFAULT 0,map_refresh_days INT NOT NULL DEFAULT 1,updated_at VARCHAR(32) NOT NULL)$engine",
             "CREATE TABLE IF NOT EXISTS chapter_refresh_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,org_id BIGINT NOT NULL,trigger_type VARCHAR(32) NOT NULL,started_at VARCHAR(32) NOT NULL,finished_at VARCHAR(32),status VARCHAR(32) NOT NULL,http_status INT,error_category VARCHAR(64),INDEX idx_refresh_log_finished(finished_at),INDEX idx_refresh_log_trigger_status(trigger_type,status))$engine",

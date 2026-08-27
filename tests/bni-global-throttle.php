@@ -21,8 +21,8 @@ $mysqlConnection = static fn (): PDO => new PDO(
 
 if (($argv[1] ?? '') === '--worker') {
     $database = $mysqlConnection();
-    (new BniGlobalThrottle($database))->awaitStartSlot((string) ($argv[2] ?? 'test'));
-    echo json_encode(['type' => $argv[2] ?? 'test', 'startedMs' => (int) floor(microtime(true) * 1000)], JSON_THROW_ON_ERROR), "\n";
+    $measurement=(new BniGlobalThrottle($database))->awaitStartSlotMeasurement((string) ($argv[2] ?? 'test'));$startedMs=(int)floor(microtime(true)*1000);
+    echo json_encode(['type' => $argv[2] ?? 'test', 'startedMs' => $startedMs,'waitMs'=>$startedMs-$measurement['reserved_at_ms']], JSON_THROW_ON_ERROR), "\n";
     exit;
 }
 
@@ -62,7 +62,7 @@ foreach (['usage_search', 'automatic', 'manual', 'member_verification'] as $type
     if (!is_resource($process)) throw new RuntimeException('Throttle-Testprozess konnte nicht gestartet werden.');
     $processes[] = [$process, $pipes, $type];
 }
-$starts = [];
+$starts = [];$measuredWaits=[];
 foreach ($processes as [$process, $pipes, $type]) {
     $stdout = stream_get_contents($pipes[1]);
     $stderr = stream_get_contents($pipes[2]);
@@ -71,10 +71,12 @@ foreach ($processes as [$process, $pipes, $type]) {
     if (!str_starts_with(trim($stdout), '{') || trim($stderr) !== '') throw new RuntimeException("Throttle-Testprozess {$type} fehlgeschlagen (Status {$status}): {$stderr}{$stdout}");
     $row = json_decode(trim($stdout), true, 8, JSON_THROW_ON_ERROR);
     $starts[] = (int) $row['startedMs'];
+    $measuredWaits[]=(int)$row['waitMs'];
 }
 sort($starts);
 $gaps = [];
 for ($index = 1; $index < count($starts); $index++) $gaps[] = $starts[$index] - $starts[$index - 1];
 $check(count($gaps) === 3 && min($gaps) >= 1490, 'Parallele Prozesse starteten mit weniger als 1490 ms Toleranzabstand: ' . implode(',', $gaps));
+$sortedWaits=$measuredWaits;sort($sortedWaits);$check($sortedWaits[0]<100&&$sortedWaits[1]>=1490&&$sortedWaits[2]>=$sortedWaits[1]+1490&&$sortedWaits[3]>=$sortedWaits[2]+1490,'Parallele Wartezeiten steigen nicht entsprechend der Slotfolge: '.implode(',',$sortedWaits));
 
-echo 'PASS globaler BNI-Throttle SQLite/MariaDB; gemessene Startabstände: ', implode(' ms, ', $gaps), " ms\n";
+echo 'PASS globaler BNI-Throttle SQLite/MariaDB; gemessene Startabstände: ', implode(' ms, ', $gaps),' ms; Wartezeiten: ',implode(' ms, ',$sortedWaits), " ms\n";
