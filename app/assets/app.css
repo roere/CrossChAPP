@@ -428,9 +428,17 @@ tr.organization:hover { background: #faf7f7; }
 .account-details dt { margin-bottom: .25rem; color: var(--muted); font-size: .7rem; font-weight: 800; }
 .account-details dd { overflow-wrap: anywhere; margin: 0; font-weight: 800; }
 .account-home-chapter { display: flex; align-items: center; gap: .45rem; }
+.keyword-chips { display: flex; flex-wrap: wrap; gap: .45rem; min-width: 0; }
+.keyword-chip { display: inline-flex; align-items: center; gap: .3rem; max-width: 100%; padding: .3rem .55rem; border-radius: 999px; background: #f2f2f2; overflow-wrap: anywhere; }
+.keyword-chip button { width: 24px; min-height: 24px; padding: 0; border: 0; color: var(--bni-red-dark); background: transparent; }
+.keyword-add-row { display: flex; align-items: end; gap: .55rem; margin-top: .75rem; }
+.keyword-add-row label { flex: 1; }
+.request-profile-button { padding: 0; border: 0; color: inherit; background: transparent; font: inherit; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 3px; }
+.request-profile-button:hover, .request-profile-button:focus-visible { color: var(--bni-red-dark); background: transparent; }
 .icon-button { min-width: 2rem; min-height: 2rem; padding: .25rem; line-height: 1; }
 .performance-stats { margin: 1rem 0; }
 .performance-chart-wrap { width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 4px; background: white; }
+.performance-controls { display: flex; flex-wrap: wrap; gap: .75rem; }
 .performance-chart-wrap svg { display: block; width: 100%; height: auto; min-height: 220px; }
 .chart-axis { stroke: #8b8d91; stroke-width: 1; }
 .performance-line { fill: none; stroke: var(--bni-red); stroke-width: 2; vector-effect: non-scaling-stroke; }

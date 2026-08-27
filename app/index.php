@@ -162,6 +162,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <div><dt>E-Mail-Adresse</dt><dd data-account-field="email">Wird geladen …</dd></div>
                     <div><dt>Heimatchapter</dt><dd class="account-home-chapter"><span data-account-field="homeChapterName">Wird geladen …</span><button id="copy-home-chapter-link" type="button" class="icon-button" title="Chapterlink kopieren" aria-label="Chapterlink kopieren" hidden>🔗</button></dd></div>
                     <div><dt>Verifikation</dt><dd data-account-field="verificationStatus">Wird geladen …</dd></div>
+                    <div><dt>Schlagwörter zu mir</dt><dd id="account-keywords-view"><span class="page-meta">Keine Schlagwörter hinterlegt.</span></dd></div>
                 </dl>
                 <?php if (!$isAdmin): ?>
                     <section id="my-account-chapter-editor" hidden>
@@ -170,6 +171,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                             <label><input name="account_skip_chapter_verification" type="checkbox" value="1" aria-describedby="account-skip-chapter-verification-tooltip"> <span>Chapter-Prüfung überspringen</span></label>
                             <span class="field-tooltip"><button type="button" aria-label="Hinweis zur Chapter-Prüfung" aria-describedby="account-skip-chapter-verification-tooltip">i</button><span id="account-skip-chapter-verification-tooltip" role="tooltip">Es wird nicht geprüft, ob der Name in der Mitgliederliste des Chapters steht.</span></span>
                         </div>
+                        <section class="account-keyword-editor" aria-labelledby="account-keywords-heading"><h3 id="account-keywords-heading">Schlagwörter zu mir</h3><div id="account-keywords-edit-list" class="keyword-chips"></div><div class="keyword-add-row"><label>Schlagwort<input id="account-keyword-input" maxlength="40" autocomplete="off"></label><button id="save-account-keyword" type="button" class="icon-button" title="Schlagwort speichern" aria-label="Schlagwort speichern">💾</button></div><p id="account-keyword-limit" class="page-meta" hidden>Maximal 10 Schlagwörter.</p></section>
                         <div class="registration-actions"><button id="save-account-home-chapter" type="button">Speichern</button><button id="cancel-account-edit" type="button" class="secondary">Abbrechen</button></div>
                     </section>
                 <?php endif; ?>
@@ -181,6 +183,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                 </div>
             </div>
         </dialog>
+        <dialog id="request-profile-dialog" class="account-dialog" aria-modal="true" aria-labelledby="request-profile-heading"><div class="account-dialog-card"><button id="close-request-profile-icon" type="button" class="dialog-close" aria-label="Profilansicht schließen">×</button><h2 id="request-profile-heading">Über</h2><h3>Schlagwörter</h3><div id="request-profile-keywords" class="keyword-chips"></div><div id="request-profile-message" class="message" role="status" aria-live="polite"></div><div class="registration-actions"><button id="close-request-profile" type="button" class="secondary">Schließen</button></div></div></dialog>
         <?php if (!$isAdmin): ?>
             <dialog id="delete-account-dialog" class="account-dialog" aria-modal="true" aria-labelledby="delete-account-heading">
                 <div class="account-dialog-card">

@@ -75,11 +75,17 @@ final class RepresentationRequestRepository
         foreach ($statement->fetchAll() as $row) {
             $own = $viewerUserId !== null && (int) $row['user_id'] === $viewerUserId;
             $assigned=(bool)$row['is_assigned'];$item = ['requestDate' => (string) $row['request_date'], 'isOwn' => $own, 'isAssigned'=>$assigned, 'canContact' => $viewerCanContact&&!$own&&!$assigned, 'isVerified' => ($row['bni_verification_status']??'') === 'manual_verified'];
-            if ($viewerUserId !== null) { $initial = function_exists('mb_substr') ? mb_substr((string) $row['last_name'], 0, 1) : substr((string) $row['last_name'], 0, 1); $item['displayName'] = trim((string) $row['first_name'] . ' ' . $initial . '.'); }
+            if ($viewerUserId !== null) { $initial = function_exists('mb_substr') ? mb_substr((string) $row['last_name'], 0, 1) : substr((string) $row['last_name'], 0, 1); $item['displayName'] = trim((string) $row['first_name'] . ' ' . $initial . '.');$item['profileRequestId']=(int)$row['id']; }
             if (!$own) $item['requestId'] = (int) $row['id'];
             $result[(int) $row['org_id']][] = $item;
         }
         return $result;
+    }
+
+    /** @return array{displayName:string,userId:int}|null */
+    public function visibleProfileContext(int$requestId,string$today):?array
+    {
+        $statement=$this->database->prepare("SELECT requests.user_id,users.first_name,users.last_name FROM representation_requests requests JOIN users ON users.id=requests.user_id AND users.status='active' AND users.email_verified_at IS NOT NULL WHERE requests.id=:request AND requests.request_date>=:today");$statement->execute([':request'=>$requestId,':today'=>$today]);$row=$statement->fetch();if(!is_array($row))return null;$initial=function_exists('mb_substr')?mb_substr((string)$row['last_name'],0,1):substr((string)$row['last_name'],0,1);return['displayName'=>trim((string)$row['first_name'].' '.$initial.'.'),'userId'=>(int)$row['user_id']];
     }
 
     /** @return array<string,mixed>|null */

@@ -36,6 +36,7 @@
     document.querySelector('#logout-button')?.addEventListener('click', logout);
     initializeAccountMenu();
     initializeMyAccount();
+    initializeRequestProfile();
     initializePasswordChange();
     initializeGuideImages();
     document.querySelector('#chapter-search-form')?.addEventListener('submit', searchChapters);
@@ -174,7 +175,8 @@
         const skipOption = document.querySelector('#account-skip-chapter-verification-option');
         const skipCheckbox = skipOption?.querySelector('input') || null;
         const copyChapterLink=document.querySelector('#copy-home-chapter-link');
-        let accountData = null; let accountPicker = null; let chaptersLoaded = false; let accountEditActive = false;
+        const keywordView=document.querySelector('#account-keywords-view'),keywordEditList=document.querySelector('#account-keywords-edit-list'),keywordInput=document.querySelector('#account-keyword-input'),saveKeyword=document.querySelector('#save-account-keyword'),keywordLimit=document.querySelector('#account-keyword-limit');
+        let accountData = null; let accountPicker = null; let chaptersLoaded = false; let accountEditActive = false;let accountKeywords=[];
         const setEditMode = active => {
             accountEditActive = active;
             if (editor) editor.hidden = !active;
@@ -204,10 +206,12 @@
             if(copyChapterLink){copyChapterLink.hidden=!account.homeChapterShortLinkUrl;copyChapterLink.dataset.url=account.homeChapterShortLinkUrl||'';}
         };
         copyChapterLink?.addEventListener('click',async()=>{const url=copyChapterLink.dataset.url;if(!url)return;try{await navigator.clipboard.writeText(url);message.textContent='Chapterlink kopiert.';message.className='message success';}catch{message.textContent='Der Chapterlink konnte nicht kopiert werden.';message.className='message error';}});
+        const renderKeywords=()=>{const empty=()=>{const text=document.createElement('span');text.className='page-meta';text.textContent='Keine Schlagwörter hinterlegt.';return text;},chip=(item,editable)=>{const span=document.createElement('span');span.className='keyword-chip';span.append(document.createTextNode(item.keyword));if(editable){const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title=`Schlagwort ${item.keyword} löschen`;remove.setAttribute('aria-label',remove.title);remove.dataset.keywordId=String(item.id);span.append(remove);}return span;};keywordView?.replaceChildren(...(accountKeywords.length?accountKeywords.map(item=>chip(item,false)):[empty()]));keywordEditList?.replaceChildren(...(accountKeywords.length?accountKeywords.map(item=>chip(item,true)):[empty()]));const maximum=accountKeywords.length>=10;if(keywordInput)keywordInput.disabled=maximum;if(saveKeyword)saveKeyword.disabled=maximum;if(keywordLimit)keywordLimit.hidden=!maximum;};
+        const updateKeywords=keywords=>{accountKeywords=Array.isArray(keywords)?keywords:[];renderKeywords();};
         const loadAccount = async () => {
-            const response = await fetch('/api/auth/account.php'); const payload = await response.json();
-            if (!response.ok) throw new Error(payload.error || 'Die Kontodaten konnten nicht geladen werden.');
-            renderAccount(payload.account); return payload.account;
+            const [response,keywordsResponse]=await Promise.all([fetch('/api/auth/account.php'),fetch('/api/auth/keywords.php')]); const payload = await response.json(),keywordsPayload=await keywordsResponse.json();
+            if (!response.ok||!keywordsResponse.ok) throw new Error(payload.error||keywordsPayload.error || 'Die Kontodaten konnten nicht geladen werden.');
+            renderAccount(payload.account);updateKeywords(keywordsPayload.keywords); return payload.account;
         };
         trigger.addEventListener('click', async () => {
             message.textContent = ''; message.className = 'message'; leaveEditMode(); dialog.showModal();
@@ -247,12 +251,17 @@
             saveChapter.addEventListener('click',async()=>{
                 saveChapter.disabled=true;message.textContent='';message.className='message';
                 try{
-                    const response=await fetch('/api/auth/account.php',{method:'PATCH',headers:jsonHeaders,body:JSON.stringify({home_chapter_org_id:document.querySelector('#account-home-chapter-id').value||null,skip_chapter_verification:skipCheckbox?.checked===true})});
+                    const selectedValue=document.querySelector('#account-home-chapter-id').value||null,originalValue=accountData?.homeChapterOrgId===null||accountData?.homeChapterOrgId===undefined?null:String(accountData.homeChapterOrgId),chapterChanged=selectedValue!==originalValue;
+                    const response=await fetch('/api/auth/account.php',{method:'PATCH',headers:jsonHeaders,body:JSON.stringify({home_chapter_org_id:selectedValue,skip_chapter_verification:skipCheckbox?.checked===true})});
                     const payload=await response.json();
                     if(!response.ok){if(payload.code==='technical_unavailable'&&payload.canSkip===true&&skipOption){skipOption.hidden=false;if(skipCheckbox)skipCheckbox.checked=false;}throw new Error(payload.message||payload.error||'Das Heimatchapter konnte nicht gespeichert werden.');}
-                    renderAccount(payload.account);leaveEditMode();message.textContent=payload.result==='removed'?'Das Heimatchapter wurde entfernt.':'Das Heimatchapter wurde gespeichert.';message.className='message success';editButton.focus();
+                    renderAccount(payload.account);leaveEditMode();if(chapterChanged){message.textContent=payload.result==='removed'?'Das Heimatchapter wurde entfernt.':'Das Heimatchapter wurde gespeichert.';message.className='message success';}editButton.focus();
                 }catch(error){message.textContent=error.message;message.className='message error';}finally{saveChapter.disabled=false;}
             });
+            let keywordSaving=false;const saveKeywordAction=async()=>{if(keywordSaving||accountKeywords.length>=10)return;const keyword=keywordInput.value.trim();if(!keyword){message.textContent='Bitte gib ein Schlagwort ein.';message.className='message error';keywordInput.focus();return;}if([...keyword].length>40){message.textContent='Ein Schlagwort darf maximal 40 Zeichen lang sein.';message.className='message error';keywordInput.focus();return;}keywordSaving=true;saveKeyword.disabled=true;try{const response=await fetch('/api/auth/keywords.php',{method:'POST',headers:jsonHeaders,body:JSON.stringify({keyword})}),payload=await response.json();if(!response.ok)throw new Error(payload.error||'Das Schlagwort konnte nicht gespeichert werden.');updateKeywords(payload.keywords);keywordInput.value='';message.textContent='Schlagwort gespeichert.';message.className='message success';if(!keywordInput.disabled)keywordInput.focus();}catch(error){message.textContent=error.message;message.className='message error';keywordInput.focus();}finally{keywordSaving=false;if(accountKeywords.length<10)saveKeyword.disabled=false;}};
+            saveKeyword?.addEventListener('click',saveKeywordAction);
+            keywordInput?.addEventListener('keydown',event=>{if(event.key!=='Enter')return;event.preventDefault();event.stopPropagation();saveKeywordAction();});
+            keywordEditList?.addEventListener('click',async event=>{const button=event.target.closest('[data-keyword-id]');if(!button)return;button.disabled=true;try{const response=await fetch('/api/auth/keywords.php',{method:'DELETE',headers:jsonHeaders,body:JSON.stringify({keyword_id:Number(button.dataset.keywordId)})}),payload=await response.json();if(!response.ok)throw new Error(payload.error||'Das Schlagwort konnte nicht gelöscht werden.');updateKeywords(payload.keywords);message.textContent='Schlagwort gelöscht.';message.className='message success';}catch(error){button.disabled=false;message.textContent=error.message;message.className='message error';}});
         }
         closeButton.addEventListener('click', closeAccount); closeIcon.addEventListener('click', closeAccount);
         dialog.addEventListener('keydown', event => { if (accountEditActive && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); } }, true);
@@ -512,7 +521,7 @@
             const currentNumber = (anonymousNumbers.get(item.requestDate) || 0) + 1; anonymousNumbers.set(item.requestDate, currentNumber);
             const rawPerson = authenticated ? item.displayName : `Gesuch ${currentNumber}`;
             const person = typeof rawPerson === 'string' ? rawPerson.trim() : '';
-            text.textContent = [formatDateOnly(item.requestDate), person].filter(Boolean).join(' · '); row.append(text);if(item.isVerified){const verified=document.createElement('span');verified.className='verified-badge';verified.textContent='Verifiziert';row.append(verified);}
+            text.append(document.createTextNode(formatDateOnly(item.requestDate)));if(person){text.append(document.createTextNode(' · '));if(authenticated&&item.profileRequestId){const profile=document.createElement('button');profile.type='button';profile.className='request-profile-button';profile.textContent=person;profile.dataset.profileRequestId=String(item.profileRequestId);profile.setAttribute('aria-label',`Schlagwörter von ${person} anzeigen`);text.append(profile);}else text.append(document.createTextNode(person));}row.append(text);if(item.isVerified){const verified=document.createElement('span');verified.className='verified-badge';verified.textContent='Verifiziert';row.append(verified);}
             if (item.canContact && item.requestId) { const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary request-contact-button'; button.textContent = 'Kontaktieren'; button.dataset.requestId = item.requestId; button.dataset.requestDate=item.requestDate; row.append(button); }
             else if (item.isOwn) { const own = document.createElement('span'); own.className = 'offer-meta'; own.textContent = 'Dein Gesuch'; row.append(own); }
             else if (item.isAssigned) { const assigned = document.createElement('span'); assigned.className = 'status-badge'; assigned.textContent = 'Vergeben'; row.append(assigned); }
@@ -536,6 +545,8 @@
         [firstName,lastName,email].forEach(input => { input.addEventListener('blur', () => { validateIdentity(); window.clearTimeout(previewTimer); previewTimer=window.setTimeout(loadPreview,150); }); input.addEventListener('input', () => { window.clearTimeout(previewTimer); previewTimer=window.setTimeout(loadPreview,350); }); });
         form.addEventListener('submit', async event => { event.preventDefault(); if(!validateIdentity()){form.querySelector('[aria-invalid="true"]')?.focus();return;} const submit=form.querySelector('button[type=submit]');submit.disabled=true;error.textContent='';try{const response=await fetch('/api/representation/request-contact.php',{method:'POST',headers:jsonHeaders,body:JSON.stringify(payload('send'))});const data=await response.json();if(!response.ok)throw new Error(data.error);document.querySelector('#request-contact-content').replaceChildren(Object.assign(document.createElement('p'),{textContent:'Deine Rückmeldung wurde gesendet.'}));}catch(cause){error.textContent=cause instanceof SyntaxError?'Die Rückmeldung konnte nicht gesendet werden.':(cause.message||'Die Rückmeldung konnte nicht gesendet werden.');error.className='message error';submit.disabled=false;}});
     }
+
+    function initializeRequestProfile(){const dialog=document.querySelector('#request-profile-dialog');if(!dialog)return;const heading=document.querySelector('#request-profile-heading'),keywords=document.querySelector('#request-profile-keywords'),message=document.querySelector('#request-profile-message'),closeButton=document.querySelector('#close-request-profile'),closeIcon=document.querySelector('#close-request-profile-icon');let trigger=null;const close=()=>{if(dialog.open)dialog.close();trigger?.focus();};document.querySelector('#result-list')?.addEventListener('click',async event=>{const button=event.target.closest('[data-profile-request-id]');if(!button)return;trigger=button;heading.textContent=`Über ${button.textContent.trim()}`;keywords.replaceChildren();message.textContent='Schlagwörter werden geladen …';dialog.showModal();closeIcon.focus();try{const response=await fetch(`/api/representation/request-profile.php?request_id=${encodeURIComponent(button.dataset.profileRequestId)}`),payload=await response.json();if(!response.ok)throw new Error(payload.error||'Die Schlagwörter konnten nicht geladen werden.');heading.textContent=`Über ${payload.displayName}`;const values=Array.isArray(payload.keywords)?payload.keywords:[];if(values.length)keywords.replaceChildren(...values.map(value=>{const chip=document.createElement('span');chip.className='keyword-chip';chip.textContent=value;return chip;}));else{const empty=document.createElement('span');empty.className='page-meta';empty.textContent='Keine Schlagwörter hinterlegt.';keywords.replaceChildren(empty);}message.textContent='';}catch(error){message.textContent=error.message;message.className='message error';}});closeButton.addEventListener('click',close);closeIcon.addEventListener('click',close);dialog.addEventListener('cancel',event=>{event.preventDefault();close();});dialog.addEventListener('click',event=>{if(event.target===dialog)close();});}
 
     function resultDetailPanel(chapter) {
         const panel = document.createElement('div'); panel.id = `result-details-${chapter.orgId}`; panel.className = 'result-detail-panel';

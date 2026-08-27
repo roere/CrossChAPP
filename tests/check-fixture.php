@@ -4,6 +4,7 @@ require_once '/var/www/html/src/Database.php';
 require_once '/var/www/html/src/UserRepository.php';
 require_once '/var/www/html/src/RepresentationRequestRepository.php';
 require_once '/var/www/html/src/RepresentationOfferRepository.php';
+require_once '/var/www/html/src/UserKeywordRepository.php';
 
 if (getenv('CROSSCHAPP_TEST_MODE') !== '1') throw new RuntimeException('Fixture darf nur im Testmodus laufen.');
 $db=(new Database())->connection();$now=gmdate('Y-m-d\TH:i:s\Z');
@@ -19,6 +20,7 @@ foreach($rows as$row)$organization->execute([...$row,$now,$now,$now]);
 $db->exec("UPDATE organizations SET street='Musterstraße 10' WHERE org_id=910001");
 $users=new UserRepository($db);$a=$users->create('Anna','Alpha','check-a@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),910001,'manual_verified');$b=$users->create('Bernd','Beta','check-b@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),910002,'directory_match');$c=$users->create('Carla','Gamma','check-c@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),null);$deletable=$users->create('Dora','Delete','check-delete@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),910003);$verifiable=$users->create('Vera','Verify','check-verify@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),910005);$db->exec("UPDATE users SET status='active',email_verified_at='$now' WHERE id IN (".(int)$a['id'].','.(int)$b['id'].','.(int)$deletable['id'].','.(int)$verifiable['id'].')');
 $manager=$users->create('Mara','Manager','check-manager@example.test',password_hash('check-password-123',PASSWORD_DEFAULT),910001,'manual_verified');$db->exec("UPDATE users SET role='user_manager',status='active',email_verified_at='$now' WHERE id=".(int)$manager['id']);
+$keywordRepository=new UserKeywordRepository($db);foreach(['Steuerberatung','Immobilien','Köln']as$keyword)$keywordRepository->add((int)$a['id'],$keyword);$keywordRepository->add((int)$b['id'],'Photovoltaik');
 $nextFriday=(new DateTimeImmutable('next friday',new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
 $nextWednesday=(new DateTimeImmutable('next wednesday',new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
 $request=(new RepresentationRequestRepository($db))->create((int)$a['id'],$nextFriday);

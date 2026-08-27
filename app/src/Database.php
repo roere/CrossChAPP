@@ -138,6 +138,18 @@ final class Database
             SQL);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_user_error_log_created ON user_error_log(created_at_ms)');
         foreach(['checked_first_name'=>'TEXT','checked_last_name'=>'TEXT','org_id'=>'INTEGER','chapter_name'=>'TEXT','match_count'=>'INTEGER','match_references'=>'TEXT']as$column=>$definition)$this->addTableColumnIfMissing('user_error_log',$column,$definition);
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS user_keywords (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                keyword TEXT NOT NULL,
+                normalized_keyword TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id,normalized_keyword),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_user_keywords_user ON user_keywords(user_id)');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_organizations_country_type ON organizations(country_code, org_type)');
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS automation_settings (
