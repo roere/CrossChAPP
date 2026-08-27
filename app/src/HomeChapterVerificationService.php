@@ -9,6 +9,7 @@ final class HomeChapterVerificationException extends RuntimeException
         string $message,
         public readonly bool $canSkip = false,
         public readonly ?string $technicalReason = null,
+        public readonly array $diagnosticMatches = [],
     ) {
         parent::__construct($message);
     }
@@ -54,6 +55,9 @@ final class HomeChapterVerificationService
             'ambiguous' => throw new HomeChapterVerificationException(
                 'ambiguous',
                 'Der BNI-Eintrag konnte nicht eindeutig zugeordnet werden.',
+                false,
+                'multiple_member_matches',
+                is_array($match['matches'] ?? null) ? $match['matches'] : [],
             ),
             'unavailable', 'discovery_invalid', 'upstream_error', 'invalid_member_structure',
             'rate_limited', 'forbidden' => throw $this->technical((string) $match['status']),

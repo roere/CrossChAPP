@@ -6,13 +6,15 @@ $check=static function(bool $condition,string $message):void{if(!$condition)thro
 $db=(new Database(':memory:'))->connection();$logger=new UserFacingErrorLogger($db);
 $first=$logger->log('Anmeldung momentan nicht möglich.','Mail transport is not configured or not ready','registration_mail_unavailable','registration',null,'/api/auth/register.php');
 usleep(2000);
-$second=$logger->log('Der BNI-Eintrag konnte nicht eindeutig zugeordnet werden.','Multiple member matches for chapter org_id=44628&token=very-secret-token-value','ambiguous','registration');
+$second=$logger->log('Der BNI-Eintrag konnte nicht eindeutig zugeordnet werden.','Multiple member matches for chapter org_id=44628&token=very-secret-token-value','ambiguous','registration',null,null,['firstName'=>'Max','lastName'=>'Mustermann','orgId'=>44628,'chapterName'=>'Königsforst BNI (Overath)','matchCount'=>2,'matches'=>[['externalRef'=>'ref-one','profileUrl'=>'https://bni-rheinruhr.de/koenigsforst/de/memberdetails?encryptedMemberId=ref-one'],['externalRef'=>'ref-two','profileUrl'=>'javascript:alert(1)']]]);
 usleep(2000);
 $third=$logger->log('Die BNI-Mitgliederprüfung ist technisch momentan nicht möglich.','HTTP 429 from memberlist endpoint Bearer very-secret-bearer-value','technical_unavailable','registration');
 $messages=$logger->latest();
 $check(array_column($messages,'id')===[$third,$second,$first],'Meldungen werden nicht neueste zuerst geliefert.');
 $check($messages[0]['user_message']==='Die BNI-Mitgliederprüfung ist technisch momentan nicht möglich.'&&str_contains($messages[0]['technical_message'],'HTTP 429'),'Usermeldung oder echte technische Ursache fehlt.');
 $serialized=json_encode($messages,JSON_THROW_ON_ERROR);$check(!str_contains($serialized,'very-secret'),'Logger entfernt Tokens und Bearer-Secrets nicht.');
+$ambiguous=$messages[1];$check($ambiguous['checked_first_name']==='Max'&&$ambiguous['checked_last_name']==='Mustermann'&&(int)$ambiguous['org_id']===44628&&$ambiguous['chapter_name']==='Königsforst BNI (Overath)'&&(int)$ambiguous['match_count']===2&&$ambiguous['matches'][0]['profileUrl']!==null&&$ambiguous['matches'][1]['profileUrl']===null,'Ambiguous-Diagnose oder URL-Validierung fehlt.');
+$check(!str_contains($serialized,'email')&&!str_contains($serialized,'phone')&&!str_contains($serialized,'company'),'Nicht benötigte personenbezogene Trefferdaten wurden gespeichert.');
 $oldMs=(int)floor(microtime(true)*1000)-61*86400000;$db->exec("UPDATE user_error_log SET created_at_ms=$oldMs WHERE id=$first");
 $removed=$logger->cleanup();$check($removed===1&&count($logger->latest())===2,'60-Tage-Retention bereinigt alte Einträge nicht selektiv.');
 $before=(int)$db->query('SELECT COUNT(*) FROM user_error_log')->fetchColumn();

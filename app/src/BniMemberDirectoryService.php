@@ -11,7 +11,7 @@ final class BniMemberDirectoryService
     private readonly BniMemberDirectoryConfigResolver $resolver;
     public function __construct(private readonly PDO $database, ?Closure $transport = null, ?Closure $delay = null, ?Closure $resolverTransport = null) { $this->client=new BniMemberListClient($database,$transport,$delay);$this->resolver=new BniMemberDirectoryConfigResolver($database,$resolverTransport,$delay); }
 
-    /** @return array{status:string,externalRef:?string} */
+    /** @return array{status:string,externalRef:?string,matches?:list<array{externalRef:?string,profileUrl:?string}>} */
     public function match(string $firstName, string $lastName, int $orgId): array
     {
         if ($this->chapter($orgId) === null) return ['status' => 'unavailable', 'externalRef' => null];
@@ -21,7 +21,7 @@ final class BniMemberDirectoryService
         try {
             $response=$this->client->fetch($orgId);
             if($response['status']!=='ok')return['status'=>$response['status'],'externalRef'=>null];
-            return $this->exactMatches($response['body'], $firstName, $lastName);
+            return $this->exactMatches($response['body'], $firstName, $lastName, $orgId);
         } finally { $this->release($owner); }
     }
 
@@ -32,18 +32,32 @@ final class BniMemberDirectoryService
         $statement->execute([':id' => $orgId]); $row = $statement->fetch(); return is_array($row) ? $row : null;
     }
 
-    /** @return array{status:string,externalRef:?string} */
-    private function exactMatches(string $html, string $firstName, string $lastName): array
+    /** @return array{status:string,externalRef:?string,matches?:list<array{externalRef:?string,profileUrl:?string}>} */
+    private function exactMatches(string $html, string $firstName, string $lastName, int $orgId): array
     {
+        $statement=$this->database->prepare('SELECT referer FROM bni_member_directory_configs WHERE org_id=:org');$statement->execute([':org'=>$orgId]);$config=$statement->fetch();
+        $referer=is_array($config)?(string)($config['referer']??''):'';
         libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML('<?xml encoding="UTF-8">' . $html); $xpath = new DOMXPath($dom); $matches = [];
         foreach ($xpath->query('//a[contains(@href,"memberdetails")]') ?: [] as $link) {
             $href = html_entity_decode($link->getAttribute('href'), ENT_QUOTES | ENT_HTML5, 'UTF-8'); parse_str((string) parse_url($href, PHP_URL_QUERY), $query);
             $name = is_string($query['name'] ?? null) ? (string) $query['name'] : trim($link->textContent);
             if (!$this->sameName($name, $firstName, $lastName)) continue;
-            $matches[] = is_string($query['encryptedMemberId'] ?? null) ? $query['encryptedMemberId'] : null;
+            $externalRef=is_string($query['encryptedMemberId']??null)?trim((string)$query['encryptedMemberId']):'';$profileUrl=$this->profileUrl($href,$referer);
+            $matches[]=['externalRef'=>$externalRef!==''?$externalRef:null,'profileUrl'=>$externalRef!==''?$profileUrl:null];
         }
-        if (count($matches) === 1) return ['status' => 'match', 'externalRef' => $matches[0]];
-        return ['status' => count($matches) > 1 ? 'ambiguous' : 'not_found', 'externalRef' => null];
+        if (count($matches) === 1) return ['status' => 'match', 'externalRef' => $matches[0]['externalRef']];
+        return ['status' => count($matches) > 1 ? 'ambiguous' : 'not_found', 'externalRef' => null, 'matches'=>$matches];
+    }
+
+    private function profileUrl(string $href,string $referer):?string
+    {
+        $base=parse_url($referer);if(!is_array($base))return null;$host=strtolower(rtrim((string)($base['host']??''),'.'));
+        if(!preg_match('/(^|\.)bni[^.]*\.(de|at|com|hamburg)$/',$host)||strtolower((string)($base['scheme']??''))!=='https')return null;
+        $target=parse_url($href);if($target===false||isset($target['user'])||isset($target['pass'])||isset($target['fragment']))return null;
+        if(isset($target['scheme'])||isset($target['host'])){$scheme=strtolower((string)($target['scheme']??''));$targetHost=strtolower(rtrim((string)($target['host']??''),'.'));if($scheme!=='https'||$targetHost!==$host)return null;$path=(string)($target['path']??'');}
+        else{$path=(string)($target['path']??'');if(str_starts_with($path,'/')){}else{$basePath=(string)($base['path']??'/');$path=rtrim(str_replace('\\','/',dirname($basePath)),'/').'/'.$path;}}
+        if($path===''||str_contains($path,'..')||!str_contains(strtolower($path),'memberdetails'))return null;
+        return'https://'.$host.$path.(isset($target['query'])?'?'.$target['query']:'');
     }
 
     private function sameName(string $candidate, string $first, string $last): bool

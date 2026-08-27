@@ -19,6 +19,10 @@
 
 #user-error-monitor { margin-bottom: 2rem; }
 #user-error-table td { vertical-align: top; overflow-wrap: anywhere; }
+.diagnostic-details { display: grid; grid-template-columns: max-content minmax(0,1fr); gap: .5rem 1rem; }
+.diagnostic-details dt { font-weight: 700; }
+.diagnostic-details dd { margin: 0; overflow-wrap: anywhere; }
+#ambiguous-diagnostic-links { display: grid; gap: .5rem; margin-block: 1rem; }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }

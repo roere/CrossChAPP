@@ -127,10 +127,17 @@ final class Database
                 context TEXT,
                 user_id INTEGER,
                 route TEXT,
+                checked_first_name TEXT,
+                checked_last_name TEXT,
+                org_id INTEGER,
+                chapter_name TEXT,
+                match_count INTEGER,
+                match_references TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
             )
             SQL);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_user_error_log_created ON user_error_log(created_at_ms)');
+        foreach(['checked_first_name'=>'TEXT','checked_last_name'=>'TEXT','org_id'=>'INTEGER','chapter_name'=>'TEXT','match_count'=>'INTEGER','match_references'=>'TEXT']as$column=>$definition)$this->addTableColumnIfMissing('user_error_log',$column,$definition);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_organizations_country_type ON organizations(country_code, org_type)');
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS automation_settings (

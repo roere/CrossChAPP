@@ -51,7 +51,7 @@ final class AccountService
             try {
                 $verification = $this->homeChapterVerification->verify($first, $last, (int) $homeId, false, $ip);
             } catch (HomeChapterVerificationException $exception) {
-                throw new HomeChapterVerificationException($exception->reason, $exception->getMessage(), false, $exception->technicalReason);
+                throw new HomeChapterVerificationException($exception->reason, $exception->getMessage(), false, $exception->technicalReason, $exception->diagnosticMatches);
             }
             $bniStatus = $verification['verificationStatus'];
             $externalRef = $verification['externalRef'];
