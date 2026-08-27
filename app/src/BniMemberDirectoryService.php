@@ -37,13 +37,15 @@ final class BniMemberDirectoryService
     {
         $statement=$this->database->prepare('SELECT referer FROM bni_member_directory_configs WHERE org_id=:org');$statement->execute([':org'=>$orgId]);$config=$statement->fetch();
         $referer=is_array($config)?(string)($config['referer']??''):'';
-        libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML('<?xml encoding="UTF-8">' . $html); $xpath = new DOMXPath($dom); $matches = [];
+        libxml_use_internal_errors(true); $dom = new DOMDocument(); $dom->loadHTML('<?xml encoding="UTF-8">' . $html); $xpath = new DOMXPath($dom); $matches = []; $uniqueByExternalRef=[];
         foreach ($xpath->query('//a[contains(@href,"memberdetails")]') ?: [] as $link) {
             $href = html_entity_decode($link->getAttribute('href'), ENT_QUOTES | ENT_HTML5, 'UTF-8'); parse_str((string) parse_url($href, PHP_URL_QUERY), $query);
             $name = is_string($query['name'] ?? null) ? (string) $query['name'] : trim($link->textContent);
             if (!$this->sameName($name, $firstName, $lastName)) continue;
             $externalRef=is_string($query['encryptedMemberId']??null)?trim((string)$query['encryptedMemberId']):'';$profileUrl=$this->profileUrl($href,$referer);
-            $matches[]=['externalRef'=>$externalRef!==''?$externalRef:null,'profileUrl'=>$externalRef!==''?$profileUrl:null];
+            if($externalRef===''){$matches[]=['externalRef'=>null,'profileUrl'=>null];continue;}
+            if(!array_key_exists($externalRef,$uniqueByExternalRef)){$uniqueByExternalRef[$externalRef]=count($matches);$matches[]=['externalRef'=>$externalRef,'profileUrl'=>$profileUrl];continue;}
+            $existingIndex=$uniqueByExternalRef[$externalRef];if($matches[$existingIndex]['profileUrl']===null&&$profileUrl!==null)$matches[$existingIndex]['profileUrl']=$profileUrl;
         }
         if (count($matches) === 1) return ['status' => 'match', 'externalRef' => $matches[0]['externalRef']];
         return ['status' => count($matches) > 1 ? 'ambiguous' : 'not_found', 'externalRef' => null, 'matches'=>$matches];
