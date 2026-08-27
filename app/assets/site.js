@@ -252,6 +252,7 @@
                 saveChapter.disabled=true;message.textContent='';message.className='message';
                 try{
                     const selectedValue=document.querySelector('#account-home-chapter-id').value||null,originalValue=accountData?.homeChapterOrgId===null||accountData?.homeChapterOrgId===undefined?null:String(accountData.homeChapterOrgId),chapterChanged=selectedValue!==originalValue;
+                    if(!chapterChanged){leaveEditMode();editButton.focus();return;}
                     const response=await fetch('/api/auth/account.php',{method:'PATCH',headers:jsonHeaders,body:JSON.stringify({home_chapter_org_id:selectedValue,skip_chapter_verification:skipCheckbox?.checked===true})});
                     const payload=await response.json();
                     if(!response.ok){if(payload.code==='technical_unavailable'&&payload.canSkip===true&&skipOption){skipOption.hidden=false;if(skipCheckbox)skipCheckbox.checked=false;}throw new Error(payload.message||payload.error||'Das Heimatchapter konnte nicht gespeichert werden.');}

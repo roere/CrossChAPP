@@ -159,7 +159,7 @@ final class AccountService
         if (!is_bool($skipChapterVerification)) throw new InvalidArgumentException('Die Auswahl zur Chapter-Prüfung ist ungültig.');
         $user = $this->users->findById($userId);
         if ($user === null) throw new DomainException('Das Benutzerkonto wurde nicht gefunden.');
-        if ($user['role'] !== 'user') throw new DomainException('Administratorkonten können hier nicht bearbeitet werden.');
+        if (!in_array($user['role'], ['user', 'user_manager'], true)) throw new DomainException('Administratorkonten können hier nicht bearbeitet werden.');
         if ($homeChapterOrgId === null || $homeChapterOrgId === '') {
             if ($user['home_chapter_org_id'] === null) return ['result' => 'unchanged', 'account' => $this->account($userId)];
             $this->users->updateHomeChapterVerification($userId, null, 'unverified', null);

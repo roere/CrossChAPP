@@ -101,7 +101,7 @@ final class UserRepository
                 bni_verified_at = :verified_at,
                 bni_verified_by_user_id = NULL,
                 updated_at = :updated_at
-            WHERE id = :id AND role = 'user'
+            WHERE id = :id AND role IN ('user', 'user_manager')
             SQL);
         $statement->execute([
             ':org_id' => $orgId,

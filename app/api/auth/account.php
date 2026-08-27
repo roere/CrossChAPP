@@ -47,8 +47,8 @@ try {
     JsonResponse::send(['error'=>$exception->getMessage(),'message'=>$exception->getMessage(),'code'=>$exception->reason,'technicalReason'=>$exception->technicalReason,'canSkip'=>$exception->canSkip],$exception->reason==='technical_unavailable'?503:422);
 } catch (InvalidArgumentException $exception) {
     JsonResponse::send(['error'=>$exception->getMessage()],400);
-} catch (DomainException) {
-    JsonResponse::send(['error' => 'Administratorkonten können nicht gelöscht werden.'], 403);
+} catch (DomainException $exception) {
+    JsonResponse::send(['error' => $_SERVER['REQUEST_METHOD'] === 'DELETE' ? 'Administratorkonten können nicht gelöscht werden.' : $exception->getMessage()], 403);
 } catch (Throwable) {
     JsonResponse::send(['error' => 'Das Konto konnte nicht gelöscht werden.'], 500);
 }
