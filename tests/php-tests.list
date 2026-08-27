@@ -23,3 +23,5 @@ automation-refresh.php
 bni-request-policy.php
 pending-chapters.php
 bni-global-throttle.php
+bni-performance.php
+user-facing-error-log.php

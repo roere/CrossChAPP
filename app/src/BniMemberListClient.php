@@ -3,10 +3,11 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/BniGlobalThrottle.php';
+require_once __DIR__ . '/BniRequestEventRepository.php';
 
 final class BniMemberListClient
 {
-    public function __construct(private readonly PDO $database, private readonly ?Closure $transport=null, private readonly ?Closure $delay=null, private ?BniGlobalThrottle $throttle=null, private readonly bool $transportIsExternal=false) {}
+    public function __construct(private readonly PDO $database, private readonly ?Closure $transport=null, private readonly ?Closure $delay=null, private ?BniGlobalThrottle $throttle=null, private readonly bool $transportIsExternal=false,private ?BniRequestEventRepository $events=null) {}
 
     /** @return array{status:string,body:string,httpStatus:int} */
     public function fetch(int $orgId): array
@@ -17,10 +18,12 @@ final class BniMemberListClient
         if(str_contains((string)$config['endpoint'],'/chapterdetail/display')){parse_str((string)$config['parameters'],$data);$data['website_type']=$config['website_type'];$data['website_id']=$config['website_id'];$data['mappedWidgetSettings']=$config['mapped_widget_settings'];}
         else $data=['parameters'=>$config['parameters'],'languages'=>$config['languages'],'cmsv3'=>'true','website_type'=>$config['website_type'],'website_id'=>$config['website_id'],'mappedWidgetSettings'=>$config['mapped_widget_settings'],'pageMode'=>'Live_Site'];
         $headers=['Content-Type: application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With: XMLHttpRequest','Referer: '.$config['referer'],'User-Agent: Mozilla/5.0'];
-        if($this->transport!==null)$result=($this->transport)('POST',(string)$config['endpoint'],$data,$headers);
-        else{$context=stream_context_create(['http'=>['method'=>'POST','header'=>implode("\r\n",$headers),'content'=>http_build_query($data),'ignore_errors'=>true,'timeout'=>25]]);$body=@file_get_contents((string)$config['endpoint'],false,$context);$responseHeaders=$http_response_header??[];$status=0;foreach(array_reverse($responseHeaders)as$header)if(preg_match('/^HTTP\/\S+\s+(\d{3})/',$header,$match)){ $status=(int)$match[1];break;}$result=['status'=>$status,'body'=>$body===false?'':$body,'headers'=>$responseHeaders];}
+        $external=$this->transport===null||$this->transportIsExternal;$eventId=null;if($external){$this->events??=new BniRequestEventRepository($this->database);$eventId=$this->events->start('member_list','verification');}
+        try{if($this->transport!==null)$result=($this->transport)('POST',(string)$config['endpoint'],$data,$headers);
+        else{$context=stream_context_create(['http'=>['method'=>'POST','header'=>implode("\r\n",$headers),'content'=>http_build_query($data),'ignore_errors'=>true,'timeout'=>25]]);$body=@file_get_contents((string)$config['endpoint'],false,$context);$responseHeaders=$http_response_header??[];$status=0;foreach(array_reverse($responseHeaders)as$header)if(preg_match('/^HTTP\/\S+\s+(\d{3})/',$header,$match)){ $status=(int)$match[1];break;}$result=['status'=>$status,'body'=>$body===false?'':$body,'headers'=>$responseHeaders];}}
+        catch(Throwable $exception){if($eventId!==null)$this->events?->finish($eventId,null,'network_error');throw$exception;}
         $http=(int)($result['status']??0);$body=(string)($result['body']??'');$validBody=str_contains($body,'memberdetails')||str_contains($body,'listtables')||str_contains($body,'id="members"')||str_contains($body,"id='members'");$status=match(true){$http>=200&&$http<300&&$validBody=>'ok',$http>=200&&$http<300=>'upstream_error',$http===429=>'rate_limited',$http===403=>'forbidden',default=>'upstream_error'};
-        return['status'=>$status,'body'=>$body,'httpStatus'=>$http];
+        if($eventId!==null)$this->events?->finish($eventId,$http?:null,$http===0?'network_error':($status==='ok'?'success':($status==='rate_limited'?'rate_limited':($status==='forbidden'?'forbidden':'http_error'))));return['status'=>$status,'body'=>$body,'httpStatus'=>$http];
     }
 
     private function awaitRealRequest():void

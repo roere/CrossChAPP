@@ -11,6 +11,7 @@ require_once dirname(__DIR__, 2) . '/src/MailService.php';
 require_once dirname(__DIR__, 2) . '/src/MailSettingsRepository.php';
 require_once dirname(__DIR__, 2) . '/src/UserRepository.php';
 require_once dirname(__DIR__, 2) . '/src/ClientIp.php';
+require_once dirname(__DIR__, 2) . '/src/UserFacingErrorLogger.php';
 
 if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'PATCH', 'DELETE'], true)) JsonResponse::send(['error' => 'Nur GET, PATCH und DELETE sind erlaubt.'], 405);
 $identity = Auth::requireUserJson();
@@ -42,6 +43,7 @@ try {
     JsonResponse::send(['error' => 'Ungültige Anfrage.'], 400);
 } catch (HomeChapterVerificationException $exception) {
     if($exception->canSkip&&isset($payload)&&is_array($payload))$_SESSION['account_chapter_skip_org_id']=(int)($payload['home_chapter_org_id']??0);else unset($_SESSION['account_chapter_skip_org_id']);
+    if(in_array($exception->reason,['ambiguous','technical_unavailable'],true)){$home=(int)($payload['home_chapter_org_id']??0);$technical=$exception->reason==='ambiguous'?"Multiple member matches for chapter org_id={$home}":'BNI member verification failed: '.($exception->technicalReason??$exception->reason);(new UserFacingErrorLogger((new Database())->connection()))->log($exception->getMessage(),$technical,$exception->reason,'account_change',(int)$identity['user_id'],'/api/auth/account.php');}
     JsonResponse::send(['error'=>$exception->getMessage(),'message'=>$exception->getMessage(),'code'=>$exception->reason,'technicalReason'=>$exception->technicalReason,'canSkip'=>$exception->canSkip],$exception->reason==='technical_unavailable'?503:422);
 } catch (InvalidArgumentException $exception) {
     JsonResponse::send(['error'=>$exception->getMessage()],400);

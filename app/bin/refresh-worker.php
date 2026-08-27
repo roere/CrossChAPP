@@ -11,6 +11,8 @@ require_once dirname(__DIR__) . '/src/OrganizationRepository.php';
 require_once dirname(__DIR__) . '/src/MapRefreshService.php';
 require_once dirname(__DIR__) . '/src/RepresentationCleanupService.php';
 require_once dirname(__DIR__) . '/src/WorkerHeartbeat.php';
+require_once dirname(__DIR__) . '/src/BniRequestEventRepository.php';
+require_once dirname(__DIR__) . '/src/UserFacingErrorLogger.php';
 
 $runOnce = in_array('--once', $argv, true);
 $requestedLimit = null;
@@ -28,6 +30,8 @@ do {
     $interval = $settings['automaticRefreshIntervalMinutes'];
     $automation->updateWorkerRuntime($interval);
     (new RepresentationCleanupService($database))->runCleanup();
+    (new BniRequestEventRepository($database))->cleanup(35);
+    (new UserFacingErrorLogger($database))->cleanup();
 
     if ($settings['mapRefreshEnabled'] && $automation->mapRefreshDue($settings['mapRefreshDays'])) {
         (new MapRefreshService($organizations, $automation))->refresh('map_automatic');

@@ -59,7 +59,7 @@ final class ChapterRefreshService
                     ? $this->automation->startLog($orgId, $triggerType)
                     : $this->automation->startLimitedLog($orgId, $triggerType, (int) $settings['automaticRefreshDailyLimit']);
                 if ($logId === null) throw new BniRequestNotStartedException('daily_limit');
-            });
+            },$triggerType);
             if (($details['orgId'] ?? null) !== $orgId) {
                 throw new RuntimeException('Die BNI-Detailantwort gehört zu einer anderen Organisation.');
             }

@@ -105,6 +105,32 @@ final class Database
             )
             SQL);
         $this->connection->exec('INSERT OR IGNORE INTO bni_request_throttle(id,last_reserved_start_ms) VALUES(1,0)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS bni_request_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at_ms INTEGER NOT NULL,
+                request_type TEXT NOT NULL,
+                trigger_type TEXT,
+                http_status INTEGER,
+                result_type TEXT
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_bni_request_events_started ON bni_request_events(started_at_ms)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS user_error_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                created_at_ms INTEGER NOT NULL,
+                user_message TEXT NOT NULL,
+                technical_message TEXT NOT NULL,
+                error_code TEXT,
+                context TEXT,
+                user_id INTEGER,
+                route TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_user_error_log_created ON user_error_log(created_at_ms)');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_organizations_country_type ON organizations(country_code, org_type)');
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS automation_settings (

@@ -23,7 +23,7 @@ final class MapRefreshService
         if (!$this->automation->acquireMapLock($token)) return ['status' => 'skipped', 'reason' => 'locked'];
         $logId = $this->automation->startMapLog($trigger);
         try {
-            $organizations = $this->client->getMapOrganizations();
+            $organizations = $this->client->getMapOrganizations(null,$trigger);
             $this->organizations->upsertMapOrganizations($organizations);
             $this->automation->markMapRefreshSuccess(); $this->automation->finishMapLog($logId, 'success', 200);
             return ['status' => 'success', 'count' => count($organizations)];

@@ -3,10 +3,11 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/BniGlobalThrottle.php';
+require_once __DIR__ . '/BniRequestEventRepository.php';
 
 final class BniMemberDirectoryConfigResolver
 {
-    public function __construct(private readonly PDO $database,private readonly ?Closure $transport=null,private readonly ?Closure $delay=null,private ?BniGlobalThrottle $throttle=null,private readonly bool $transportIsExternal=false){}
+    public function __construct(private readonly PDO $database,private readonly ?Closure $transport=null,private readonly ?Closure $delay=null,private ?BniGlobalThrottle $throttle=null,private readonly bool $transportIsExternal=false,private ?BniRequestEventRepository $events=null){}
 
     /** @return array{status:string} */
     public function resolve(int $orgId):array
@@ -17,7 +18,7 @@ final class BniMemberDirectoryConfigResolver
         if(!is_array($row))return['status'=>'unavailable'];
         $url=$this->validatedChapterUrl((string)($row['chapter_url']??''));$chapterId=rawurldecode(trim((string)($row['cms_security_hash']??'')));
         if($url===null||$chapterId==='')return['status'=>'unavailable'];
-        $this->awaitRealRequest();$response=$this->request($url);$http=(int)($response['status']??0);
+        $this->awaitRealRequest();$external=$this->transport===null||$this->transportIsExternal;$eventId=null;if($external){$this->events??=new BniRequestEventRepository($this->database);$eventId=$this->events->start('member_discovery','verification');}try{$response=$this->request($url);}catch(Throwable $exception){if($eventId!==null)$this->events?->finish($eventId,null,'network_error');throw$exception;}$http=(int)($response['status']??0);if($eventId!==null)$this->events?->finish($eventId,$http?:null,$http===0?'network_error':($http>=200&&$http<300?'success':($http===429?'rate_limited':($http===403?'forbidden':'http_error'))));
         if($http===403)return['status'=>'forbidden'];if($http===429)return['status'=>'rate_limited'];if($http<200||$http>=300)return['status'=>'upstream_error'];
         $body=(string)($response['body']??'');
         if(!preg_match('/id=["\']website_type["\'][^>]*value=["\']([^"\']+)["\']/i',$body,$type)||!preg_match('/id=["\']website_id["\'][^>]*value=["\']([0-9]+)["\']/i',$body,$website)||!preg_match('/var\s+mappedWidgetSettings\s*=\s*(["\'])(.*?)\1\s*;/s',$body,$mapped))return['status'=>'unavailable'];

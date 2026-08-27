@@ -1,0 +1,20 @@
+<?php
+declare(strict_types=1);
+$root=is_file(__DIR__.'/../app/src/Database.php')?__DIR__.'/../app':'/var/www/html';
+require_once $root.'/src/Database.php';require_once $root.'/src/UserFacingErrorLogger.php';
+$check=static function(bool $condition,string $message):void{if(!$condition)throw new RuntimeException($message);};
+$db=(new Database(':memory:'))->connection();$logger=new UserFacingErrorLogger($db);
+$first=$logger->log('Anmeldung momentan nicht möglich.','Mail transport is not configured or not ready','registration_mail_unavailable','registration',null,'/api/auth/register.php');
+usleep(2000);
+$second=$logger->log('Der BNI-Eintrag konnte nicht eindeutig zugeordnet werden.','Multiple member matches for chapter org_id=44628&token=very-secret-token-value','ambiguous','registration');
+usleep(2000);
+$third=$logger->log('Die BNI-Mitgliederprüfung ist technisch momentan nicht möglich.','HTTP 429 from memberlist endpoint Bearer very-secret-bearer-value','technical_unavailable','registration');
+$messages=$logger->latest();
+$check(array_column($messages,'id')===[$third,$second,$first],'Meldungen werden nicht neueste zuerst geliefert.');
+$check($messages[0]['user_message']==='Die BNI-Mitgliederprüfung ist technisch momentan nicht möglich.'&&str_contains($messages[0]['technical_message'],'HTTP 429'),'Usermeldung oder echte technische Ursache fehlt.');
+$serialized=json_encode($messages,JSON_THROW_ON_ERROR);$check(!str_contains($serialized,'very-secret'),'Logger entfernt Tokens und Bearer-Secrets nicht.');
+$oldMs=(int)floor(microtime(true)*1000)-61*86400000;$db->exec("UPDATE user_error_log SET created_at_ms=$oldMs WHERE id=$first");
+$removed=$logger->cleanup();$check($removed===1&&count($logger->latest())===2,'60-Tage-Retention bereinigt alte Einträge nicht selektiv.');
+$before=(int)$db->query('SELECT COUNT(*) FROM user_error_log')->fetchColumn();
+$check($before===2,'Normale Validierungsfehler werden ohne expliziten Logger-Aufruf nicht protokolliert.');
+echo "PASS User-Fehlerlog: Ursachen, Redaction, Sortierung und 60-Tage-Retention\n";

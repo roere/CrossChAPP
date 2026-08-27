@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class MysqlSchema
 {
-    public const LATEST_VERSION = 6;
+    public const LATEST_VERSION = 8;
 
     public static function migrate(PDO $db): void
     {
@@ -49,6 +49,16 @@ final class MysqlSchema
             $db->exec("CREATE TABLE IF NOT EXISTS bni_request_throttle(id INT PRIMARY KEY,last_reserved_start_ms BIGINT NOT NULL)$engine");
             $db->exec('INSERT IGNORE INTO bni_request_throttle(id,last_reserved_start_ms) VALUES(1,0)');
             $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(6,UTC_TIMESTAMP())");
+        }
+        if ($version < 7) {
+            $engine = ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+            $db->exec("CREATE TABLE IF NOT EXISTS bni_request_events(id BIGINT AUTO_INCREMENT PRIMARY KEY,started_at_ms BIGINT NOT NULL,request_type VARCHAR(40) NOT NULL,trigger_type VARCHAR(40),http_status INT,result_type VARCHAR(40),INDEX idx_bni_request_events_started(started_at_ms))$engine");
+            $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(7,UTC_TIMESTAMP())");
+        }
+        if ($version < 8) {
+            $engine = ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+            $db->exec("CREATE TABLE IF NOT EXISTS user_error_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,created_at VARCHAR(32) NOT NULL,created_at_ms BIGINT NOT NULL,user_message VARCHAR(500) NOT NULL,technical_message VARCHAR(1000) NOT NULL,error_code VARCHAR(80),context VARCHAR(80),user_id BIGINT NULL,route VARCHAR(190),INDEX idx_user_error_log_created(created_at_ms),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL)$engine");
+            $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(8,UTC_TIMESTAMP())");
         }
         if (getenv('CROSSCHAPP_DB_SKIP_SEED') === '1') {
             return;
@@ -132,6 +142,7 @@ final class MysqlSchema
         return [
             "CREATE TABLE IF NOT EXISTS schema_migrations(version INT PRIMARY KEY,applied_at VARCHAR(32) NOT NULL)$engine",
             "CREATE TABLE IF NOT EXISTS bni_request_throttle(id INT PRIMARY KEY,last_reserved_start_ms BIGINT NOT NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS bni_request_events(id BIGINT AUTO_INCREMENT PRIMARY KEY,started_at_ms BIGINT NOT NULL,request_type VARCHAR(40) NOT NULL,trigger_type VARCHAR(40),http_status INT,result_type VARCHAR(40),INDEX idx_bni_request_events_started(started_at_ms))$engine",
             "CREATE TABLE IF NOT EXISTS organizations(id BIGINT AUTO_INCREMENT PRIMARY KEY,org_id BIGINT NOT NULL UNIQUE,cms_security_hash VARCHAR(255),country_code VARCHAR(8),org_type VARCHAR(64),longitude DOUBLE,latitude DOUBLE,chapter_name VARCHAR(255),short_link_slug VARCHAR(255),region VARCHAR(255),region_id BIGINT,city VARCHAR(255),postal_code VARCHAR(32),street VARCHAR(255),venue VARCHAR(255),meeting_day VARCHAR(32),meeting_time VARCHAR(32),meeting_type VARCHAR(64),meeting_duration INT,member_count INT,chapter_url TEXT,visitor_registration_url TEXT,online_meeting_link TEXT,timezone VARCHAR(128),status VARCHAR(64),description TEXT,detail_status VARCHAR(32) NOT NULL DEFAULT 'not_loaded' CHECK(detail_status IN ('not_loaded','loaded','error')),map_loaded_at VARCHAR(32),details_loaded_at VARCHAR(32),created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,UNIQUE KEY uq_organizations_short_link_slug(short_link_slug),INDEX idx_organizations_detail_status(detail_status),INDEX idx_organizations_country_type(country_code,org_type))$engine",
             "CREATE TABLE IF NOT EXISTS automation_settings(id INT PRIMARY KEY,usage_refresh_enabled TINYINT(1) NOT NULL DEFAULT 0,usage_refresh_days INT NOT NULL DEFAULT 7,automatic_refresh_enabled TINYINT(1) NOT NULL DEFAULT 0,automatic_refresh_days INT NOT NULL DEFAULT 30,automatic_refresh_batch_size INT NOT NULL DEFAULT 10,automatic_refresh_interval_minutes INT NOT NULL DEFAULT 60,automatic_refresh_daily_limit INT NOT NULL DEFAULT 50,map_refresh_enabled TINYINT(1) NOT NULL DEFAULT 0,map_refresh_days INT NOT NULL DEFAULT 1,updated_at VARCHAR(32) NOT NULL)$engine",
             "CREATE TABLE IF NOT EXISTS chapter_refresh_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,org_id BIGINT NOT NULL,trigger_type VARCHAR(32) NOT NULL,started_at VARCHAR(32) NOT NULL,finished_at VARCHAR(32),status VARCHAR(32) NOT NULL,http_status INT,error_category VARCHAR(64),INDEX idx_refresh_log_finished(finished_at),INDEX idx_refresh_log_trigger_status(trigger_type,status))$engine",
@@ -139,6 +150,7 @@ final class MysqlSchema
             "CREATE TABLE IF NOT EXISTS automation_runtime(id INT PRIMARY KEY,worker_last_seen_at VARCHAR(32),last_check_at VARCHAR(32),next_check_at VARCHAR(32),last_map_refresh_at VARCHAR(32),map_lock_token VARCHAR(128),map_lock_until VARCHAR(32),map_retry_after_until VARCHAR(32),updated_at VARCHAR(32) NOT NULL)$engine",
             "CREATE TABLE IF NOT EXISTS map_refresh_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,trigger_type VARCHAR(32) NOT NULL,started_at VARCHAR(32) NOT NULL,finished_at VARCHAR(32),status VARCHAR(32) NOT NULL,http_status INT,error_category VARCHAR(64),INDEX idx_map_refresh_log_time(started_at,trigger_type,status))$engine",
             "CREATE TABLE IF NOT EXISTS users(id BIGINT AUTO_INCREMENT PRIMARY KEY,first_name VARCHAR(120) NOT NULL,last_name VARCHAR(120) NOT NULL,username VARCHAR(190) UNIQUE,email VARCHAR(254) NOT NULL UNIQUE,password_hash VARCHAR(255) NOT NULL,home_chapter_org_id BIGINT,role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK(role IN ('user','user_manager','admin')),status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','active','disabled')),email_verified_at VARCHAR(32),created_at VARCHAR(32) NOT NULL,updated_at VARCHAR(32) NOT NULL,last_login_at VARCHAR(32),bni_verification_status VARCHAR(32) NOT NULL DEFAULT 'unverified' CHECK(bni_verification_status IN ('unverified','directory_match','manual_verified')),bni_verified_at VARCHAR(32),bni_verified_by_user_id BIGINT,bni_external_member_ref VARCHAR(255),INDEX idx_users_home_chapter(home_chapter_org_id),CONSTRAINT fk_users_home FOREIGN KEY(home_chapter_org_id) REFERENCES organizations(org_id) ON DELETE SET NULL,CONSTRAINT fk_users_verifier FOREIGN KEY(bni_verified_by_user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
+            "CREATE TABLE IF NOT EXISTS user_error_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,created_at VARCHAR(32) NOT NULL,created_at_ms BIGINT NOT NULL,user_message VARCHAR(500) NOT NULL,technical_message VARCHAR(1000) NOT NULL,error_code VARCHAR(80),context VARCHAR(80),user_id BIGINT NULL,route VARCHAR(190),INDEX idx_user_error_log_created(created_at_ms),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
             "CREATE TABLE IF NOT EXISTS email_verification_tokens(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT,token_hash CHAR(64) NOT NULL UNIQUE,expires_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,used_at VARCHAR(32),INDEX idx_email_verification_tokens_user_expiry(user_id,expires_at),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
             "CREATE TABLE IF NOT EXISTS password_reset_tokens(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT,token_hash CHAR(64) NOT NULL UNIQUE,expires_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,used_at VARCHAR(32),INDEX idx_password_reset_tokens_user_expiry(user_id,expires_at),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL)$engine",
             "CREATE TABLE IF NOT EXISTS mail_settings(id INT PRIMARY KEY,smtp_host VARCHAR(255),smtp_port INT NOT NULL DEFAULT 587,smtp_username VARCHAR(255),smtp_password TEXT,encryption VARCHAR(20) NOT NULL DEFAULT 'starttls',sender_email VARCHAR(254),sender_name VARCHAR(255) NOT NULL DEFAULT 'CrossChAPP',base_url VARCHAR(512) NOT NULL DEFAULT 'http://localhost:8082',updated_at VARCHAR(32) NOT NULL)$engine",

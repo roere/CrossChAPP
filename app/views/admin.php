@@ -262,7 +262,19 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div class="auth-actions"><button id="confirm-cancel-invitation" type="button">Widerrufen</button><button type="submit" class="secondary">Abbrechen</button></div>
         </form>
     </dialog><?php endif; ?>
-    <?php if ($isAdmin): ?><details id="reports-panel" class="panel misc-panel"><summary>Meldungen</summary><div class="misc-content"><p>Keine Meldungen vorhanden.</p></div></details>
+    <?php if ($isAdmin): ?><details id="reports-panel" class="panel misc-panel"><summary>Meldungen</summary><div class="misc-content">
+        <section id="user-error-monitor" aria-labelledby="user-error-heading">
+            <p class="section-kicker">Anwendersichtbare Fehler</p><h2 id="user-error-heading">Letzte Meldungen</h2>
+            <div id="user-error-table-wrap" class="table-scroll" hidden><table id="user-error-table"><thead><tr><th>Zeitpunkt</th><th>Meldung für Anwender</th><th>Echte Fehlermeldung</th><th>Code / Kontext</th></tr></thead><tbody id="user-error-list"></tbody></table></div>
+            <p id="user-error-empty" class="page-meta" hidden>Keine Meldungen vorhanden.</p><div id="user-error-message" class="message" role="status" aria-live="polite"></div>
+        </section>
+        <section id="bni-performance-monitor" aria-labelledby="bni-performance-heading">
+            <p class="section-kicker">Leistungsmonitor</p><div class="section-heading"><div><h2 id="bni-performance-heading">BNI-Anfragen – letzte 24 Stunden</h2><p>Gezählt werden ausschließlich tatsächlich gestartete externe BNI-Requests.</p></div><label>Zeitraum<select id="bni-performance-window"><option value="1">1 Minute</option><option value="5" selected>5 Minuten</option><option value="10">10 Minuten</option><option value="30">30 Minuten</option><option value="60">60 Minuten</option></select></label></div>
+            <div id="bni-performance-stats" class="stats performance-stats" aria-label="BNI-Anfragestatistik"></div>
+            <div class="performance-chart-wrap"><svg id="bni-performance-chart" viewBox="0 0 720 220" role="img" aria-labelledby="bni-performance-chart-title bni-performance-chart-description"><title id="bni-performance-chart-title">BNI-Anfragen der letzten 24 Stunden</title><desc id="bni-performance-chart-description">Rollierende Anzahl tatsächlich gestarteter BNI-Anfragen.</desc><line x1="42" y1="12" x2="42" y2="190" class="chart-axis"/><line x1="42" y1="190" x2="708" y2="190" class="chart-axis"/><polyline id="bni-performance-line" class="performance-line" points=""/><text id="bni-performance-y-max" x="36" y="18" text-anchor="end">0</text><text id="bni-performance-start" x="42" y="212">--:--</text><text id="bni-performance-end" x="708" y="212" text-anchor="end">--:--</text></svg></div>
+            <div id="bni-performance-message" class="message" role="status" aria-live="polite"></div>
+        </section>
+    </div></details>
     <details id="misc-panel" class="panel misc-panel">
         <summary>Sonstiges</summary>
         <div class="misc-content">

@@ -307,14 +307,10 @@
         button.disabled = true;
         try {
             const registrationData = Object.fromEntries(new FormData(form));
-            registrationData.skip_chapter_verification = form.skip_chapter_verification.checked;
+            registrationData.skip_chapter_verification = false;
             const response = await fetch('/api/auth/register.php', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(registrationData) });
             const payload = await response.json();
             if (!response.ok) {
-                const skipOption = document.querySelector('#skip-chapter-verification-option');
-                if (payload.code === 'technical_unavailable' && payload.canSkip === true) {
-                    if (skipOption) { skipOption.hidden = false; form.skip_chapter_verification.checked = false; }
-                } else if (skipOption) { skipOption.hidden = true; form.skip_chapter_verification.checked = false; }
                 throw new Error(payload.message || payload.error || 'Registrierung fehlgeschlagen.');
             }
             const panel = form.closest('.registration-panel');
@@ -396,8 +392,6 @@
 
     async function loadHomeChapters() {
         const result = document.querySelector('#home-chapter-results');
-        const skipOption = document.querySelector('#skip-chapter-verification-option');
-        const resetSkipOption = () => { if (skipOption) { skipOption.hidden = true; const checkbox=skipOption.querySelector('input');if(checkbox)checkbox.checked=false; } };
         const picker = window.CrossChappChapterPicker.create({
             list: result,
             countryInput: document.querySelector('#home-chapter-country'),
@@ -412,7 +406,6 @@
             showAllByDefault: false,
             maxResults: 20,
             collapseAfterSelect: true,
-            onSelect: resetSkipOption,
         });
         try { const response = await fetch('/api/auth/chapters.php'); const payload = await response.json(); if (!response.ok) throw new Error(payload.error); picker.setChapters(payload.chapters); }
         catch { result.textContent = 'Die lokale Chapterliste konnte nicht geladen werden.'; }

@@ -6,6 +6,7 @@ require_once __DIR__ . '/HttpClient.php';
 require_once __DIR__ . '/BniGlobalThrottle.php';
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/BniRequestNotStartedException.php';
+require_once __DIR__ . '/BniRequestEventRepository.php';
 
 final class BniClient
 {
@@ -15,6 +16,8 @@ final class BniClient
     public function __construct(
         private readonly HttpClient $http = new HttpClient(),
         private ?BniGlobalThrottle $throttle = null,
+        private ?BniRequestEventRepository $events = null,
+        private readonly bool $transportIsExternal = false,
     )
     {
     }
@@ -37,7 +40,7 @@ final class BniClient
     }
 
     /** @return list<array<string, mixed>> */
-    public function getMapOrganizations(?Closure $beforeRequest = null): array
+    public function getMapOrganizations(?Closure $beforeRequest = null,?string $triggerType=null): array
     {
         $query = http_build_query([
             'orgIds' => '5723,5768',
@@ -47,7 +50,7 @@ final class BniClient
             'cmsv3' => 'true',
             'isOldVersion' => 'false',
         ]);
-        $payload = $this->getJson(self::MAP_ENDPOINT . '?' . $query, 'map', $beforeRequest);
+        $payload = $this->getJson(self::MAP_ENDPOINT . '?' . $query, 'map', $beforeRequest,$triggerType);
         $organizations = $payload['orgMaps'] ?? null;
 
         if (!is_array($organizations)) {
@@ -79,7 +82,7 @@ final class BniClient
     }
 
     /** @return array<string, mixed> */
-    public function getChapterDetails(string $encodedChapterId, ?Closure $beforeRequest = null): array
+    public function getChapterDetails(string $encodedChapterId, ?Closure $beforeRequest = null,?string $triggerType=null): array
     {
         if ($encodedChapterId === '' || strlen($encodedChapterId) > 512) {
             throw new InvalidArgumentException('Die Detail-ID fehlt oder ist ungültig.');
@@ -94,7 +97,7 @@ final class BniClient
             'encodedChapterId' => $encodedChapterId,
             'locale' => 'de',
         ]);
-        $payload = $this->getJson($url, 'chapter_detail', $beforeRequest);
+        $payload = $this->getJson($url, 'chapter_detail', $beforeRequest,$triggerType);
         $content = $payload['content'] ?? null;
         $details = is_array($content) ? ($content['chapterDetails'] ?? null) : null;
 
@@ -134,17 +137,21 @@ final class BniClient
     }
 
     /** @return array<string, mixed> */
-    private function getJson(string $url, string $requestType, ?Closure $beforeRequest): array
+    private function getJson(string $url, string $requestType, ?Closure $beforeRequest,?string $triggerType): array
     {
-        if ($this->http->usesExternalTransport()) {
+        $external=$this->http->usesExternalTransport()||$this->transportIsExternal;
+        if ($external) {
             $this->http->assertExternalAllowed();
-            $this->throttle ??= new BniGlobalThrottle((new Database())->connection());
+            if($this->throttle===null||$this->events===null){$database=(new Database())->connection();$this->throttle??=new BniGlobalThrottle($database);$this->events??=new BniRequestEventRepository($database);}
             $this->throttle->awaitStartSlot($requestType);
         }
         if ($beforeRequest !== null) {
             $beforeRequest();
         }
-        return $this->http->getJson($url);
+        $eventId=$external?$this->events?->start($requestType,$triggerType):null;
+        try{$result=$this->http->getJson($url);if($eventId!==null)$this->events?->finish($eventId,200,'success');return$result;}
+        catch(HttpException $exception){if($eventId!==null)$this->events?->finish($eventId,$exception->statusCode,$exception->statusCode===429?'rate_limited':($exception->statusCode===403?'forbidden':'http_error'));throw$exception;}
+        catch(Throwable $exception){if($eventId!==null)$this->events?->finish($eventId,null,'network_error');throw$exception;}
     }
 
     private function nullableString(mixed $value): ?string
