@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+require_once __DIR__.'/RepresentationExpiryPolicy.php';
 
 final class RepresentationRequestRepository
 {
@@ -40,8 +41,7 @@ final class RepresentationRequestRepository
         $chapter = $this->chapterForUser($userId);
         if ($chapter === null) throw new DomainException('Ein Heimatchapter ist erforderlich.');
         $zone = self::timezone((string) ($chapter['timezone'] ?? '')); $date = DateTimeImmutable::createFromFormat('!Y-m-d', $requestDate, $zone);
-        $today = new DateTimeImmutable('today', $zone);
-        if (!$date || $date->format('Y-m-d') !== $requestDate || $date < $today) throw new InvalidArgumentException('Bitte wähle einen heutigen oder zukünftigen Termin.');
+        if (!$date || $date->format('Y-m-d') !== $requestDate || !RepresentationExpiryPolicy::isActive($requestDate)) throw new InvalidArgumentException('Bitte wähle einen heutigen oder zukünftigen Termin.');
         if (self::weekday($date) !== self::normalizeWeekday((string) ($chapter['meeting_day'] ?? ''))) throw new InvalidArgumentException('Der Termin passt nicht zum regulären Meeting-Wochentag deines Heimatchapters.');
         $now = gmdate('Y-m-d\TH:i:s\Z');
         try {

@@ -8,6 +8,7 @@ require_once dirname(__DIR__, 2) . '/src/JsonResponse.php';
 require_once dirname(__DIR__, 2) . '/src/UserRepository.php';
 require_once dirname(__DIR__, 2) . '/src/RepresentationOfferRepository.php';
 require_once dirname(__DIR__, 2) . '/src/RepresentationCleanupService.php';
+require_once dirname(__DIR__, 2) . '/src/RepresentationExpiryPolicy.php';
 
 $identity = Auth::requireUserJson();
 $database = (new Database())->connection();
@@ -40,11 +41,10 @@ if ($orgIds === []) JsonResponse::send(['error' => 'Bitte wähle mindestens ein 
 if (!$allDates && $dates === []) JsonResponse::send(['error' => 'Bitte wähle mindestens einen Termin oder Alle Daten aus.'], 400);
 if ($user['home_chapter_org_id'] !== null && in_array((int) $user['home_chapter_org_id'], $orgIds, true)) JsonResponse::send(['error' => 'Für dein eigenes Chapter kannst du kein Vertretungsangebot anlegen.'], 400);
 
-$today = new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin'));
 foreach ($dates as $date) {
     if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) JsonResponse::send(['error' => 'Ein Termin ist ungültig.'], 400);
     $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('Europe/Berlin'));
-    if (!$parsed || $parsed->format('Y-m-d') !== $date || $parsed < $today) JsonResponse::send(['error' => 'Vergangene oder ungültige Termine sind nicht erlaubt.'], 400);
+    if (!$parsed || $parsed->format('Y-m-d') !== $date || !RepresentationExpiryPolicy::isActive($date)) JsonResponse::send(['error' => 'Vergangene oder ungültige Termine sind nicht erlaubt.'], 400);
 }
 $placeholders = implode(',', array_fill(0, count($orgIds), '?'));
 $statement = $database->prepare("SELECT org_id FROM organizations WHERE org_type = 'CHAPTER' AND org_id IN ($placeholders)");

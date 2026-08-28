@@ -17,6 +17,7 @@ representation-cancellation-mysql.php
 representation-routing.php
 representation-requests.php
 representation-cleanup.php
+representation-expiry-history.php
 representation-contact.php
 representation-request-contact.php
 automation-refresh.php

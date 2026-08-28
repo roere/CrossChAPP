@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/DatabaseDialect.php';
 require_once __DIR__ . '/RepresentationAssignmentException.php';
+require_once __DIR__.'/RepresentationExpiryPolicy.php';
 
 final class RepresentationAssignmentService
 {
@@ -129,6 +130,7 @@ final class RepresentationAssignmentService
     /** @param array<string,mixed> $token */
     private function underlyingAvailable(array $token):bool
     {
+        if(!RepresentationExpiryPolicy::isActive((string)$token['representation_date']))return false;
         $slot=$this->database->prepare("SELECT COUNT(*) FROM representation_assignments WHERE requester_user_id=:requester AND chapter_org_id=(SELECT org_id FROM ".($token['direction']==='request_contact'?'representation_requests WHERE id=:source':'representation_offers WHERE id=:source').") AND representation_date=:date AND status='active'");
         $slot->execute([':requester'=>$token['requester_user_id'],':source'=>$token['direction']==='request_contact'?$token['request_id']:$token['offer_id'],':date'=>$token['representation_date']]);
         if((int)$slot->fetchColumn()>0)return false;

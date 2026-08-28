@@ -14,7 +14,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
         <div id="local-message" class="message" role="status" aria-live="polite">Lokale Daten werden geladen …</div>
     </section>
 
-    <section id="results" class="results" hidden>
+    <details id="chapter-data-panel" class="panel misc-panel"><summary>Chapterdaten</summary><section id="results" class="results chapter-data-content" hidden>
         <p class="page-meta">Gesamtbestand inkl. Chapter im Aufbau und in Planung</p>
         <div id="stats" class="stats" aria-label="Chapter-Statistik"></div>
         <section class="panel batch-panel" aria-labelledby="batch-heading">
@@ -130,7 +130,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
                 </table>
             </div>
         </section>
-    </section>
+    </section></details>
 
     <section id="data-import" class="panel source-panel admin-update-panel" aria-labelledby="source-heading">
         <div>
@@ -277,6 +277,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div id="bni-performance-message" class="message" role="status" aria-live="polite"></div>
         </section>
     </div></details>
+    <details id="representation-history-panel" class="panel misc-panel"><summary><span id="representation-history-title">Vertretungen</span></summary><div class="misc-content"><p class="page-meta">Historie der letzten maximal 500 Gesuche und konkreten Angebotstermine.</p><div class="representation-history-scroll"><table id="representation-history-table"><thead><tr><th data-sort-key="type"><button type="button" class="sort-button">Art <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="person"><button type="button" class="sort-button">Person <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="chapter"><button type="button" class="sort-button">Chapter <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="secondPerson"><button type="button" class="sort-button">Zweite Person <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="secondChapter"><button type="button" class="sort-button">Chapter zweite Person <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="date"><button type="button" class="sort-button">Datum <span class="sort-indicator" aria-hidden="true"></span></button></th><th data-sort-key="occurred"><button type="button" class="sort-button">Stattgefunden <span class="sort-indicator" aria-hidden="true"></span></button></th></tr></thead><tbody id="representation-history-list"></tbody></table></div><p id="representation-history-empty" class="page-meta" hidden>Keine Vertretungsvorgänge vorhanden.</p><div id="representation-history-message" class="message" role="status" aria-live="polite"></div></div></details>
     <details id="misc-panel" class="panel misc-panel">
         <summary>Sonstiges</summary>
         <div class="misc-content">

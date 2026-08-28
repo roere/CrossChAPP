@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/DatabaseDialect.php';
+require_once __DIR__.'/RepresentationExpiryPolicy.php';
 
 final class RepresentationContactService
 {
@@ -37,7 +38,7 @@ final class RepresentationContactService
     {
         $zone = new DateTimeZone('Europe/Berlin'); $today = new DateTimeImmutable('today', $zone);
         $date = DateTimeImmutable::createFromFormat('!Y-m-d', $requestedDate, $zone); $customMessage = trim($customMessage);
-        if (!$date || $date->format('Y-m-d') !== $requestedDate || $date < $today || strlen($customMessage) < 20 || strlen($customMessage) > 3000) throw new InvalidArgumentException('Die Anfrage ist unvollständig oder ungültig.');
+        if (!$date || $date->format('Y-m-d') !== $requestedDate || !RepresentationExpiryPolicy::isActive($requestedDate) || strlen($customMessage) < 20 || strlen($customMessage) > 3000) throw new InvalidArgumentException('Die Anfrage ist unvollständig oder ungültig.');
         $context = $this->offers->contactContext($offerId, $requesterId);
         if ($context === null) throw new DomainException('Dieses Vertretungsangebot ist nicht verfügbar.');
         if ((bool) $context['all_dates']) {

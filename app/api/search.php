@@ -12,6 +12,7 @@ require_once dirname(__DIR__) . '/src/OrganizationRepository.php';
 require_once dirname(__DIR__) . '/src/Auth.php';
 require_once dirname(__DIR__) . '/src/RepresentationRequestRepository.php';
 require_once dirname(__DIR__) . '/src/RepresentationCleanupService.php';
+require_once dirname(__DIR__) . '/src/RepresentationExpiryPolicy.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405);
@@ -60,7 +61,7 @@ try {
     $location=$exactChapter===null?(new Geocoder())->geocode($locationInput):['latitude'=>(float)$exactChapter['latitude'],'longitude'=>(float)$exactChapter['longitude'],'label'=>(string)$exactChapter['chapterName']];
     $automationSettings = (new AutomationRepository($database))->settings();
     $service = new ChapterSearchService($repository);
-    $today = (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+    $today = RepresentationExpiryPolicy::minimumActiveDate();
     $search = $service->search(
         $location['latitude'],
         $location['longitude'],

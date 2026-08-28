@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 require_once __DIR__ . '/DatabaseDialect.php';
+require_once __DIR__.'/RepresentationExpiryPolicy.php';
 
 final class RepresentationRequestContactService
 {
@@ -56,7 +57,7 @@ final class RepresentationRequestContactService
     {
         $customMessage = trim($customMessage); if (strlen($customMessage) < 20 || strlen($customMessage) > 3000) throw new InvalidArgumentException('Die Rückmeldung ist unvollständig oder ungültig.');
         try { $zone = new DateTimeZone((string) ($context['timezone'] ?: 'Europe/Berlin')); } catch (Throwable) { $zone = new DateTimeZone('Europe/Berlin'); }
-        $date = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $context['request_date'], $zone); if (!$date || $date < new DateTimeImmutable('today', $zone)) throw new DomainException('Dieses Vertretungsgesuch ist abgelaufen.');
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $context['request_date'], $zone); if (!$date || !RepresentationExpiryPolicy::isActive((string)$context['request_date'])) throw new DomainException('Dieses Vertretungsgesuch ist abgelaufen.');
         $fullName = trim($context['contact_first_name'] . ' ' . $context['contact_last_name']); $formattedDate = self::formatDate($date); $contactChapter = (string) ($context['contact_chapter'] ?? '');
         $variables = ['request_owner_first_name' => $anonymous ? '' : (string) $context['owner_first_name'], 'contact_first_name' => (string) $context['contact_first_name'], 'contact_last_name' => (string) $context['contact_last_name'], 'contact_full_name' => $fullName,
             'contact_email' => (string) $context['contact_email'], 'contact_chapter' => $contactChapter, 'requested_chapter' => (string) $context['requested_chapter'], 'requested_date' => $formattedDate, 'custom_message' => '{{custom_message}}', 'app_name' => 'CrossChAPP'];
