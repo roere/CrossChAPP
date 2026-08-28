@@ -14,6 +14,22 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
         <div id="local-message" class="message" role="status" aria-live="polite">Lokale Daten werden geladen …</div>
     </section>
 
+    <section id="data-import" class="panel source-panel admin-update-panel" aria-labelledby="source-heading">
+        <div>
+            <p class="section-kicker">Bewusste Live-Aktion</p>
+            <h2 id="source-heading">BNI-Daten aktualisieren</h2>
+            <p>Die lokale Datenbank enthält die zuletzt importierten BNI-Daten. Mit „Grunddaten aktualisieren“ wird die aktuelle BNI-DACH-Kartenquelle erneut eingelesen.</p>
+        </div>
+        <form id="source-form" class="source-form">
+            <label for="source-url">BNI-DACH-Link</label>
+            <div class="input-row">
+                <input id="source-url" name="url" type="url" value="https://bni.de/de/findachapter" required>
+                <button id="read-button" type="submit">Grunddaten von BNI aktualisieren</button>
+            </div>
+        </form>
+        <div id="message" class="message" role="status" aria-live="polite"></div>
+    </section>
+
     <details id="chapter-data-panel" class="panel misc-panel"><summary>Chapterdaten</summary><section id="results" class="results chapter-data-content" hidden>
         <p class="page-meta">Gesamtbestand inkl. Chapter im Aufbau und in Planung</p>
         <div id="stats" class="stats" aria-label="Chapter-Statistik"></div>
@@ -40,9 +56,9 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div id="batch-progress" class="batch-progress" role="status" aria-live="polite"></div>
             <div id="batch-message" class="message" role="status" aria-live="polite"></div>
             <p class="batch-rate-hint">BNI-Abfragen erfolgen sequenziell mit mindestens 1,5 Sekunden Abstand. Bei einer Rate-Limitierung wird der Batch automatisch beendet.</p>
-            <details id="automation-panel" class="automation-panel">
+            <details id="automation-panel" class="panel misc-panel">
                 <summary>Automatisierter Import</summary>
-                <div class="automation-content">
+                <div class="misc-content automation-content">
                     <form id="automation-form">
                         <section class="automation-setting">
                             <div>
@@ -132,21 +148,6 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
         </section>
     </section></details>
 
-    <section id="data-import" class="panel source-panel admin-update-panel" aria-labelledby="source-heading">
-        <div>
-            <p class="section-kicker">Bewusste Live-Aktion</p>
-            <h2 id="source-heading">BNI-Daten aktualisieren</h2>
-            <p>Die lokale Datenbank enthält die zuletzt importierten BNI-Daten. Mit „Grunddaten aktualisieren“ wird die aktuelle BNI-DACH-Kartenquelle erneut eingelesen.</p>
-        </div>
-        <form id="source-form" class="source-form">
-            <label for="source-url">BNI-DACH-Link</label>
-            <div class="input-row">
-                <input id="source-url" name="url" type="url" value="https://bni.de/de/findachapter" required>
-                <button id="read-button" type="submit">Grunddaten von BNI aktualisieren</button>
-            </div>
-        </form>
-        <div id="message" class="message" role="status" aria-live="polite"></div>
-    </section>
     <?php endif; ?>
     <details id="users-panel" class="panel misc-panel">
         <summary>Anwender</summary>
