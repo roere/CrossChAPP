@@ -74,6 +74,11 @@ final class Auth
         return self::canManageUsers();
     }
 
+    public static function canUseUserFeatures(?string $role = null): bool
+    {
+        return in_array($role ?? self::role(), ['user', 'user_manager'], true);
+    }
+
     public static function role(): ?string
     {
         self::start();
@@ -130,6 +135,14 @@ final class Auth
         if ($user !== null && is_int($user['user_id'] ?? null) && $user['user_id'] > 0) return $user;
         http_response_code(401); header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['error' => 'Anmeldung erforderlich.'], JSON_UNESCAPED_UNICODE); exit;
+    }
+
+    /** @return array<string, mixed> */
+    public static function requireApplicationUserJson(): array
+    {
+        $user = self::requireUserJson();
+        if (self::canUseUserFeatures(is_string($user['role'] ?? null) ? $user['role'] : null)) return $user;
+        self::denyJson('Ein Anwenderkonto ist erforderlich.', 403);
     }
 
     private static function isHttps(): bool

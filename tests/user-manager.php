@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 $root=is_file(__DIR__.'/../app/src/Database.php')?__DIR__.'/../app':'/var/www/html';
-require_once $root.'/src/Database.php';require_once $root.'/src/UserRepository.php';
+require_once $root.'/src/Database.php';require_once $root.'/src/UserRepository.php';require_once $root.'/src/Auth.php';
 $check=static function(bool $condition,string $message):void{if(!$condition)throw new RuntimeException($message);};
 $path=sys_get_temp_dir().'/crosschapp-user-manager-'.bin2hex(random_bytes(5)).'.sqlite';
 try{
@@ -11,5 +11,11 @@ try{
     $db->prepare("INSERT INTO users(first_name,last_name,email,password_hash,role,status,created_at,updated_at)VALUES('Mara','Manager','manager-schema@example.test','hash','user_manager','active',:now,:now)")->execute([':now'=>$now]);
     $columns=array_column($db->query('PRAGMA table_info(user_invitations)')->fetchAll(),'name');$check(in_array('verification_grant',$columns,true),'SQLite-Einladungsgrant additiv vorhanden.');
     $check((int)$db->query("SELECT COUNT(*) FROM users WHERE email='legacy@example.test'")->fetchColumn()===1,'Bestehende SQLite-Benutzer bleiben erhalten.');
+    $check(Auth::canUseUserFeatures('user'),'Anwender besitzt normale Anwenderrechte.');
+    $check(Auth::canUseUserFeatures('user_manager'),'Anwenderbetreuer besitzt normale Anwenderrechte.');
+    $check(!Auth::canUseUserFeatures('admin'),'Volladmin erhält durch das Rollenmodell keine normalen Anwenderrechte.');
+    $representationFiles=['offers.php','assignments.php','contact.php','contact-preview.php'];
+    foreach($representationFiles as$file){$source=(string)file_get_contents($root.'/api/representation/'.$file);$check(str_contains($source,'requireApplicationUserJson'),'Semantische Anwenderberechtigung fehlt in '.$file);}
+    foreach(['request-contact.php']as$file){$source=(string)file_get_contents($root.'/api/representation/'.$file);$check(str_contains($source,'canUseUserFeatures'),'Semantische Anwenderberechtigung fehlt in '.$file);}
     echo "PASS Anwenderbetreuer-Schema: SQLite-Rolle, additive Migration und Einladungsgrant\n";
 }finally{foreach([$path,$path.'-wal',$path.'-shm']as$file)if(is_file($file))unlink($file);}

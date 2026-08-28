@@ -74,7 +74,7 @@ try {
         $organizationId===null?null:(int)$organizationId,
     );
     Auth::start(); $identity = Auth::user(); $viewerId = $identity !== null ? (int) $identity['user_id'] : null;
-    $viewerCanContact = $identity === null || ($identity['role'] ?? null) === 'user';
+    $viewerCanContact = $identity === null || Auth::canUseUserFeatures(is_string($identity['role'] ?? null) ? $identity['role'] : null);
     $requestMap = (new RepresentationRequestRepository($database))->activeForOrganizations(array_column($search['results'], 'orgId'), $viewerId, $today, $viewerCanContact);
     foreach ($search['results'] as &$resultItem) $resultItem['representationRequests'] = $requestMap[(int) $resultItem['orgId']] ?? [];
     unset($resultItem);

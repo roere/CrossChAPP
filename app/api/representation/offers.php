@@ -10,13 +10,12 @@ require_once dirname(__DIR__, 2) . '/src/RepresentationOfferRepository.php';
 require_once dirname(__DIR__, 2) . '/src/RepresentationCleanupService.php';
 require_once dirname(__DIR__, 2) . '/src/RepresentationExpiryPolicy.php';
 
-$identity = Auth::requireUserJson();
+$identity = Auth::requireApplicationUserJson();
 $database = (new Database())->connection();
 (new RepresentationCleanupService($database))->runCleanup();
 $users = new UserRepository($database);
 $user = $users->findById((int) $identity['user_id']);
 if ($user === null || $user['status'] !== 'active') JsonResponse::send(['error' => 'Anmeldung erforderlich.'], 401);
-if ($user['role'] !== 'user') JsonResponse::send(['error' => 'Vertretungsangebote sind normalen Benutzerkonten vorbehalten.'], 403);
 $repository = new RepresentationOfferRepository($database);
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {

@@ -4,7 +4,7 @@ require_once dirname(__DIR__, 2) . '/src/Auth.php'; require_once dirname(__DIR__
 require_once dirname(__DIR__, 2) . '/src/RepresentationOfferRepository.php'; require_once dirname(__DIR__, 2) . '/src/RepresentationContactService.php'; require_once dirname(__DIR__, 2) . '/src/MailSettingsRepository.php'; require_once dirname(__DIR__, 2) . '/src/MailService.php';
 require_once dirname(__DIR__, 2) . '/src/RepresentationAssignmentService.php';
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405);
-$identity = Auth::requireUserJson(); if (($identity['role'] ?? null) !== 'user') JsonResponse::send(['error' => 'Ein Benutzerkonto ist erforderlich.'], 403); Auth::requireCsrfJson();
+$identity = Auth::requireApplicationUserJson(); Auth::requireCsrfJson();
 try {
     $payload = json_decode(file_get_contents('php://input') ?: '', true, 8, JSON_THROW_ON_ERROR); $database = (new Database())->connection(); $settings = new MailSettingsRepository($database);
     $mailer=new MailService($settings);$assignments=new RepresentationAssignmentService($database,$settings,$mailer);
