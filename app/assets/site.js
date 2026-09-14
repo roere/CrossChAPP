@@ -171,6 +171,7 @@
         const details = document.querySelector('#my-account-details');
         const editButton = document.querySelector('#edit-my-account');
         const editor = document.querySelector('#my-account-chapter-editor');
+        const editActions = document.querySelector('#my-account-edit-actions');
         const saveChapter = document.querySelector('#save-account-home-chapter');
         const cancelEdit = document.querySelector('#cancel-account-edit');
         const skipOption = document.querySelector('#account-skip-chapter-verification-option');
@@ -182,6 +183,7 @@
         const setEditMode = active => {
             accountEditActive = active;
             if (editor) editor.hidden = !active;
+            if (editActions) editActions.hidden = !active;
             if (details) details.hidden = active;
             [editButton, closeButton, deleteButton, closeIcon].filter(Boolean).forEach(button => { button.disabled = active; });
             if (!active) { if (skipOption) skipOption.hidden = true; if (skipCheckbox) skipCheckbox.checked = false; }
