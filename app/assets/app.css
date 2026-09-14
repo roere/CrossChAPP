@@ -439,7 +439,11 @@ tr.organization:hover { background: #faf7f7; }
 .request-profile-button:hover, .request-profile-button:focus-visible { color: var(--bni-red-dark); background: transparent; }
 .icon-button { min-width: 2rem; min-height: 2rem; padding: .25rem; line-height: 1; }
 .watchlist-button { width: 38px; min-height: 38px; padding: .35rem; }
-.watchlist-button svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.watchlist-button svg { display: block; width: 22px; height: 22px; overflow: visible; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.watchlist-button[aria-pressed="true"] { color: white; border-color: var(--bni-red-dark); background: var(--bni-red); }
+.watchlist-button[aria-pressed="true"]:hover, .watchlist-button[aria-pressed="true"]:focus-visible { color: white; border-color: var(--bni-red-dark); background: var(--bni-red-dark); }
+.watchlist-bell-check circle { fill: white; stroke: var(--bni-red-dark); }
+.watchlist-bell-check path { stroke: var(--bni-red-dark); stroke-width: 2; }
 .account-watchlist { margin: 0 0 1.25rem; padding: 1rem; border: 1px solid var(--border); background: #fafafa; }
 .account-watchlist h3 { margin-top: 0; }
 .account-watchlist a { color: var(--bni-red-dark); font-weight: 700; }
