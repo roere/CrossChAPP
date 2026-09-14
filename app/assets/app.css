@@ -440,9 +440,11 @@ tr.organization:hover { background: #faf7f7; }
 .watchlist-button svg { display: block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .account-watchlist { margin: 0 0 1.25rem; padding: 1rem; border: 1px solid var(--border); background: #fafafa; }
 .account-watchlist h3 { margin-top: 0; }
-.account-watchlist h4 { margin: 1rem 0 .4rem; }
-.account-watchlist ul { display: grid; gap: .4rem; margin: 0; padding-left: 1.2rem; }
 .account-watchlist a { color: var(--bni-red-dark); font-weight: 700; }
+.watchlist-entries { display: grid; gap: .65rem; min-width: 0; }
+.watchlist-entries a { display: block; max-width: 100%; overflow-wrap: anywhere; }
+.watchlist-empty { color: var(--muted); }
+.watchlist-email-editor { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .watchlist-email-option { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; }
 .watchlist-email-option input { width: 18px; height: 18px; accent-color: var(--accent); }
 #watchlist-setting-message { min-height: 1.2em; margin: .35rem 0 0; }

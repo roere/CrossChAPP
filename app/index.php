@@ -168,10 +168,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                 <?php if ($canUseUserFeatures): ?>
                     <section id="account-watchlist" class="account-watchlist" aria-labelledby="account-watchlist-heading">
                         <h3 id="account-watchlist-heading">Beobachtungsliste</h3>
-                        <label class="watchlist-email-option"><input id="watchlist-email-notifications" type="checkbox"> <span>E-Mail Benachrichtigungen</span></label>
-                        <p id="watchlist-setting-message" class="message" role="status" aria-live="polite"></p>
-                        <h4>Beobachtete Chapter</h4><ul id="watchlist-chapters"><li class="page-meta">Wird geladen …</li></ul>
-                        <h4>Aktuelle Vertretungsgesuche</h4><ul id="watchlist-requests"><li class="page-meta">Wird geladen …</li></ul>
+                        <div id="watchlist-requests" class="watchlist-entries"><span class="page-meta">Wird geladen …</span></div>
                     </section>
                 <?php endif; ?>
                 <?php if (!$isAdmin): ?>
@@ -182,6 +179,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                             <span class="field-tooltip"><button type="button" aria-label="Hinweis zur Chapter-Prüfung" aria-describedby="account-skip-chapter-verification-tooltip">i</button><span id="account-skip-chapter-verification-tooltip" role="tooltip">Es wird nicht geprüft, ob der Name in der Mitgliederliste des Chapters steht.</span></span>
                         </div>
                         <section class="account-keyword-editor" aria-labelledby="account-keywords-heading"><h3 id="account-keywords-heading">Schlagwörter zu mir</h3><div id="account-keywords-edit-list" class="keyword-chips"></div><div class="keyword-add-row"><label>Schlagwort<input id="account-keyword-input" maxlength="40" autocomplete="off"></label><button id="save-account-keyword" type="button" class="icon-button" title="Schlagwort speichern" aria-label="Schlagwort speichern">💾</button></div><p id="account-keyword-limit" class="page-meta" hidden>Maximal 10 Schlagwörter.</p></section>
+                        <?php if ($canUseUserFeatures): ?><div class="watchlist-email-editor"><label class="watchlist-email-option"><input id="watchlist-email-notifications" type="checkbox"> <span>E-Mail Benachrichtigungen</span></label><p id="watchlist-setting-message" class="message" role="status" aria-live="polite"></p></div><?php endif; ?>
                         <div class="registration-actions"><button id="save-account-home-chapter" type="button">Speichern</button><button id="cancel-account-edit" type="button" class="secondary">Abbrechen</button></div>
                     </section>
                 <?php endif; ?>
