@@ -105,7 +105,7 @@
         try {
             const response = await fetch('/api/representation/requests.php', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify({ request_date: value }) });
             const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Das Vertretungsgesuch konnte nicht gespeichert werden.');
-            setRequestMessage('Vertretungsgesuch gespeichert.', 'success'); await initialize(); return true;
+            setRequestMessage('Vertretungsgesuch gespeichert.', 'success'); await initialize();document.dispatchEvent(new CustomEvent('crosschapp:representation-request-changed')); return true;
         } catch (cause) { setRequestMessage(cause instanceof Error ? cause.message : 'Das Vertretungsgesuch konnte nicht gespeichert werden.', 'error'); return false; }
         finally { requestDatePicker.setDisabled(!payload?.chapter?.meetingDay); }
     }
@@ -118,7 +118,7 @@
         try {
             const response = await fetch('/api/representation/requests.php', { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify({ request_id: Number(button.dataset.requestId) }) });
             const result = await response.json(); if (!response.ok) throw new Error(result.error || 'Das Vertretungsgesuch konnte nicht gelöscht werden.');
-            setRequestMessage('Vertretungsgesuch gelöscht.', 'success'); await initialize();
+            setRequestMessage('Vertretungsgesuch gelöscht.', 'success'); await initialize();document.dispatchEvent(new CustomEvent('crosschapp:representation-request-changed'));
         } catch (cause) { button.disabled = false; setRequestMessage(cause instanceof Error ? cause.message : 'Das Vertretungsgesuch konnte nicht gelöscht werden.', 'error'); }
     }
 

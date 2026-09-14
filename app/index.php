@@ -137,6 +137,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                         <?php if ($currentUser !== null): ?>
                             <div id="account-menu" class="account-menu">
                                 <button id="account-menu-trigger" type="button" class="account-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="account-dropdown"><span class="account-menu-name"><?= htmlspecialchars($accountDisplayName, ENT_QUOTES, 'UTF-8') ?></span><?php if (($currentDatabaseUser['bni_verification_status'] ?? '') === 'manual_verified'): ?><?php require __DIR__.'/views/partials/verification-badge.php'; ?><?php endif; ?><span aria-hidden="true">▼</span></button>
+                                <?php if ($canUseUserFeatures): ?><button id="watchlist-request-badge" type="button" class="watchlist-request-badge" hidden></button><?php endif; ?>
                                 <div id="account-dropdown" class="account-dropdown" role="menu" hidden>
                                     <button id="open-my-account" type="button" role="menuitem">Mein Konto</button>
                                     <button id="open-change-password" type="button" role="menuitem">Passwort ändern</button>
@@ -166,7 +167,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <div><dt>Schlagwörter zu mir</dt><dd id="account-keywords-view"><span class="page-meta">Keine Schlagwörter hinterlegt.</span></dd></div>
                 </dl>
                 <?php if ($canUseUserFeatures): ?>
-                    <section id="account-watchlist" class="account-watchlist" aria-labelledby="account-watchlist-heading">
+                    <section id="account-watchlist" class="account-watchlist" aria-labelledby="account-watchlist-heading" tabindex="-1">
                         <h3 id="account-watchlist-heading">Beobachtungsliste</h3>
                         <div id="watchlist-requests" class="watchlist-entries"><span class="page-meta">Wird geladen …</span></div>
                     </section>
@@ -181,7 +182,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                         <section class="account-keyword-editor" aria-labelledby="account-keywords-heading"><h3 id="account-keywords-heading">Schlagwörter zu mir</h3><div id="account-keywords-edit-list" class="keyword-chips"></div><div class="keyword-add-row"><label>Schlagwort<input id="account-keyword-input" maxlength="40" autocomplete="off"></label><button id="save-account-keyword" type="button" class="icon-button" title="Schlagwort speichern" aria-label="Schlagwort speichern">💾</button></div><p id="account-keyword-limit" class="page-meta" hidden>Maximal 10 Schlagwörter.</p></section>
                     </section>
                 <?php endif; ?>
-                <?php if ($canUseUserFeatures): ?><div class="watchlist-email-editor"><label class="watchlist-email-option"><input id="watchlist-email-notifications" type="checkbox"> <span>E-Mail Benachrichtigungen</span></label><p id="watchlist-setting-message" class="message" role="status" aria-live="polite"></p></div><?php endif; ?>
+                <?php if ($canUseUserFeatures): ?><div class="watchlist-email-editor"><span class="watchlist-email-row"><label class="watchlist-email-option"><input id="watchlist-email-notifications" type="checkbox" aria-describedby="watchlist-email-tooltip"> <span>E-Mail Benachrichtigungen</span></label><span class="field-tooltip"><button type="button" aria-label="Hinweis zu E-Mail Benachrichtigungen" aria-describedby="watchlist-email-tooltip">i</button><span id="watchlist-email-tooltip" role="tooltip">Per E-Mail informiert werden, wenn jemand aus einem Chapter, das Du beobachtest, eine Vertretung sucht.</span></span></span><p id="watchlist-setting-message" class="message" role="status" aria-live="polite"></p></div><?php endif; ?>
                 <?php if (!$isAdmin): ?><div id="my-account-edit-actions" class="registration-actions" hidden><button id="save-account-home-chapter" type="button">Speichern</button><button id="cancel-account-edit" type="button" class="secondary">Abbrechen</button></div><?php endif; ?>
                 <div id="my-account-message" class="message" role="alert" aria-live="polite"></div>
                 <div id="my-account-actions" class="registration-actions">

@@ -37,16 +37,16 @@ final class WatchlistRepository
         $now=self::now();$statement->execute([':enabled'=>$enabled?1:0,':enabled_at'=>$enabled?$now:null,':updated'=>$now,':user'=>$userId]);
     }
 
-    /** @return array{emailNotifications:bool,chapters:list<array<string,mixed>>,requests:list<array<string,mixed>>} */
+    /** @return array{emailNotifications:bool,activeRequestChapterCount:int,chapters:list<array<string,mixed>>,requests:list<array<string,mixed>>} */
     public function accountData(int $userId,?DateTimeImmutable $now=null): array
     {
         $enabled=$this->database->prepare('SELECT watchlist_email_enabled FROM users WHERE id=:user');$enabled->execute([':user'=>$userId]);
         $chapters=$this->database->prepare("SELECT o.org_id,o.chapter_name,o.city,o.short_link_slug FROM user_chapter_watchlist w JOIN organizations o ON o.org_id=w.organization_id AND o.org_type='CHAPTER' WHERE w.user_id=:user ORDER BY o.chapter_name,o.org_id");$chapters->execute([':user'=>$userId]);
         $chapterRows=array_map(static fn(array$row):array=>['organizationId'=>(int)$row['org_id'],'chapterName'=>(string)$row['chapter_name'],'city'=>$row['city']===null?null:(string)$row['city'],'chapterLink'=>$row['short_link_slug']?'/'.(string)$row['short_link_slug']:null],$chapters->fetchAll());
-        $requests=$this->database->prepare("SELECT r.id,r.request_date,o.chapter_name,o.city,o.short_link_slug FROM user_chapter_watchlist w JOIN representation_requests r ON r.org_id=w.organization_id JOIN organizations o ON o.org_id=r.org_id WHERE w.user_id=:user AND r.request_date>=:minimum ORDER BY r.request_date,o.chapter_name,r.id");
+        $requests=$this->database->prepare("SELECT r.id,r.org_id,r.request_date,o.chapter_name,o.city,o.short_link_slug FROM user_chapter_watchlist w JOIN representation_requests r ON r.org_id=w.organization_id JOIN organizations o ON o.org_id=r.org_id WHERE w.user_id=:user AND r.request_date>=:minimum ORDER BY r.request_date,o.chapter_name,r.id");
         $requests->execute([':user'=>$userId,':minimum'=>RepresentationExpiryPolicy::minimumActiveDate($now)]);
-        $requestRows=[];foreach($requests->fetchAll()as$row){if(!RepresentationExpiryPolicy::isActive((string)$row['request_date'],$now))continue;$requestRows[]=['requestId'=>(int)$row['id'],'chapterName'=>self::displayName($row),'requestedDate'=>(string)$row['request_date'],'chapterLink'=>$row['short_link_slug']?'/'.(string)$row['short_link_slug']:null];}
-        return['emailNotifications'=>(bool)$enabled->fetchColumn(),'chapters'=>$chapterRows,'requests'=>$requestRows];
+        $requestRows=[];$activeChapters=[];foreach($requests->fetchAll()as$row){if(!RepresentationExpiryPolicy::isActive((string)$row['request_date'],$now))continue;$activeChapters[(int)$row['org_id']]=true;$requestRows[]=['requestId'=>(int)$row['id'],'chapterName'=>self::displayName($row),'requestedDate'=>(string)$row['request_date'],'chapterLink'=>$row['short_link_slug']?'/'.(string)$row['short_link_slug']:null];}
+        return['emailNotifications'=>(bool)$enabled->fetchColumn(),'activeRequestChapterCount'=>count($activeChapters),'chapters'=>$chapterRows,'requests'=>$requestRows];
     }
 
     /** @return list<array<string,mixed>> */
