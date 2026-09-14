@@ -13,6 +13,8 @@ require_once dirname(__DIR__) . '/src/RepresentationCleanupService.php';
 require_once dirname(__DIR__) . '/src/WorkerHeartbeat.php';
 require_once dirname(__DIR__) . '/src/BniRequestEventRepository.php';
 require_once dirname(__DIR__) . '/src/UserFacingErrorLogger.php';
+require_once dirname(__DIR__) . '/src/WatchlistNotificationRunner.php';
+require_once dirname(__DIR__) . '/src/AutomationConfig.php';
 
 $runOnce = in_array('--once', $argv, true);
 $requestedLimit = null;
@@ -32,6 +34,7 @@ do {
     (new RepresentationCleanupService($database))->runCleanup();
     (new BniRequestEventRepository($database))->cleanup(35);
     (new UserFacingErrorLogger($database))->cleanup();
+    (new WatchlistNotificationRunner($database))->run();
 
     if ($settings['mapRefreshEnabled'] && $automation->mapRefreshDue($settings['mapRefreshDays'])) {
         (new MapRefreshService($organizations, $automation))->refresh('map_automatic');
@@ -47,7 +50,7 @@ do {
     }
 
     if (!$runOnce) {
-        WorkerHeartbeat::wait($interval * 60, static function (): void {
+        WorkerHeartbeat::wait(min($interval * 60, AutomationConfig::watchlistNotificationIntervalSeconds()), static function (): void {
             $heartbeatDatabase = (new Database())->connection();
             (new AutomationRepository($heartbeatDatabase))->updateWorkerHeartbeat();
         });

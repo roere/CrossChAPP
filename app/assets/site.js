@@ -44,7 +44,7 @@
 
     const searchState = {
         payload: null, expanded: new Set(), map: null, markerLayer: null,
-        refreshQueue: [], refreshQueued: new Set(), refreshCompleted: new Set(), refreshRunning: false, refreshGeneration: 0,
+        refreshQueue: [], refreshQueued: new Set(), refreshCompleted: new Set(), refreshRunning: false, refreshGeneration: 0, watched: new Set(),
     };
 
     function initializeShortLinkSearch() {
@@ -54,6 +54,7 @@
         form.dataset.organizationId=orgMeta.content;form.location.value=nameMeta.content;form.requestSubmit();
     }
     document.querySelector('#result-list')?.addEventListener('click', toggleResultDetails);
+    document.querySelector('#result-list')?.addEventListener('click', toggleWatchlist);
     document.querySelector('#map-toggle')?.addEventListener('click', toggleMap);
     document.querySelector('.result-limit-options')?.addEventListener('click', selectResultLimit);
     initializeRequestContact();
@@ -176,6 +177,7 @@
         const skipCheckbox = skipOption?.querySelector('input') || null;
         const copyChapterLink=document.querySelector('#copy-home-chapter-link');
         const keywordView=document.querySelector('#account-keywords-view'),keywordEditList=document.querySelector('#account-keywords-edit-list'),keywordInput=document.querySelector('#account-keyword-input'),saveKeyword=document.querySelector('#save-account-keyword'),keywordLimit=document.querySelector('#account-keyword-limit');
+        const watchlistEmail=document.querySelector('#watchlist-email-notifications'),watchlistMessage=document.querySelector('#watchlist-setting-message'),watchlistChapters=document.querySelector('#watchlist-chapters'),watchlistRequests=document.querySelector('#watchlist-requests');
         let accountData = null; let accountPicker = null; let chaptersLoaded = false; let accountEditActive = false;let accountKeywords=[];
         const setEditMode = active => {
             accountEditActive = active;
@@ -208,11 +210,13 @@
         copyChapterLink?.addEventListener('click',async()=>{const url=copyChapterLink.dataset.url;if(!url)return;try{await navigator.clipboard.writeText(url);message.textContent='Chapterlink kopiert.';message.className='message success';}catch{message.textContent='Der Chapterlink konnte nicht kopiert werden.';message.className='message error';}});
         const renderKeywords=()=>{const empty=()=>{const text=document.createElement('span');text.className='page-meta';text.textContent='Keine Schlagwörter hinterlegt.';return text;},chip=(item,editable)=>{const span=document.createElement('span');span.className='keyword-chip';span.append(document.createTextNode(item.keyword));if(editable){const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title=`Schlagwort ${item.keyword} löschen`;remove.setAttribute('aria-label',remove.title);remove.dataset.keywordId=String(item.id);span.append(remove);}return span;};keywordView?.replaceChildren(...(accountKeywords.length?accountKeywords.map(item=>chip(item,false)):[empty()]));keywordEditList?.replaceChildren(...(accountKeywords.length?accountKeywords.map(item=>chip(item,true)):[empty()]));const maximum=accountKeywords.length>=10;if(keywordInput)keywordInput.disabled=maximum;if(saveKeyword)saveKeyword.disabled=maximum;if(keywordLimit)keywordLimit.hidden=!maximum;};
         const updateKeywords=keywords=>{accountKeywords=Array.isArray(keywords)?keywords:[];renderKeywords();};
+        const renderWatchlist=data=>{if(!watchlistEmail)return;watchlistEmail.checked=data.emailNotifications===true;const empty=text=>{const item=document.createElement('li');item.className='page-meta';item.textContent=text;return item;};watchlistChapters.replaceChildren(...((data.chapters||[]).map(chapter=>{const item=document.createElement('li');item.textContent=`${chapter.chapterName}${chapter.city?` (${chapter.city})`:''}`;return item;})));if(!watchlistChapters.children.length)watchlistChapters.append(empty('Keine Chapter beobachtet.'));watchlistRequests.replaceChildren(...((data.requests||[]).map(request=>{const item=document.createElement('li'),link=document.createElement('a');link.href=request.chapterLink||'/?view=crosschaptern';link.textContent=request.chapterName;const date=document.createElement('span');date.textContent=` · ${formatDateOnly(request.requestedDate)}`;item.append(link,date);return item;})));if(!watchlistRequests.children.length)watchlistRequests.append(empty('Keine aktuellen Vertretungsgesuche.'));};
         const loadAccount = async () => {
-            const [response,keywordsResponse]=await Promise.all([fetch('/api/auth/account.php'),fetch('/api/auth/keywords.php')]); const payload = await response.json(),keywordsPayload=await keywordsResponse.json();
-            if (!response.ok||!keywordsResponse.ok) throw new Error(payload.error||keywordsPayload.error || 'Die Kontodaten konnten nicht geladen werden.');
-            renderAccount(payload.account);updateKeywords(keywordsPayload.keywords); return payload.account;
+            const calls=[fetch('/api/auth/account.php'),fetch('/api/auth/keywords.php'),...(watchlistEmail?[fetch('/api/auth/watchlist.php')]:[])],responses=await Promise.all(calls),payload=await responses[0].json(),keywordsPayload=await responses[1].json(),watchlistPayload=watchlistEmail?await responses[2].json():null;
+            if (!responses.every(response=>response.ok)) throw new Error(payload.error||keywordsPayload.error||watchlistPayload?.error || 'Die Kontodaten konnten nicht geladen werden.');
+            renderAccount(payload.account);updateKeywords(keywordsPayload.keywords);if(watchlistPayload)renderWatchlist(watchlistPayload); return payload.account;
         };
+        watchlistEmail?.addEventListener('change',async()=>{const intended=watchlistEmail.checked;watchlistEmail.disabled=true;watchlistMessage.textContent='';watchlistMessage.className='message';try{const response=await fetch('/api/auth/watchlist.php',{method:'PATCH',headers:jsonHeaders,body:JSON.stringify({emailNotifications:intended})}),payload=await response.json();if(!response.ok)throw new Error(payload.error||'Die Einstellung konnte nicht gespeichert werden.');renderWatchlist(payload);watchlistMessage.textContent='Änderung gespeichert.';watchlistMessage.className='message success';}catch(error){watchlistEmail.checked=!intended;watchlistMessage.textContent=error.message;watchlistMessage.className='message error';}finally{watchlistEmail.disabled=false;}});
         trigger.addEventListener('click', async () => {
             message.textContent = ''; message.className = 'message'; leaveEditMode(); dialog.showModal();
             try {
@@ -467,6 +471,7 @@
         const around = document.querySelector('#search-around');
         const list = document.querySelector('#result-list');
         searchState.payload = payload;
+        searchState.watched = new Set(payload.watchlistOrganizationIds || []);
         searchState.expanded.clear();
         searchState.refreshGeneration += 1;
         searchState.refreshQueue = [];
@@ -506,12 +511,17 @@
         toggle.dataset.id = chapter.orgId; toggle.setAttribute('aria-expanded', 'false'); toggle.setAttribute('aria-controls', `result-details-${chapter.orgId}`);
         toggle.setAttribute('aria-label', `Details für ${chapter.chapterName || 'Chapter'} öffnen`); toggle.textContent = '▶ Details';
         actions.prepend(toggle);
+        if(authenticated&&['user','user_manager'].includes(authRole))actions.append(watchlistButton(chapter));
         const details = resultDetailPanel(chapter); details.hidden = true;
         const refreshStatus = document.createElement('p'); refreshStatus.className = 'result-refresh-status'; refreshStatus.setAttribute('aria-live', 'polite');
         const requests = representationRequests(chapter);
         article.append(header, facts); if (requests) article.append(requests); article.append(actions, refreshStatus, details);
         return article;
     }
+
+    function watchlistButton(chapter){const button=document.createElement('button');button.type='button';button.className='watchlist-button secondary';button.dataset.watchlistOrgId=String(chapter.orgId);button.dataset.chapterName=chapter.chapterName||'Chapter';renderWatchlistButton(button,searchState.watched.has(Number(chapter.orgId)));return button;}
+    function renderWatchlistButton(button,watched){const chapter=button.dataset.chapterName,title=watched?'Chapter nicht mehr beobachten':'Chapter beobachten';button.dataset.watched=String(watched);button.title=title;button.setAttribute('aria-label',`${chapter} ${watched?'nicht mehr beobachten':'beobachten'}`);button.setAttribute('aria-pressed',String(watched));button.innerHTML=`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9 4 18m13-9 3 9M7 9h10M4 18a3 3 0 1 0 6 0 3 3 0 0 0-6 0Zm10 0a3 3 0 1 0 6 0 3 3 0 0 0-6 0ZM8 9V6m8 3V6M8 6h3m5 0h-3"/>${watched?'<path d="M3 3 21 21"/>':''}</svg>`;}
+    async function toggleWatchlist(event){const button=event.target.closest('[data-watchlist-org-id]');if(!button)return;event.stopPropagation();const wasWatched=button.dataset.watched==='true',orgId=Number(button.dataset.watchlistOrgId);button.disabled=true;try{const response=await fetch('/api/auth/watchlist.php',{method:wasWatched?'DELETE':'POST',headers:jsonHeaders,body:JSON.stringify({organization_id:orgId})}),payload=await response.json();if(!response.ok)throw new Error(payload.error||'Die Beobachtungsliste konnte nicht gespeichert werden.');if(wasWatched)searchState.watched.delete(orgId);else searchState.watched.add(orgId);renderWatchlistButton(button,!wasWatched);}catch(error){const message=document.querySelector('#search-message');message.textContent=error.message;message.className='message error';renderWatchlistButton(button,wasWatched);}finally{button.disabled=false;}}
 
     function representationRequests(chapter) {
         const requests = chapter.representationRequests || []; if (!requests.length) return null;

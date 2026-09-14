@@ -32,6 +32,7 @@ $tables = [
     'representation_requests', 'representation_request_contact_log',
     'representation_anonymous_request_contact_log',
     'representation_assignments', 'representation_acceptance_tokens',
+    'user_chapter_watchlist', 'watchlist_notifications',
 ];
 
 try {

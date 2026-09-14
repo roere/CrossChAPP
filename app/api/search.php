@@ -13,6 +13,7 @@ require_once dirname(__DIR__) . '/src/Auth.php';
 require_once dirname(__DIR__) . '/src/RepresentationRequestRepository.php';
 require_once dirname(__DIR__) . '/src/RepresentationCleanupService.php';
 require_once dirname(__DIR__) . '/src/RepresentationExpiryPolicy.php';
+require_once dirname(__DIR__) . '/src/WatchlistRepository.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     JsonResponse::send(['error' => 'Nur POST ist erlaubt.'], 405);
@@ -75,6 +76,7 @@ try {
     );
     Auth::start(); $identity = Auth::user(); $viewerId = $identity !== null ? (int) $identity['user_id'] : null;
     $viewerCanContact = $identity === null || Auth::canUseUserFeatures(is_string($identity['role'] ?? null) ? $identity['role'] : null);
+    $watchlistIds=$identity!==null&&Auth::canUseUserFeatures(is_string($identity['role']??null)?$identity['role']:null)?(new WatchlistRepository($database))->organizationIds((int)$identity['user_id']):[];
     $requestMap = (new RepresentationRequestRepository($database))->activeForOrganizations(array_column($search['results'], 'orgId'), $viewerId, $today, $viewerCanContact);
     foreach ($search['results'] as &$resultItem) $resultItem['representationRequests'] = $requestMap[(int) $resultItem['orgId']] ?? [];
     unset($resultItem);
@@ -96,6 +98,7 @@ try {
             'detail_delay_ms' => BniRequestPolicy::DETAIL_DELAY_MS,
         ],
         'results' => $search['results'],
+        'watchlistOrganizationIds'=>$watchlistIds,
     ]);
 } catch (InvalidArgumentException $exception) {
     JsonResponse::send(['error' => $exception->getMessage()], 400);

@@ -38,6 +38,7 @@ if (isset($_GET['verify'])) {
     exit;
 }
 $isAdmin = Auth::isAdmin();
+$canUseUserFeatures = Auth::canUseUserFeatures();
 $canManageUsers = Auth::canManageUsers();
 $currentUser = Auth::user();
 $currentDatabaseUser = null;
@@ -164,6 +165,15 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <div><dt>Verifikation</dt><dd data-account-field="verificationStatus">Wird geladen …</dd></div>
                     <div><dt>Schlagwörter zu mir</dt><dd id="account-keywords-view"><span class="page-meta">Keine Schlagwörter hinterlegt.</span></dd></div>
                 </dl>
+                <?php if ($canUseUserFeatures): ?>
+                    <section id="account-watchlist" class="account-watchlist" aria-labelledby="account-watchlist-heading">
+                        <h3 id="account-watchlist-heading">Beobachtungsliste</h3>
+                        <label class="watchlist-email-option"><input id="watchlist-email-notifications" type="checkbox"> <span>E-Mail Benachrichtigungen</span></label>
+                        <p id="watchlist-setting-message" class="message" role="status" aria-live="polite"></p>
+                        <h4>Beobachtete Chapter</h4><ul id="watchlist-chapters"><li class="page-meta">Wird geladen …</li></ul>
+                        <h4>Aktuelle Vertretungsgesuche</h4><ul id="watchlist-requests"><li class="page-meta">Wird geladen …</li></ul>
+                    </section>
+                <?php endif; ?>
                 <?php if (!$isAdmin): ?>
                     <section id="my-account-chapter-editor" hidden>
                         <?php $chapterPicker = ['legend'=>'Heimatchapter','optional'=>true,'inputId'=>'account-home-chapter-id','inputName'=>'home_chapter_org_id','countryId'=>'account-home-chapter-country','searchId'=>'account-home-chapter-search','locationId'=>'account-home-chapter-location','clearId'=>'clear-account-home-chapter','clearLabel'=>'Heimatchapter entfernen','selectedId'=>'account-selected-home-chapter','resultsId'=>'account-home-chapter-results','emptyLabel'=>'Kein Heimatchapter ausgewählt.','ariaLabel'=>'Heimatchapter auswählen']; require __DIR__ . '/views/partials/chapter-picker.php'; ?>

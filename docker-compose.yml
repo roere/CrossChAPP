@@ -31,6 +31,7 @@ services:
       CROSSCHAPP_DB_NAME: ${CROSSCHAPP_DB_NAME:-crosschapp}
       CROSSCHAPP_DB_USER: ${CROSSCHAPP_DB_USER:-crosschapp}
       CROSSCHAPP_DB_PASSWORD: ${CROSSCHAPP_DB_PASSWORD:-crosschapp-local}
+      CROSSCHAPP_WATCHLIST_INTERVAL_SECONDS: ${CROSSCHAPP_WATCHLIST_INTERVAL_SECONDS:-1800}
     depends_on:
       db:
         condition: service_healthy

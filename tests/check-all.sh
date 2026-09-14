@@ -61,6 +61,7 @@ run "Global BNI Concurrency" compose_exec php /var/www/tests/bni-global-throttle
 run "BNI Performance Monitor" compose_exec php /var/www/tests/bni-performance.php
 run "User Error Log" compose_exec php /var/www/tests/user-facing-error-log.php
 run "User Keywords" compose_exec php /var/www/tests/user-keywords.php
+run "Watchlist" compose_exec php /var/www/tests/watchlist.php
 run "Search Tests" php_group search
 run "Database Integrity" compose_exec php /var/www/tests/check-database-integrity.php
 run "Isolated Fixture" compose_exec_web php /var/www/tests/check-fixture.php

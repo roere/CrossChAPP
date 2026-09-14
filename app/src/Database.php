@@ -219,6 +219,7 @@ final class Database
         $this->addTableColumnIfMissing('automation_runtime', 'map_lock_token', 'TEXT');
         $this->addTableColumnIfMissing('automation_runtime', 'map_lock_until', 'TEXT');
         $this->addTableColumnIfMissing('automation_runtime', 'map_retry_after_until', 'TEXT');
+        $this->addTableColumnIfMissing('automation_runtime', 'last_watchlist_notification_check_at', 'TEXT');
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS map_refresh_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -259,6 +260,8 @@ final class Database
         $this->addTableColumnIfMissing('users', 'bni_verified_at', 'TEXT');
         $this->addTableColumnIfMissing('users', 'bni_verified_by_user_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL');
         $this->addTableColumnIfMissing('users', 'bni_external_member_ref', 'TEXT');
+        $this->addTableColumnIfMissing('users', 'watchlist_email_enabled', 'INTEGER NOT NULL DEFAULT 0');
+        $this->addTableColumnIfMissing('users', 'watchlist_email_enabled_at', 'TEXT');
         $this->migrateUserManagerRole();
         $this->connection->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_users_home_chapter ON users(home_chapter_org_id)');
@@ -341,6 +344,7 @@ final class Database
             'representation_assignment_cancelled_representative'=>['CrossChAPP – Vertretung storniert',"Hallo {{representative_first_name}},\n\ndie vereinbarte Vertretung am {{requested_date}} für {{chapter}} wurde von {{cancelled_by}} storniert. Der Termin ist wieder für neue Vertretungen freigegeben.\n\nDiese Nachricht wurde automatisch versendet. Bitte antworte nicht auf diese E-Mail."],
         ];
         foreach ($assignmentTemplates as $key=>$template) $statement->execute([':key'=>$key,':subject'=>$template[0],':body'=>$template[1],':updated_at'=>gmdate('Y-m-d\TH:i:s\Z')]);
+        $statement->execute([':key'=>'watchlist_representation_request',':subject'=>'CrossChAPP – Neues Vertretungsgesuch bei {{chapter}}',':body'=>"Hallo,\n\nbei {{chapter}} wurde ein neues Vertretungsgesuch für {{requested_date}} eingestellt.\n\nChapter öffnen: {{chapter_link}}\n\nViele Grüße\n{{app_name}}",':updated_at'=>gmdate('Y-m-d\TH:i:s\Z')]);
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS auth_attempts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -530,6 +534,25 @@ final class Database
             SQL);
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_requests_user_date ON representation_requests(user_id, org_id, request_date)');
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_representation_requests_org_date ON representation_requests(org_id, request_date)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS user_chapter_watchlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,organization_id INTEGER NOT NULL,created_at TEXT NOT NULL,
+                UNIQUE(user_id,organization_id),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(organization_id) REFERENCES organizations(org_id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_watchlist_user ON user_chapter_watchlist(user_id)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_watchlist_organization ON user_chapter_watchlist(organization_id)');
+        $this->connection->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS watchlist_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,representation_request_id INTEGER NOT NULL,
+                channel TEXT NOT NULL,sent_at TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(user_id,representation_request_id,channel),
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY(representation_request_id) REFERENCES representation_requests(id) ON DELETE CASCADE
+            )
+            SQL);
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_watchlist_notifications_user ON watchlist_notifications(user_id)');
+        $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_watchlist_notifications_request ON watchlist_notifications(representation_request_id)');
         $this->connection->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS representation_request_contact_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
