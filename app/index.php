@@ -192,6 +192,20 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                 </div>
             </div>
         </dialog>
+        <?php if ($canUseUserFeatures): ?>
+        <dialog id="remove-watchlist-dialog" class="account-dialog" aria-modal="true" aria-labelledby="remove-watchlist-heading" aria-describedby="remove-watchlist-confirmation">
+            <div class="account-dialog-card">
+                <button id="close-remove-watchlist" type="button" class="dialog-close" aria-label="Entfernen abbrechen">×</button>
+                <h2 id="remove-watchlist-heading">Chapter nicht mehr beobachten?</h2>
+                <p id="remove-watchlist-confirmation"></p>
+                <div id="remove-watchlist-message" class="message" role="alert" aria-live="polite"></div>
+                <div class="registration-actions">
+                    <button id="confirm-remove-watchlist" type="button" class="danger">Entfernen</button>
+                    <button id="cancel-remove-watchlist" type="button" class="secondary">Abbrechen</button>
+                </div>
+            </div>
+        </dialog>
+        <?php endif; ?>
         <dialog id="request-profile-dialog" class="account-dialog" aria-modal="true" aria-labelledby="request-profile-heading"><div class="account-dialog-card"><button id="close-request-profile-icon" type="button" class="dialog-close" aria-label="Profilansicht schließen">×</button><h2 id="request-profile-heading">Über</h2><h3>Schlagwörter</h3><div id="request-profile-keywords" class="keyword-chips"></div><div id="request-profile-message" class="message" role="status" aria-live="polite"></div><div class="registration-actions"><button id="close-request-profile" type="button" class="secondary">Schließen</button></div></div></dialog>
         <?php if (!$isAdmin): ?>
             <dialog id="delete-account-dialog" class="account-dialog" aria-modal="true" aria-labelledby="delete-account-heading">

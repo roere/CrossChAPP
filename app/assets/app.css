@@ -449,9 +449,11 @@ tr.organization:hover { background: #faf7f7; }
 .account-watchlist a { color: var(--bni-red-dark); font-weight: 700; }
 .watchlist-entries { display: grid; gap: .65rem; min-width: 0; }
 .watchlist-entries a { display: block; max-width: 100%; overflow-wrap: anywhere; }
-.watchlist-chapter { display: flex; align-items: flex-start; gap: .6rem; min-width: 0; cursor: pointer; }
-.watchlist-chapter input { flex: 0 0 18px; width: 18px; height: 18px; min-height: 18px; padding: 0; margin: .15rem 0; accent-color: var(--accent); }
-.watchlist-chapter span { min-width: 0; overflow-wrap: anywhere; }
+.watchlist-chapter { display: flex; align-items: center; justify-content: space-between; gap: .6rem; min-width: 0; }
+.watchlist-chapter > span { min-width: 0; overflow-wrap: anywhere; }
+.watchlist-remove { flex: 0 0 auto; }
+.watchlist-remove svg { display: block; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#remove-watchlist-confirmation { overflow-wrap: anywhere; }
 .watchlist-empty { color: var(--muted); }
 .watchlist-email-editor { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .watchlist-email-row { display: inline-flex; align-items: center; gap: .45rem; }

@@ -224,14 +224,17 @@
             updateWatchlistBadge(data);
             watchlistEmail.checked = data.emailNotifications === true;
             const rows = (data.chapters || []).map(chapter => {
-                const label = document.createElement('label'), checkbox = document.createElement('input'), name = document.createElement('span');
-                label.className = 'watchlist-chapter';
-                checkbox.type = 'checkbox'; checkbox.checked = true;
-                checkbox.dataset.removeWatchlistOrgId = String(chapter.organizationId);
+                const row = document.createElement('div'), remove = document.createElement('button'), name = document.createElement('span');
+                row.className = 'watchlist-chapter';
+                remove.type = 'button'; remove.className = 'icon-button secondary watchlist-remove';
+                remove.dataset.removeWatchlistOrgId = String(chapter.organizationId);
+                remove.dataset.chapterName = chapter.chapterName;
+                remove.title = 'Chapter nicht mehr beobachten';
+                remove.setAttribute('aria-label', `${chapter.chapterName} nicht mehr beobachten`);
+                remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg>';
                 name.textContent = chapter.chapterName;
-                checkbox.setAttribute('aria-label', `${chapter.chapterName} nicht mehr beobachten`);
-                label.append(checkbox, name);
-                return label;
+                row.append(name, remove);
+                return row;
             });
             const links = (data.requests || []).map(request => {
                 const link = document.createElement('a');
@@ -253,17 +256,49 @@
             const requests = watchlistData.requests.filter(request => ids.has(Number(request.organizationId)));
             renderWatchlist({...watchlistData, chapters, requests, activeRequestChapterCount: new Set(requests.map(request => request.organizationId)).size});
         });
-        watchlistRequests?.addEventListener('change', async event => {
-            const checkbox = event.target.closest('[data-remove-watchlist-org-id]');
-            if (!checkbox || checkbox.checked || checkbox.disabled) return;
-            checkbox.disabled = true;
-            watchlistMessage.textContent = ''; watchlistMessage.className = 'message';
+        const removeDialog = document.querySelector('#remove-watchlist-dialog');
+        const confirmRemove = document.querySelector('#confirm-remove-watchlist');
+        const cancelRemove = document.querySelector('#cancel-remove-watchlist');
+        const closeRemoveIcon = document.querySelector('#close-remove-watchlist');
+        const removeMessage = document.querySelector('#remove-watchlist-message');
+        let removeTrigger = null, removingWatchlist = false;
+        const closeRemove = () => {
+            if (removingWatchlist) return;
+            removeDialog.close();
+            if (removeTrigger?.isConnected) removeTrigger.focus();
+            else document.querySelector('#account-watchlist')?.focus();
+            removeTrigger = null;
+        };
+        watchlistRequests?.addEventListener('click', event => {
+            const button = event.target.closest('[data-remove-watchlist-org-id]');
+            if (!button || removingWatchlist || removeDialog.open) return;
+            removeTrigger = button;
+            document.querySelector('#remove-watchlist-confirmation').textContent = `Möchtest Du „${button.dataset.chapterName}“ wirklich von Deiner Beobachtungsliste entfernen?`;
+            removeMessage.textContent = ''; removeMessage.className = 'message';
+            removeDialog.showModal(); cancelRemove.focus();
+        });
+        cancelRemove?.addEventListener('click', closeRemove);
+        closeRemoveIcon?.addEventListener('click', closeRemove);
+        removeDialog?.addEventListener('cancel', event => { event.preventDefault(); closeRemove(); });
+        confirmRemove?.addEventListener('click', async () => {
+            if (removingWatchlist || !removeTrigger) return;
+            removingWatchlist = true;
+            confirmRemove.disabled = cancelRemove.disabled = closeRemoveIcon.disabled = true;
+            confirmRemove.textContent = 'Wird entfernt …';
+            removeDialog.setAttribute('aria-busy', 'true');
+            removeMessage.textContent = '';
+            let removed = false;
             try {
-                await changeWatchlist(Number(checkbox.dataset.removeWatchlistOrgId), false);
+                await changeWatchlist(Number(removeTrigger.dataset.removeWatchlistOrgId), false);
+                removed = true;
             } catch (error) {
-                checkbox.checked = true; checkbox.disabled = false;
-                watchlistMessage.textContent = error.message; watchlistMessage.className = 'message error';
+                removeMessage.textContent = error instanceof TypeError ? 'Das Chapter konnte nicht entfernt werden. Bitte versuche es erneut.' : error.message; removeMessage.className = 'message error';
+            } finally {
+                removingWatchlist = false;
+                confirmRemove.disabled = cancelRemove.disabled = closeRemoveIcon.disabled = false;
+                confirmRemove.textContent = 'Entfernen'; removeDialog.removeAttribute('aria-busy');
             }
+            if (removed) closeRemove();
         });
         const loadAccount = async () => {
             const calls=[fetch('/api/auth/account.php'),fetch('/api/auth/keywords.php'),...(watchlistEmail?[fetch('/api/auth/watchlist.php')]:[])],responses=await Promise.all(calls),payload=await responses[0].json(),keywordsPayload=await responses[1].json(),watchlistPayload=watchlistEmail?await responses[2].json():null;

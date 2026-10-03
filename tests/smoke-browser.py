@@ -137,8 +137,8 @@ try:
     assert manager_request['item'] and all(manager_request['item'].get(key)==user_request['item'].get(key) for key in shared_fields) and manager_request['rendered']==user_request['rendered'] and manager_request['item']['displayName']=='Anna A.' and manager_request['item']['canContact'] and not any(key in manager_request['keys'] for key in ('requesterName','requesterFullName','firstName','lastName','userName','contactName','email','user_id')), {'user':user_request,'user_manager':manager_request}
     js("document.querySelector('#result-910001 [data-watchlist-org-id]').click()");time.sleep(.3)
     js("document.querySelector('#account-menu-trigger').click();document.querySelector('#open-my-account').click()");time.sleep(.3)
-    assert js("return document.querySelector('[data-remove-watchlist-org-id=\"910001\"]').checked")
-    js("document.querySelector('[data-remove-watchlist-org-id=\"910001\"]').click()");time.sleep(.3)
+    assert js("return !!document.querySelector('[data-remove-watchlist-org-id=\"910001\"] svg')")
+    js("document.querySelector('[data-remove-watchlist-org-id=\"910001\"]').click();document.querySelector('#confirm-remove-watchlist').click()");time.sleep(.3)
     assert js("return document.querySelector('#my-account-dialog').open&&document.querySelector('#watchlist-requests').textContent==='-'&&document.querySelector('#result-910001 [data-watchlist-org-id]').getAttribute('aria-pressed')==='false'")
     js("document.querySelector('#close-my-account').click()")
     manager_request_logs=wd('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in manager_request_logs if entry.get('level')=='SEVERE'],manager_request_logs
@@ -211,26 +211,42 @@ try:
     window.__accountWatchLocation=location.href;window.__accountWatchDocument=document;
     document.querySelector('#open-my-account').click();
     """);time.sleep(.3)
-    assert js("const e=document.querySelector('#watchlist-requests'),c=[...e.querySelectorAll('input')];return c.length===3&&c.every(x=>x.checked&&x.labels.length===1&&x.tabIndex===0)&&e.textContent.includes('Testchapter Königsforst')&&!e.querySelector('ul,ol,li')&&!e.textContent.includes('Beobachtete Chapter')")
+    assert js("const e=document.querySelector('#watchlist-requests'),c=[...e.querySelectorAll('[data-remove-watchlist-org-id]')];return !e.querySelector('input')&&c.length===3&&c.every(x=>x.querySelector('svg')&&x.tabIndex===0&&x.title==='Chapter nicht mehr beobachten'&&x.getAttribute('aria-label')===x.dataset.chapterName+' nicht mehr beobachten')&&e.textContent.includes('Testchapter Königsforst')&&!e.querySelector('ul,ol,li')&&!e.textContent.includes('Beobachtete Chapter')")
     for width in [390,1440]:
         wd('POST',f'/session/{session}/window/rect',{'width':width,'height':1000})
         geometry=js("const d=document.querySelector('#my-account-dialog');return {dialog:[d.scrollWidth,d.clientWidth],page:[document.documentElement.scrollWidth,innerWidth],outside:[...d.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>d.getBoundingClientRect().right).map(e=>({tag:e.tagName,id:e.id,class:e.className,width:e.getBoundingClientRect().width}))}")
         assert geometry['dialog'][0]<=geometry['dialog'][1] and geometry['page'][0]<=geometry['page'][1],geometry
-    js("window.__accountWatchFail=true;document.querySelector('[data-remove-watchlist-org-id=\"910001\"]').click()")
-    assert js("const c=document.querySelector('[data-remove-watchlist-org-id=\"910001\"]');c.dispatchEvent(new Event('change',{bubbles:true}));return c.disabled")
+    # Opening, cancellation, X and Escape never send DELETE and restore focus.
+    for dismissal in ['cancel-remove-watchlist','close-remove-watchlist','escape']:
+        js("document.querySelector('[data-remove-watchlist-org-id=\"910001\"]').focus()")
+        wd('POST',f'/session/{session}/actions',{'actions':[{'type':'key','id':'account-watch-open','actions':[{'type':'keyDown','value':'\ue007'},{'type':'keyUp','value':'\ue007'}]}]})
+        assert js("return document.querySelector('#remove-watchlist-dialog').open&&document.querySelector('#remove-watchlist-confirmation').textContent==='Möchtest Du „Testchapter Königsforst“ wirklich von Deiner Beobachtungsliste entfernen?'&&!window.__accountWatchCalls.some(c=>c.method==='DELETE')")
+        if dismissal=='escape':
+            wd('POST',f'/session/{session}/actions',{'actions':[{'type':'key','id':'account-watch-escape','actions':[{'type':'keyDown','value':'\ue00c'},{'type':'keyUp','value':'\ue00c'}]}]})
+        else:js(f"document.querySelector('#{dismissal}').click()")
+        assert js("return !document.querySelector('#remove-watchlist-dialog').open&&document.activeElement===document.querySelector('[data-remove-watchlist-org-id=\"910001\"]')&&document.querySelectorAll('[data-remove-watchlist-org-id]').length===3&&!window.__accountWatchCalls.some(c=>c.method==='DELETE')")
+    # Long chapter names also wrap inside the confirmation on mobile.
+    wd('POST',f'/session/{session}/window/rect',{'width':390,'height':1000})
+    js("document.querySelector('[data-remove-watchlist-org-id=\"910003\"]').click()")
+    assert js("const d=document.querySelector('#remove-watchlist-dialog');return d.scrollWidth<=d.clientWidth&&document.documentElement.scrollWidth<=innerWidth")
+    js("document.querySelector('#cancel-remove-watchlist').click()")
+    wd('POST',f'/session/{session}/window/rect',{'width':1440,'height':1000})
+    js("window.__accountWatchFail=true;document.querySelector('[data-remove-watchlist-org-id=\"910001\"]').click();document.querySelector('#confirm-remove-watchlist').click();document.querySelector('#confirm-remove-watchlist').dispatchEvent(new MouseEvent('click',{bubbles:true}))")
+    assert js("return document.querySelector('#confirm-remove-watchlist').disabled&&document.querySelector('#confirm-remove-watchlist').textContent==='Wird entfernt …'")
     time.sleep(.3)
     assert js("return window.__accountWatchCalls.filter(c=>c.method==='DELETE').length===1")
-    assert js("const c=document.querySelector('[data-remove-watchlist-org-id=\"910001\"]');return c.checked&&!c.disabled&&document.querySelector('#watchlist-setting-message').textContent==='Entfernen fehlgeschlagen.'&&document.querySelector('#watchlist-requests').querySelectorAll('a').length===2&&document.querySelector('#watchlist-request-badge').textContent==='2'")
+    assert js("return !!document.querySelector('[data-remove-watchlist-org-id=\"910001\"]')&&!document.querySelector('#confirm-remove-watchlist').disabled&&document.querySelector('#remove-watchlist-dialog').open&&document.querySelector('#remove-watchlist-message').textContent==='Entfernen fehlgeschlagen.'&&document.querySelector('#watchlist-requests').querySelectorAll('a').length===2&&document.querySelector('#watchlist-request-badge').textContent==='2'")
     expected_remove_logs=wd('POST',f'/session/{session}/log',{'type':'browser'});assert not [entry for entry in expected_remove_logs if entry.get('level')=='SEVERE' and '/api/auth/watchlist.php' not in entry.get('message','')],expected_remove_logs
-    js("window.__accountWatchFail=false;window.__accountWatchCalls=[];document.querySelector('[data-remove-watchlist-org-id=\"910001\"]').focus()")
-    wd('POST',f'/session/{session}/actions',{'actions':[{'type':'key','id':'account-watch-key','actions':[{'type':'keyDown','value':' '},{'type':'keyUp','value':' '}]}]});time.sleep(.3)
+    js("window.__accountWatchFail=false;window.__accountWatchCalls=[];document.querySelector('#confirm-remove-watchlist').focus()")
+    wd('POST',f'/session/{session}/actions',{'actions':[{'type':'key','id':'account-watch-key','actions':[{'type':'keyDown','value':'\ue007'},{'type':'keyUp','value':'\ue007'}]}]});time.sleep(.3)
+    assert js("return !document.querySelector('#remove-watchlist-dialog').open")
     removed=js("return {calls:window.__accountWatchCalls,open:document.querySelector('#my-account-dialog').open,same:document===window.__accountWatchDocument&&location.href===window.__accountWatchLocation,rows:document.querySelectorAll('[data-remove-watchlist-org-id]').length,links:[...document.querySelectorAll('#watchlist-requests a')].map(a=>a.getAttribute('href')),badge:document.querySelector('#watchlist-request-badge').textContent,bell:document.querySelector('#result-910001 [data-watchlist-org-id]').getAttribute('aria-pressed'),check:!!document.querySelector('#result-910001 .watchlist-bell-check')}")
     assert removed['calls']==[{'url':'/api/auth/watchlist.php','method':'DELETE'}] and removed['open'] and removed['same'] and removed['rows']==2 and removed['links']==['/bni_testchapter_rhein'] and removed['badge']=='1' and removed['bell']=='false' and not removed['check'],removed
     neutral_bell=js("const b=document.querySelector('#result-910001 [data-watchlist-org-id]');return {title:b.title,tooltip:b.parentElement.querySelector('[role=tooltip]').textContent,aria:b.getAttribute('aria-label')}")
     assert neutral_bell=={'title':'Chapter beobachten. Du erhältst eine Information, wenn jemand aus diesem Chapter eine Vertretung sucht.','tooltip':'Chapter beobachten. Du erhältst eine Information, wenn jemand aus diesem Chapter eine Vertretung sucht.','aria':'Testchapter Königsforst beobachten'},neutral_bell
-    js("document.querySelector('[data-remove-watchlist-org-id=\"910002\"]').click()");time.sleep(.3)
-    assert js("const e=document.querySelector('#watchlist-requests');return e.querySelectorAll('input').length===1&&!e.querySelector('a')&&!e.querySelector('.watchlist-empty')&&document.querySelector('#watchlist-request-badge').hidden")
-    js("document.querySelector('[data-remove-watchlist-org-id=\"910003\"]').click()");time.sleep(.3)
+    js("document.querySelector('[data-remove-watchlist-org-id=\"910002\"]').click();document.querySelector('#confirm-remove-watchlist').click()");time.sleep(.3)
+    assert js("const e=document.querySelector('#watchlist-requests');return e.querySelectorAll('[data-remove-watchlist-org-id]').length===1&&!e.querySelector('a')&&!e.querySelector('.watchlist-empty')&&document.querySelector('#watchlist-request-badge').hidden")
+    js("document.querySelector('[data-remove-watchlist-org-id=\"910003\"]').click();document.querySelector('#confirm-remove-watchlist').click()");time.sleep(.3)
     assert js("return document.querySelector('#watchlist-requests').textContent==='-'&&document.querySelector('#watchlist-requests').children.length===1")
     js("window.fetch=window.__accountWatchOriginal;document.querySelector('#close-my-account').click();document.querySelector('#open-my-account').click()");time.sleep(.3)
     copied_link=js("window.__copiedChapterLink='';Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:value=>{window.__copiedChapterLink=value;return Promise.resolve();}}});document.querySelector('#copy-home-chapter-link').click();return new Promise(resolve=>setTimeout(()=>resolve({url:window.__copiedChapterLink,message:document.querySelector('#my-account-message').textContent}),50))")
