@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
-TEST_DIR=$(mktemp -d /tmp/crosschapp-check-XXXXXX)
+TEST_DIR=$(mktemp -d "$ROOT/tests/.crosschapp-check-XXXXXX")
 export CROSSCHAPP_TEST_DATA_DIR="$TEST_DIR/data"
 export CROSSCHAPP_TEST_PORT="${CROSSCHAPP_TEST_PORT:-18082}"
 COMPOSE=(docker compose -p "crosschapp-check-$$" -f docker-compose.test.yml)
@@ -15,7 +15,7 @@ cleanup() {
     if [[ -n "$CHROMEDRIVER_PID" ]]; then kill "$CHROMEDRIVER_PID" 2>/dev/null || true; wait "$CHROMEDRIVER_PID" 2>/dev/null || true; fi
     "${COMPOSE[@]}" exec -T test-web sh -lc 'find /var/www/data -mindepth 1 -maxdepth 1 -delete' >/dev/null 2>&1 || true
     "${COMPOSE[@]}" down --volumes --remove-orphans >/dev/null 2>&1 || true
-    [[ "$TEST_DIR" == /tmp/crosschapp-check-* ]] && rm -rf -- "$TEST_DIR"
+    [[ "$TEST_DIR" == "$ROOT"/tests/.crosschapp-check-* ]] && rm -rf -- "$TEST_DIR"
 }
 trap cleanup EXIT INT TERM
 

@@ -449,6 +449,9 @@ tr.organization:hover { background: #faf7f7; }
 .account-watchlist a { color: var(--bni-red-dark); font-weight: 700; }
 .watchlist-entries { display: grid; gap: .65rem; min-width: 0; }
 .watchlist-entries a { display: block; max-width: 100%; overflow-wrap: anywhere; }
+.watchlist-chapter { display: flex; align-items: flex-start; gap: .6rem; min-width: 0; cursor: pointer; }
+.watchlist-chapter input { flex: 0 0 18px; width: 18px; height: 18px; min-height: 18px; padding: 0; margin: .15rem 0; accent-color: var(--accent); }
+.watchlist-chapter span { min-width: 0; overflow-wrap: anywhere; }
 .watchlist-empty { color: var(--muted); }
 .watchlist-email-editor { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .watchlist-email-row { display: inline-flex; align-items: center; gap: .45rem; }
@@ -635,6 +638,9 @@ button.danger:hover { border-color: #8f101d; background: #8f101d; }
     .guide-step:nth-child(even) { direction: ltr; }
     .guide-cta-actions { display: grid; width: 100%; }
     .account-details { grid-template-columns: 1fr; }
+    #my-account-dialog .watchlist-email-row { position: relative; max-width: 100%; }
+    #my-account-dialog .watchlist-email-row > .field-tooltip { position: static; }
+    #my-account-dialog #watchlist-email-tooltip { left: 0; width: 100%; transform: none; }
     .request-contact-identity { grid-template-columns: 1fr; }
     .request-contact-identity label:last-of-type { grid-column: auto; }
     .shell { width: min(100% - 1rem, 1480px); }

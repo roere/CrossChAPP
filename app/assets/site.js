@@ -217,7 +217,54 @@
         copyChapterLink?.addEventListener('click',async()=>{const url=copyChapterLink.dataset.url;if(!url)return;try{await navigator.clipboard.writeText(url);message.textContent='Chapterlink kopiert.';message.className='message success';}catch{message.textContent='Der Chapterlink konnte nicht kopiert werden.';message.className='message error';}});
         const renderKeywords=()=>{const empty=()=>{const text=document.createElement('span');text.className='page-meta';text.textContent='Keine Schlagwörter hinterlegt.';return text;},chip=(item,editable)=>{const span=document.createElement('span');span.className='keyword-chip';span.append(document.createTextNode(item.keyword));if(editable){const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title=`Schlagwort ${item.keyword} löschen`;remove.setAttribute('aria-label',remove.title);remove.dataset.keywordId=String(item.id);span.append(remove);}return span;};keywordView?.replaceChildren(...(accountKeywords.length?accountKeywords.map(item=>chip(item,false)):[empty()]));keywordEditList?.replaceChildren(...(accountKeywords.length?accountKeywords.map(item=>chip(item,true)):[empty()]));const maximum=accountKeywords.length>=10;if(keywordInput)keywordInput.disabled=maximum;if(saveKeyword)saveKeyword.disabled=maximum;if(keywordLimit)keywordLimit.hidden=!maximum;};
         const updateKeywords=keywords=>{accountKeywords=Array.isArray(keywords)?keywords:[];renderKeywords();};
-        const renderWatchlist=data=>{if(!watchlistEmail)return;updateWatchlistBadge(data);watchlistEmail.checked=data.emailNotifications===true;const links=(data.requests||[]).map(request=>{const link=document.createElement('a');link.href=request.chapterLink||'/?view=crosschaptern';link.textContent=`${request.chapterName} · ${formatDateOnly(request.requestedDate)}`;return link;});if(links.length)watchlistRequests.replaceChildren(...links);else{const empty=document.createElement('span');empty.className='watchlist-empty';empty.textContent='-';watchlistRequests.replaceChildren(empty);}};
+        let watchlistData = null;
+        const renderWatchlist = data => {
+            if (!watchlistEmail) return;
+            watchlistData = data;
+            updateWatchlistBadge(data);
+            watchlistEmail.checked = data.emailNotifications === true;
+            const rows = (data.chapters || []).map(chapter => {
+                const label = document.createElement('label'), checkbox = document.createElement('input'), name = document.createElement('span');
+                label.className = 'watchlist-chapter';
+                checkbox.type = 'checkbox'; checkbox.checked = true;
+                checkbox.dataset.removeWatchlistOrgId = String(chapter.organizationId);
+                name.textContent = chapter.chapterName;
+                checkbox.setAttribute('aria-label', `${chapter.chapterName} nicht mehr beobachten`);
+                label.append(checkbox, name);
+                return label;
+            });
+            const links = (data.requests || []).map(request => {
+                const link = document.createElement('a');
+                link.href = request.chapterLink || '/?view=crosschaptern';
+                link.textContent = `${request.chapterName} · ${formatDateOnly(request.requestedDate)}`;
+                return link;
+            });
+            if (rows.length) watchlistRequests.replaceChildren(...rows, ...links);
+            else {
+                const empty = document.createElement('span');
+                empty.className = 'watchlist-empty'; empty.textContent = '-';
+                watchlistRequests.replaceChildren(empty);
+            }
+        };
+        document.addEventListener('crosschapp:watchlist-changed', event => {
+            if (!watchlistData) return;
+            const ids = new Set(event.detail.organizationIds.map(Number));
+            const chapters = watchlistData.chapters.filter(chapter => ids.has(Number(chapter.organizationId)));
+            const requests = watchlistData.requests.filter(request => ids.has(Number(request.organizationId)));
+            renderWatchlist({...watchlistData, chapters, requests, activeRequestChapterCount: new Set(requests.map(request => request.organizationId)).size});
+        });
+        watchlistRequests?.addEventListener('change', async event => {
+            const checkbox = event.target.closest('[data-remove-watchlist-org-id]');
+            if (!checkbox || checkbox.checked || checkbox.disabled) return;
+            checkbox.disabled = true;
+            watchlistMessage.textContent = ''; watchlistMessage.className = 'message';
+            try {
+                await changeWatchlist(Number(checkbox.dataset.removeWatchlistOrgId), false);
+            } catch (error) {
+                checkbox.checked = true; checkbox.disabled = false;
+                watchlistMessage.textContent = error.message; watchlistMessage.className = 'message error';
+            }
+        });
         const loadAccount = async () => {
             const calls=[fetch('/api/auth/account.php'),fetch('/api/auth/keywords.php'),...(watchlistEmail?[fetch('/api/auth/watchlist.php')]:[])],responses=await Promise.all(calls),payload=await responses[0].json(),keywordsPayload=await responses[1].json(),watchlistPayload=watchlistEmail?await responses[2].json():null;
             if (!responses.every(response=>response.ok)) throw new Error(payload.error||keywordsPayload.error||watchlistPayload?.error || 'Die Kontodaten konnten nicht geladen werden.');
@@ -528,7 +575,23 @@
 
     function watchlistButton(chapter){const wrapper=document.createElement('span'),button=document.createElement('button'),tooltip=document.createElement('span');wrapper.className='field-tooltip watchlist-tooltip';button.type='button';button.className='watchlist-button secondary';button.dataset.watchlistOrgId=String(chapter.orgId);button.dataset.chapterName=chapter.chapterName||'Chapter';tooltip.id=`watchlist-tooltip-${chapter.orgId}`;tooltip.setAttribute('role','tooltip');button.setAttribute('aria-describedby',tooltip.id);wrapper.append(button,tooltip);renderWatchlistButton(button,searchState.watched.has(Number(chapter.orgId)));return wrapper;}
     function renderWatchlistButton(button,watched){const chapter=button.dataset.chapterName,title=watched?'Chapter nicht mehr beobachten. Du erhältst keine Information mehr, wenn jemand aus diesem Chapter eine Vertretung sucht.':'Chapter beobachten. Du erhältst eine Information, wenn jemand aus diesem Chapter eine Vertretung sucht.';button.dataset.watched=String(watched);button.title=title;button.setAttribute('aria-label',`${chapter} ${watched?'nicht mehr beobachten':'beobachten'}`);button.setAttribute('aria-pressed',String(watched));const tooltip=button.parentElement?.querySelector('[role="tooltip"]');if(tooltip)tooltip.textContent=title;button.innerHTML=`<svg class="watchlist-bell-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="watchlist-bell-shape" d="M6.5 9a5.5 5.5 0 0 1 11 0v3.25L20 16H4l2.5-3.75V9Zm3.5 10h4"/>${watched?'<g class="watchlist-bell-check"><circle cx="18" cy="6" r="4"/><path d="m16.2 6 1.2 1.2 2.4-2.4"/></g>':''}</svg>`;}
-    async function toggleWatchlist(event){const button=event.target.closest('[data-watchlist-org-id]');if(!button)return;event.stopPropagation();const wasWatched=button.dataset.watched==='true',orgId=Number(button.dataset.watchlistOrgId);button.disabled=true;try{const response=await fetch('/api/auth/watchlist.php',{method:wasWatched?'DELETE':'POST',headers:jsonHeaders,body:JSON.stringify({organization_id:orgId})}),payload=await response.json();if(!response.ok)throw new Error(payload.error||'Die Beobachtungsliste konnte nicht gespeichert werden.');if(wasWatched)searchState.watched.delete(orgId);else searchState.watched.add(orgId);renderWatchlistButton(button,!wasWatched);await refreshWatchlistBadge();}catch(error){const message=document.querySelector('#search-message');message.textContent=error.message;message.className='message error';renderWatchlistButton(button,wasWatched);}finally{button.disabled=false;}}
+    async function changeWatchlist(orgId, watched) {
+        const response = await fetch('/api/auth/watchlist.php', {method: watched ? 'POST' : 'DELETE', headers: jsonHeaders, body: JSON.stringify({organization_id: orgId})});
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || 'Die Beobachtungsliste konnte nicht gespeichert werden.');
+        searchState.watched = new Set(payload.organizationIds.map(Number));
+        document.querySelectorAll('[data-watchlist-org-id]').forEach(button => renderWatchlistButton(button, searchState.watched.has(Number(button.dataset.watchlistOrgId))));
+        document.dispatchEvent(new CustomEvent('crosschapp:watchlist-changed', {detail: payload}));
+    }
+    async function toggleWatchlist(event) {
+        const button = event.target.closest('[data-watchlist-org-id]');
+        if (!button || button.disabled) return;
+        event.stopPropagation();
+        const wasWatched = button.dataset.watched === 'true'; button.disabled = true;
+        try { await changeWatchlist(Number(button.dataset.watchlistOrgId), !wasWatched); await refreshWatchlistBadge(); }
+        catch (error) { const message = document.querySelector('#search-message'); message.textContent = error.message; message.className = 'message error'; renderWatchlistButton(button, wasWatched); }
+        finally { button.disabled = false; }
+    }
 
     function representationRequests(chapter) {
         const requests = chapter.representationRequests || []; if (!requests.length) return null;
