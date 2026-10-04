@@ -456,6 +456,7 @@ tr.organization:hover { background: #faf7f7; }
 #remove-watchlist-confirmation { overflow-wrap: anywhere; }
 .watchlist-empty { color: var(--muted); }
 .watchlist-email-editor { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+#my-account-dialog .watchlist-email-editor > .message:empty { display: none; }
 .watchlist-email-row { display: inline-flex; align-items: center; gap: .45rem; }
 .watchlist-email-option { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; }
 .watchlist-email-option input { width: 18px; height: 18px; accent-color: var(--accent); }
@@ -642,7 +643,7 @@ button.danger:hover { border-color: #8f101d; background: #8f101d; }
     .account-details { grid-template-columns: 1fr; }
     #my-account-dialog .watchlist-email-row { position: relative; max-width: 100%; }
     #my-account-dialog .watchlist-email-row > .field-tooltip { position: static; }
-    #my-account-dialog #watchlist-email-tooltip { left: 0; width: 100%; transform: none; }
+    #my-account-dialog .watchlist-email-row [role="tooltip"] { left: 0; width: 100%; transform: none; }
     .request-contact-identity { grid-template-columns: 1fr; }
     .request-contact-identity label:last-of-type { grid-column: auto; }
     .shell { width: min(100% - 1rem, 1480px); }
@@ -710,3 +711,15 @@ button.danger:hover { border-color: #8f101d; background: #8f101d; }
     .representation-map-dialog-card { padding: 1rem; }
     .representation-map { height: min(380px, 52vh); }
 }
+
+.watchlist-push-editor { margin: .5rem 0 0; }
+.watchlist-push-editor .message { margin-top: .35rem; }
+.server-load-table { max-height: 360px; overflow: auto; }
+.server-load-table th button { border: 0; padding: .25rem; background: transparent; color: inherit; min-height: 32px; white-space: normal; }
+.server-load-table th { white-space: normal; }
+.server-load-table table { min-width: 700px; }
+#server-load-panel .misc-content { min-width: 0; }
+#server-load-panel .performance-stats { min-width: 0; }
+#server-load-panel .stat-value { overflow-wrap: anywhere; }
+#server-load-panel .section-heading { flex-wrap: wrap; }
+#server-load-panel .section-heading > div { min-width: 0; flex: 1 1 280px; }

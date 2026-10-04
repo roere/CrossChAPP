@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class MysqlSchema
 {
-    public const LATEST_VERSION = 12;
+    public const LATEST_VERSION = 13;
 
     public static function migrate(PDO $db): void
     {
@@ -67,6 +67,11 @@ final class MysqlSchema
         if($version<10){$engine=' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';$db->exec("CREATE TABLE IF NOT EXISTS user_keywords(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT NOT NULL,keyword VARCHAR(40) NOT NULL,normalized_keyword VARCHAR(40) NOT NULL,created_at VARCHAR(32) NOT NULL,UNIQUE KEY uq_user_keywords_normalized(user_id,normalized_keyword),INDEX idx_user_keywords_user(user_id),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)$engine");$db->exec("INSERT INTO schema_migrations(version,applied_at)VALUES(10,UTC_TIMESTAMP())");}
         if($version<11){foreach(['throttle_reserved_at_ms BIGINT NULL','throttle_wait_ms BIGINT NULL']as$definition){[$column]=explode(' ',$definition,2);$exists=(int)$db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='bni_request_events' AND COLUMN_NAME='{$column}'")->fetchColumn();if($exists===0)$db->exec("ALTER TABLE bni_request_events ADD COLUMN {$definition}");}$db->exec("INSERT INTO schema_migrations(version,applied_at)VALUES(11,UTC_TIMESTAMP())");}
         if($version<12){$engine=' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';foreach(['watchlist_email_enabled TINYINT(1) NOT NULL DEFAULT 0','watchlist_email_enabled_at VARCHAR(32) NULL']as$definition){[$column]=explode(' ',$definition,2);$exists=(int)$db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='users' AND COLUMN_NAME='{$column}'")->fetchColumn();if($exists===0)$db->exec("ALTER TABLE users ADD COLUMN {$definition}");}$runtimeExists=(int)$db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='automation_runtime' AND COLUMN_NAME='last_watchlist_notification_check_at'")->fetchColumn();if($runtimeExists===0)$db->exec("ALTER TABLE automation_runtime ADD COLUMN last_watchlist_notification_check_at VARCHAR(32) NULL");$db->exec("CREATE TABLE IF NOT EXISTS user_chapter_watchlist(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT NOT NULL,organization_id BIGINT NOT NULL,created_at VARCHAR(32) NOT NULL,UNIQUE KEY uq_watchlist_user_organization(user_id,organization_id),INDEX idx_watchlist_user(user_id),INDEX idx_watchlist_organization(organization_id),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(organization_id) REFERENCES organizations(org_id) ON DELETE CASCADE)$engine");$db->exec("CREATE TABLE IF NOT EXISTS watchlist_notifications(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT NOT NULL,representation_request_id BIGINT NOT NULL,channel VARCHAR(20) NOT NULL,sent_at VARCHAR(32) NOT NULL,created_at VARCHAR(32) NOT NULL,UNIQUE KEY uq_watchlist_notification(user_id,representation_request_id,channel),INDEX idx_watchlist_notifications_user(user_id),INDEX idx_watchlist_notifications_request(representation_request_id),FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,FOREIGN KEY(representation_request_id) REFERENCES representation_requests(id) ON DELETE CASCADE)$engine");$db->exec("INSERT INTO schema_migrations(version,applied_at)VALUES(12,UTC_TIMESTAMP())");}
+        if ($version < 13) {
+            require_once __DIR__.'/PushSchema.php';
+            PushSchema::migrate($db);
+            $db->exec("INSERT INTO schema_migrations(version,applied_at) VALUES(13,UTC_TIMESTAMP())");
+        }
         if (getenv('CROSSCHAPP_DB_SKIP_SEED') === '1') {
             return;
         }

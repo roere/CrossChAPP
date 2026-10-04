@@ -263,6 +263,7 @@ require_once __DIR__ . '/../src/BniRequestPolicy.php';
             <div class="auth-actions"><button id="confirm-cancel-invitation" type="button">Widerrufen</button><button type="submit" class="secondary">Abbrechen</button></div>
         </form>
     </dialog><?php endif; ?>
+    <?php if ($isAdmin) require __DIR__.'/partials/server-load.php'; ?>
     <?php if ($isAdmin): ?><details id="reports-panel" class="panel misc-panel"><summary>Meldungen</summary><div class="misc-content">
         <section id="user-error-monitor" aria-labelledby="user-error-heading">
             <p class="section-kicker">Anwendersichtbare Fehler</p><h2 id="user-error-heading">Letzte Meldungen</h2>

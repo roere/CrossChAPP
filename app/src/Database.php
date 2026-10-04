@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/MysqlSchema.php';
+require_once __DIR__ . '/PushSchema.php';
 require_once __DIR__ . '/ChapterShortLink.php';
 
 final class Database
@@ -412,6 +413,7 @@ final class Database
         $this->connection->exec('CREATE INDEX IF NOT EXISTS idx_user_invitations_email_status ON user_invitations(email, status, expires_at)');
         $this->connection->exec("CREATE UNIQUE INDEX IF NOT EXISTS uq_user_invitations_pending_email ON user_invitations(LOWER(email)) WHERE status = 'pending'");
         $this->createRepresentationSchema();
+        PushSchema::migrate($this->connection);
     }
 
     private function migrateUserManagerRole(): void

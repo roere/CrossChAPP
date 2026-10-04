@@ -25,6 +25,10 @@ services:
       CROSSCHAPP_DB_NAME: crosschapp_test
       CROSSCHAPP_DB_USER: crosschapp_test
       CROSSCHAPP_DB_PASSWORD: test-only-password
+      # Deliberately synthetic VAPID placeholders; the test guard forbids any real push transport.
+      CROSSCHAPP_VAPID_PUBLIC_KEY: "BAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE"
+      CROSSCHAPP_VAPID_PRIVATE_KEY: "not-a-real-key-test-only"
+      CROSSCHAPP_VAPID_SUBJECT: "mailto:push@example.test"
       CROSSCHAPP_TEST_MODE: "1"
       APP_BASE_URL: "http://127.0.0.1:${CROSSCHAPP_TEST_PORT:-18082}"
       CROSSCHAPP_DISABLE_EXTERNAL_HTTP: "1"

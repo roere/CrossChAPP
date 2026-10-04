@@ -3,3 +3,6 @@
 /data/geocoder.lock
 /.env.production
 /backups/
+
+# Private local Web Push test configuration and isolated data
+/.local-push-test/

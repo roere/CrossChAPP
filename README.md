@@ -292,3 +292,69 @@ Dieser unabhängige Endpunkt liest weiterhin die öffentliche Mitgliederliste de
 - Ohne konfigurierte SMTP-Verbindung können Bestätigungs- und Reset-Nachrichten nicht extern zugestellt werden.
 - Ein vollständiger Benutzerprofilbereich ist noch nicht umgesetzt; nach dem Login wird zunächst nur der Kontoname angezeigt.
 - Geocoding hängt von der Verfügbarkeit des öffentlichen Nominatim-Dienstes ab.
+
+### Web Push und Serverlast
+
+Web Push ist ein zusätzlicher Kanal der Chapter-Watchlist. In „Mein Konto“ können
+`user` und `user_manager` Benachrichtigungen pro Browser/Gerät aktivieren. Die
+Berechtigungsabfrage erfolgt ausschließlich beim Aktivieren. Mehrere Geräte sind
+möglich; Deaktivieren betrifft das aktuelle Gerät. HTTPS (lokal auch localhost)
+und ein Browser mit Push API, Notifications und Service Worker sind erforderlich.
+Auf iOS/iPadOS ist Web Push je nach Nutzungssituation erst in einer auf dem
+Home-Bildschirm installierten Web-App verfügbar; eine vollständige PWA wird hier
+nicht eingerichtet. Der Service Worker `/service-worker.js` verarbeitet nur Push
+und Benachrichtigungsklicks und legt keinen Offline-Cache an.
+
+Die Library `minishlink/web-push` übernimmt Web-Push/VAPID und Verschlüsselung.
+Serverseitig werden `CROSSCHAPP_VAPID_PUBLIC_KEY`,
+`CROSSCHAPP_VAPID_PRIVATE_KEY` und `CROSSCHAPP_VAPID_SUBJECT` (mailto- oder
+HTTPS-Kontaktadresse) benötigt. Die Beispieldateien enthalten ausschließlich leere
+Werte. Einen stabilen Schlüsselsatz außerhalb des Repositorys mit der VAPID-Funktion
+der Library erzeugen und über Server-ENV bereitstellen; private Schlüssel niemals
+an Browser, Logs oder Git übergeben. Ohne Konfiguration ist Push nicht verfügbar.
+Dieser Auftrag erzeugt und aktiviert keine echten Schlüssel.
+
+SQLite und MariaDB (Schema-Version 13) erhalten additive Tabellen:
+`push_subscriptions` (Geräte, eindeutiger Endpoint-Hash, browserseitige Schlüssel,
+Aktivierungszeit), `push_deliveries` (Gesuch/Gerät, Status, Retry-Lease) und
+`push_runs` (ausschließlich technische Messwerte). Account-Löschung entfernt
+Geräte und ihre Zustellstatus über Fremdschlüssel. Die Subscription-API erzwingt
+Session-Benutzer, bestehende Rollen und CSRF; Endpoints und Geräte-Schlüssel
+erscheinen weder im Adminmonitor noch in dessen API. Ausgehende URLs sind auf
+bekannte Browser-Push-Dienste begrenzt, HTTPS wird erzwungen und Redirects sind
+abgeschaltet. Weitere Push-Dienste erfordern eine bewusste Ergänzung der Allowlist.
+
+`WatchlistNotificationRunner` nutzt denselben konfigurierbaren Lauf für E-Mail
+und Push; das Intervall bleibt unverändert. Vor Beobachtung oder Geräteaktivierung
+vorhandene Gesuche, eigene und abgelaufene Gesuche werden ausgeschlossen.
+`watchlist_notifications` protokolliert den Kanal `push` einmal pro Benutzer und
+Gesuch. Zustellungen an einzelne Geräte werden separat erfasst: erfolgreiche
+Geräte werden nicht erneut bedient, temporär fehlgeschlagene Geräte frühestens
+nach fünf Minuten und im nächsten regulären Watchlist-Lauf. 404/410 entfernt das
+Gerät. Pro Lauf werden maximal 500 Zustellungen ausgewählt; nach 30 Sekunden
+beginnen keine weiteren Versuche (ein bereits laufender Versuch hat bis zu zehn
+Sekunden Timeout). Kein zweiter Daemon und keine BNI-Anfragen.
+
+Der eigenständige, ausschließlich für Volladmin verfügbare Hauptblock
+„Serverlast“ liest lokale Daten über `/api/admin/server-load.php`. Er teilt den
+Refresh-Timer und dessen Intervall mit dem bestehenden Leistungsmonitor. Er zeigt
+Load Average in der Sicht des Containers, Cgroup-Speicher soweit verfügbar,
+PHP-Prozessspeicher und letzten Worker-Heartbeat. CPU-Prozentwerte werden nicht
+vorgegeben. Es gibt keine erfundene Bewertung der Serverauslastung oder
+künstliche historische Serverwerte.
+
+Push-Läufe messen reale Start-/Endzeit, Dauer mit monotoner Uhr, CPU-Prozesszeit
+soweit verfügbar, bearbeitete Benutzer/Gesuch-Paare, Geräte, Versuche, angenommene
+Zustellungen, Fehler und entfernte Geräte. Annahme durch den Push-Dienst bestätigt
+keine Anzeige am Gerät. Verarbeitungszeit enthält Netzwerkwartezeit und bedeutet
+keine CPU-Auslastung. Zwei native SVG-Grafiken zeigen 15-Minuten-Summen über 24 h;
+die sortierbare Tabelle ist auf 200 Läufe beschränkt. Lauf- und technische
+Zustelldaten werden nach 30 Tagen im bestehenden Worker bereinigt; erfolgreiche
+fachliche Watchlist-Belege bleiben für die Deduplizierung erhalten. Monitoring
+speichert weder Nachrichtentexte noch Endpoints oder Benutzerkennungen.
+
+`./tests/check-all.sh` prüft den Kanal mit einem Fake-Transport auf SQLite und
+MariaDB und prüft Browseraktionen, Rechte, CSRF und Monitoring. Im Testmodus und
+bei `CROSSCHAPP_DISABLE_EXTERNAL_HTTP=1` ist der echte Push-Transport unabhängig
+von VAPID-Konfiguration vollständig gesperrt. Die isolierte Compose-Testumgebung
+verwendet ausschließlich synthetische, nicht funktionsfähige VAPID-Platzhalter.

@@ -102,6 +102,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <link rel="stylesheet" href="/assets/app.css?v=<?= $assetVersion('app.css') ?>">
     <script src="/assets/chapter-picker.js?v=<?= $assetVersion('chapter-picker.js') ?>" defer></script>
     <?php if ($requestedView === 'crosschaptern' || $requestedView === 'vertretung'): ?><script src="/assets/map.js?v=<?= $assetVersion('map.js') ?>" defer></script><?php endif; ?>
+    <script src="/assets/push.js?v=<?= $assetVersion('push.js') ?>" defer></script>
     <script src="/assets/site.js?v=<?= $assetVersion('site.js') ?>" defer></script>
     <?php if ($requestedView === 'vertretung' || $requestedView === 'vertretung-finden'): ?><script src="/assets/date-picker.js?v=<?= $assetVersion('date-picker.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'vertretung' || ($requestedView === 'admin' && $canManageUsers)): ?><script src="/assets/sort-utils.js?v=<?= $assetVersion('sort-utils.js') ?>" defer></script><?php endif; ?>
@@ -109,6 +110,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     <?php if ($requestedView === 'vertretung-finden'): ?><script src="/assets/representation-find.js?v=<?= $assetVersion('representation-find.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'representation-accept'): ?><script src="/assets/representation-accept.js?v=<?= $assetVersion('representation-accept.js') ?>" defer></script><?php endif; ?>
     <?php if (($requestedView === 'vertretung' || $requestedView === 'vertretung-finden') && $currentUser !== null): ?><script src="/assets/representation-assignments.js?v=<?= $assetVersion('representation-assignments.js') ?>" defer></script><?php endif; ?>
+    <?php if ($requestedView === 'admin' && $isAdmin): ?><script src="/assets/server-load.js?v=<?= $assetVersion('server-load.js') ?>" defer></script><?php endif; ?>
     <?php if ($requestedView === 'admin' && $canManageUsers): ?><script src="/assets/app.js?v=<?= $assetVersion('app.js') ?>" defer></script><?php endif; ?>
 </head>
 <body>
@@ -183,6 +185,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     </section>
                 <?php endif; ?>
                 <?php if ($canUseUserFeatures): ?><div class="watchlist-email-editor"><span class="watchlist-email-row"><label class="watchlist-email-option"><input id="watchlist-email-notifications" type="checkbox" aria-describedby="watchlist-email-tooltip"> <span>E-Mail Benachrichtigungen</span></label><span class="field-tooltip"><button type="button" aria-label="Hinweis zu E-Mail Benachrichtigungen" aria-describedby="watchlist-email-tooltip">i</button><span id="watchlist-email-tooltip" role="tooltip">Per E-Mail informiert werden, wenn jemand aus einem Chapter, das Du beobachtest, eine Vertretung sucht.</span></span></span><p id="watchlist-setting-message" class="message" role="status" aria-live="polite"></p></div><?php endif; ?>
+                <?php if ($canUseUserFeatures): ?><div class="watchlist-push-editor"><span class="watchlist-email-row"><label class="watchlist-email-option"><input id="watchlist-push-notifications" type="checkbox" disabled aria-describedby="watchlist-push-tooltip watchlist-push-message"> <span>Push-Benachrichtigungen</span></label><span class="field-tooltip"><button type="button" aria-label="Hinweis zu Push-Benachrichtigungen" aria-describedby="watchlist-push-tooltip">i</button><span id="watchlist-push-tooltip" role="tooltip">Benachrichtigungen direkt auf diesem Gerät erhalten, wenn jemand aus einem Chapter, das Du beobachtest, eine Vertretung sucht.</span></span></span><p id="watchlist-push-message" class="message" role="status" aria-live="polite"></p></div><?php endif; ?>
                 <?php if (!$isAdmin): ?><div id="my-account-edit-actions" class="registration-actions" hidden><button id="save-account-home-chapter" type="button">Speichern</button><button id="cancel-account-edit" type="button" class="secondary">Abbrechen</button></div><?php endif; ?>
                 <div id="my-account-message" class="message" role="alert" aria-live="polite"></div>
                 <div id="my-account-actions" class="registration-actions">
@@ -262,5 +265,6 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
     }
     ?>
     <footer class="site-footer"><div class="shell"><nav aria-label="Rechtliche Informationen"><a href="/?view=impressum">Impressum</a><span aria-hidden="true">·</span><a href="/?view=datenschutz">Datenschutzerklärung</a></nav></div></footer>
+
 </body>
 </html>
