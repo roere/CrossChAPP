@@ -361,6 +361,7 @@ tr.organization:hover { background: #faf7f7; }
 .result-limit-options button:hover, .batch-size-options button:hover { position: relative; z-index: 1; color: white; border-color: var(--bni-red-dark); background: var(--bni-red-dark); }
 .result-limit-options button[aria-pressed="true"], .batch-size-options button[aria-pressed="true"] { position: relative; z-index: 2; color: white; border-color: var(--bni-red); background: var(--bni-red); }
 .search-submit { min-height: 52px; justify-self: start; padding-inline: 2.1rem; font-size: .95rem; }
+.chapter-search-filters { display: grid; gap: .5rem; }
 .representation-request-filter { display: inline-flex; align-items: center; justify-self: start; gap: .6rem; cursor: pointer; font-weight: 700; }
 .representation-request-filter input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: 0 0 auto; }
 .search-panel .message { margin-top: .65rem; }

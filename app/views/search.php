@@ -49,8 +49,10 @@
                 </div>
             </div>
 
-            <label class="representation-request-filter"><input type="checkbox" name="has_representation_requests"> <span>Nur Chapter mit Vertretungsgesuchen anzeigen</span></label>
-            <label class="representation-request-filter"><input type="checkbox" name="include_forming_chapters"> <span>Chapter in Gründung anzeigen</span></label>
+            <div class="chapter-search-filters">
+                <label class="representation-request-filter"><input type="checkbox" name="has_representation_requests"> <span>Nur Chapter mit Vertretungsgesuchen anzeigen</span></label>
+                <label class="representation-request-filter"><input type="checkbox" name="include_forming_chapters"> <span>Chapter in Gründung anzeigen</span></label>
+            </div>
             <button id="search-button" type="submit" class="search-submit">Treffen finden</button>
         </form>
         <div id="search-message" class="message<?= $shortLinkNotFound ? ' error' : '' ?>" role="status" aria-live="polite"><?= $shortLinkNotFound ? 'Das angeforderte Chapter wurde nicht gefunden.' : '' ?></div>
