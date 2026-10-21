@@ -23,10 +23,14 @@ final class ChapterSearchService
         bool $hasRepresentationRequests = false,
         ?string $today = null,
         ?int $organizationId = null,
+        bool $includeFormingChapters = false,
     ): array
     {
         $results = [];
         foreach ($this->repository->searchableChapters($hasRepresentationRequests, $today, $organizationId) as $chapter) {
+            if (!in_array($chapter['orgType'], $includeFormingChapters ? ['CHAPTER', 'CORE_GROUP'] : ['CHAPTER'], true)) {
+                continue;
+            }
             if ($days !== [] && !in_array($chapter['meetingDay'], $days, true)) {
                 continue;
             }

@@ -534,6 +534,7 @@
             sort: form.sort.value,
             limit: form.limit.value,
             hasRepresentationRequests: form.elements.has_representation_requests.checked,
+            includeFormingChapters: form.elements.include_forming_chapters.checked,
             ...(form.dataset.organizationId ? { organizationId: Number(form.dataset.organizationId) } : {}),
         };
         message.textContent = 'Ort wird gesucht und Entfernung berechnet …'; message.className = 'message'; button.disabled = true;
@@ -791,7 +792,7 @@
 
     function setChapterRefreshStatus(orgId, text) {
         const element = document.querySelector(`#result-${orgId} .result-refresh-status`);
-        if (element) element.textContent = text;
+        if (element) element.textContent = authRole !== 'admin' && ['Lokale Daten werden angezeigt.', 'Aktualisierung zurückgestellt.'].includes(text) ? '' : text;
     }
 
     function toggleMap() {

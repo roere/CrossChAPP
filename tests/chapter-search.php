@@ -44,18 +44,25 @@ foreach ([[1, '-1 day'], [2, '+1 day'], [2, '+2 days'], [3, 'today']] as [$orgId
 $service = new ChapterSearchService($repository);
 $representationOrganizations = $repository->representationOrganizations();
 $check(array_column($representationOrganizations, 'orgId') === [1, 2] && array_unique(array_column($representationOrganizations, 'orgType')) === ['CHAPTER'], 'Vertretung anbieten erhält serverseitig ausschließlich CHAPTER-Organisationen.');
+$repository->upsertMapOrganizations([
+    ['orgId' => 99, 'cmsSecurityHash' => 'planned', 'countryCode' => 'DE', 'orgType' => 'PLANNED_GROUP', 'longitude' => 7.0, 'latitude' => 50.0],
+]);
+$repository->saveDetails(99, $details(99, 'Montag', '07:00'));
+$includingForming = $service->search(50.0, 7.0, [], 'any', 'distance', null, false, null, null, true);
+$check(array_column($includingForming['results'], 'orgId') === [1, 3, 2], 'Mit Gründungsfilter auch CORE_GROUP, aber niemals geplante Chapter.');
+$check(array_column($service->search(50.0, 7.0, ['Montag'], 'early', 'distance', null, true, $today->format('Y-m-d'), null, true)['results'], 'orgId') === [3], 'Gründungsfilter mit Tages-, Zeit- und Gesuchsfilter kombinieren.');
 $all = $service->search(50.0, 7.0, [], 'any', 'distance', null);
-$check(array_column($all['results'], 'orgId') === [1, 3, 2], 'Alle Organisationstypen mit nutzbaren lokalen Treffendaten berücksichtigen.');
-$check(array_column($service->search(50.0, 7.0, ['Montag'], 'any', 'distance', null)['results'], 'orgId') === [1, 3], 'Montagfilter.');
-$check(count($service->search(50.0, 7.0, ['Montag', 'Dienstag'], 'any', 'distance', null)['results']) === 3, 'Mehrere Tage.');
-$check(array_column($service->search(50.0, 7.0, [], 'early', 'distance', null)['results'], 'orgId') === [1, 3], 'Früh vor 09:00.');
+$check(array_column($all['results'], 'orgId') === [1, 2], 'Standardmäßig nur Chapter berücksichtigen.');
+$check(array_column($service->search(50.0, 7.0, ['Montag'], 'any', 'distance', null)['results'], 'orgId') === [1], 'Montagfilter.');
+$check(count($service->search(50.0, 7.0, ['Montag', 'Dienstag'], 'any', 'distance', null)['results']) === 2, 'Mehrere Tage.');
+$check(array_column($service->search(50.0, 7.0, [], 'early', 'distance', null)['results'], 'orgId') === [1], 'Früh vor 09:00.');
 $check(array_column($service->search(50.0, 7.0, [], 'late', 'distance', null)['results'], 'orgId') === [2], 'Spät ab 09:00.');
-$check(count($service->search(50.0, 7.0, [], 'any', 'distance', null)['results']) === 3, 'Egal ohne Zeitfilter.');
+$check(count($service->search(50.0, 7.0, [], 'any', 'distance', null)['results']) === 2, 'Egal ohne Zeitfilter.');
 $check($all['results'][0]['distanceKm'] <= $all['results'][1]['distanceKm'], 'Entfernungssortierung.');
 $withRequests = $service->search(50.0, 7.0, [], 'any', 'distance', null, true, $today->format('Y-m-d'));
-$check(array_column($withRequests['results'], 'orgId') === [3, 2], 'Nur Chapter mit heutigen oder zukünftigen Gesuchen; vergangene Gesuche sind ausgeschlossen.');
+$check(array_column($withRequests['results'], 'orgId') === [2], 'Nur Chapter mit heutigen oder zukünftigen Gesuchen; vergangene Gesuche sind ausgeschlossen.');
 $check(count(array_filter($withRequests['results'], static fn (array $chapter): bool => $chapter['orgId'] === 2)) === 1, 'Mehrere aktuelle Gesuche erzeugen keine doppelten Chaptertreffer.');
-$check(array_column($service->search(50.0, 7.0, ['Montag'], 'early', 'distance', null, true, $today->format('Y-m-d'))['results'], 'orgId') === [3], 'Gesuchsfilter kombiniert sich mit Tages- und Zeitfilter.');
+$check(array_column($service->search(50.0, 7.0, ['Montag'], 'early', 'distance', null, true, $today->format('Y-m-d'))['results'], 'orgId') === [], 'Gesuchsfilter kombiniert sich mit Tages- und Zeitfilter.');
 
 $more = [];
 for ($id = 4; $id <= 25; $id++) {
@@ -70,11 +77,11 @@ $ten = $service->search(50.0, 7.0, [], 'any', 'distance', 10);
 $twenty = $service->search(50.0, 7.0, [], 'any', 'distance', 20);
 $fifty = $service->search(50.0, 7.0, [], 'any', 'distance', 50);
 $unlimited = $service->search(50.0, 7.0, [], 'any', 'distance', null);
-$check(count($limited['results']) === 5 && $limited['totalMatching'] === 25, 'Konfigurierbares Limit und Gesamtzahl.');
+$check(count($limited['results']) === 5 && $limited['totalMatching'] === 24, 'Konfigurierbares Limit und Gesamtzahl.');
 $check(count($ten['results']) === 10, '10er-Limit.');
 $check(count($twenty['results']) === 20, '20er-Limit.');
-$check(count($fifty['results']) === 25, '50er-Limit ohne Auffüllen.');
-$check(count($unlimited['results']) === 25, 'Alle Treffer ohne künstliches Limit.');
+$check(count($fifty['results']) === 24, '50er-Limit ohne Auffüllen.');
+$check(count($unlimited['results']) === 24, 'Alle Treffer ohne künstliches Limit.');
 $requiredDetailFields = [
     'orgId', 'orgType', 'countryCode', 'latitude', 'longitude', 'chapterName', 'region', 'regionId',
     'city', 'postalCode', 'street', 'venue', 'meetingDay', 'meetingTime', 'meetingType', 'meetingDuration',

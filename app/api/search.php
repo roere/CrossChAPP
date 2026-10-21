@@ -31,6 +31,7 @@ $timeFilter = is_array($payload) ? (string) ($payload['time'] ?? 'any') : 'any';
 $sort = is_array($payload) ? (string) ($payload['sort'] ?? 'distance') : 'distance';
 $limitInput = is_array($payload) ? (string) ($payload['limit'] ?? '10') : '10';
 $hasRepresentationRequests = is_array($payload) ? ($payload['hasRepresentationRequests'] ?? false) : false;
+$includeFormingChapters = is_array($payload) ? ($payload['includeFormingChapters'] ?? false) : false;
 $organizationIdInput=is_array($payload)?($payload['organizationId']??null):null;
 $organizationId=$organizationIdInput===null?null:filter_var($organizationIdInput,FILTER_VALIDATE_INT);
 $allowedDays = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -47,6 +48,9 @@ if (!in_array($timeFilter, ['any', 'early', 'late'], true) || !in_array($sort, [
 }
 if (!array_key_exists($limitInput, $allowedLimits)) {
     JsonResponse::send(['error' => 'Die gewünschte Ergebnisanzahl ist ungültig.'], 400);
+}
+if (!is_bool($includeFormingChapters)) {
+    JsonResponse::send(['error' => 'Der Filter für Chapter in Gründung ist ungültig.'], 400);
 }
 if (!is_bool($hasRepresentationRequests)) {
     JsonResponse::send(['error' => 'Der Filter für Vertretungsgesuche ist ungültig.'], 400);
@@ -73,6 +77,7 @@ try {
         $hasRepresentationRequests,
         $today,
         $organizationId===null?null:(int)$organizationId,
+        $includeFormingChapters,
     );
     Auth::start(); $identity = Auth::user(); $viewerId = $identity !== null ? (int) $identity['user_id'] : null;
     $viewerCanContact = $identity === null || Auth::canUseUserFeatures(is_string($identity['role'] ?? null) ? $identity['role'] : null);
