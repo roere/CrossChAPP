@@ -24,7 +24,7 @@
             const subscription = await registration?.pushManager.getSubscription();
             if (subscription) checkbox.checked = (await api('POST', {action: 'status', endpoint: subscription.endpoint})).enabled === true;
             if (!configuration.configured) { checkbox.disabled = !checkbox.checked; report('Push-Benachrichtigungen sind auf diesem Server noch nicht eingerichtet.'); return; }
-            report(Notification.permission === 'denied' ? 'Bitte erlaube Benachrichtigungen in den Einstellungen Deines Browsers.' : 'Die Einstellung gilt für dieses Gerät und diesen Browser.');
+            report(Notification.permission === 'denied' ? 'Bitte erlaube Benachrichtigungen in den Einstellungen Deines Browsers.' : '');
             checkbox.disabled = false;
         } catch { report('Die Push-Einstellung konnte nicht geladen werden. Bitte öffne „Mein Konto“ erneut.', true); }
     };

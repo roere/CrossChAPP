@@ -164,7 +164,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     <div><dt>Vorname</dt><dd data-account-field="firstName">Wird geladen …</dd></div>
                     <div><dt>Nachname</dt><dd data-account-field="lastName">Wird geladen …</dd></div>
                     <div><dt>E-Mail-Adresse</dt><dd data-account-field="email">Wird geladen …</dd></div>
-                    <div><dt>Heimatchapter</dt><dd class="account-home-chapter"><span data-account-field="homeChapterName">Wird geladen …</span><button id="copy-home-chapter-link" type="button" class="icon-button" title="Chapterlink kopieren" aria-label="Chapterlink kopieren" hidden>🔗</button></dd></div>
+                    <div><dt>Heimatchapter</dt><dd class="account-home-chapter"><span data-account-field="homeChapterName">Wird geladen …</span><button id="copy-home-chapter-link" type="button" class="icon-button" title="Chapterlink kopieren" aria-label="Chapterlink kopieren" hidden>🔗</button><span id="copy-home-chapter-message" class="page-meta" role="status" aria-live="polite"></span></dd></div>
                     <div><dt>Verifikation</dt><dd data-account-field="verificationStatus">Wird geladen …</dd></div>
                     <div><dt>Schlagwörter zu mir</dt><dd id="account-keywords-view"><span class="page-meta">Keine Schlagwörter hinterlegt.</span></dd></div>
                 </dl>
@@ -185,7 +185,7 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                     </section>
                 <?php endif; ?>
                 <?php if ($canUseUserFeatures): ?><div class="watchlist-email-editor"><span class="watchlist-email-row"><label class="watchlist-email-option"><input id="watchlist-email-notifications" type="checkbox" aria-describedby="watchlist-email-tooltip"> <span>E-Mail Benachrichtigungen</span></label><span class="field-tooltip"><button type="button" aria-label="Hinweis zu E-Mail Benachrichtigungen" aria-describedby="watchlist-email-tooltip">i</button><span id="watchlist-email-tooltip" role="tooltip">Per E-Mail informiert werden, wenn jemand aus einem Chapter, das Du beobachtest, eine Vertretung sucht.</span></span></span><p id="watchlist-setting-message" class="message" role="status" aria-live="polite"></p></div><?php endif; ?>
-                <?php if ($canUseUserFeatures): ?><div class="watchlist-push-editor"><span class="watchlist-email-row"><label class="watchlist-email-option"><input id="watchlist-push-notifications" type="checkbox" disabled aria-describedby="watchlist-push-tooltip watchlist-push-message"> <span>Push-Benachrichtigungen</span></label><span class="field-tooltip"><button type="button" aria-label="Hinweis zu Push-Benachrichtigungen" aria-describedby="watchlist-push-tooltip">i</button><span id="watchlist-push-tooltip" role="tooltip">Benachrichtigungen direkt auf diesem Gerät erhalten, wenn jemand aus einem Chapter, das Du beobachtest, eine Vertretung sucht.</span></span></span><p id="watchlist-push-message" class="message" role="status" aria-live="polite"></p></div><?php endif; ?>
+                <?php if ($canUseUserFeatures): ?><div class="watchlist-push-editor"><span class="watchlist-email-row"><label class="watchlist-email-option"><input id="watchlist-push-notifications" type="checkbox" disabled aria-describedby="watchlist-push-tooltip watchlist-push-message"> <span>Push-Benachrichtigungen</span></label><span class="field-tooltip"><button type="button" aria-label="Hinweis zu Push-Benachrichtigungen" aria-describedby="watchlist-push-tooltip">i</button><span id="watchlist-push-tooltip" role="tooltip">Benachrichtigungen direkt auf diesem Gerät erhalten, wenn jemand aus einem Chapter, das Du beobachtest, eine Vertretung sucht. Die Einstellung gilt für dieses Gerät und diesen Browser.</span></span></span><p id="watchlist-push-message" class="message" role="status" aria-live="polite"></p></div><?php endif; ?>
                 <?php if (!$isAdmin): ?><div id="my-account-edit-actions" class="registration-actions" hidden><button id="save-account-home-chapter" type="button">Speichern</button><button id="cancel-account-edit" type="button" class="secondary">Abbrechen</button></div><?php endif; ?>
                 <div id="my-account-message" class="message" role="alert" aria-live="polite"></div>
                 <div id="my-account-actions" class="registration-actions">
@@ -195,6 +195,15 @@ $assetVersion = static fn (string $asset): string => (string) (filemtime(__DIR__
                 </div>
             </div>
         </dialog>
+        <?php if (!$isAdmin): ?>
+        <dialog id="my-account-edit-dialog" class="account-dialog" aria-modal="true" aria-labelledby="my-account-edit-heading">
+            <div class="account-dialog-card">
+                <button id="close-account-edit" type="button" class="dialog-close" aria-label="Bearbeiten abbrechen">×</button>
+                <h2 id="my-account-edit-heading">Mein Konto bearbeiten</h2>
+                <div id="my-account-edit-content"></div>
+            </div>
+        </dialog>
+        <?php endif; ?>
         <?php if ($canUseUserFeatures): ?>
         <dialog id="remove-watchlist-dialog" class="account-dialog" aria-modal="true" aria-labelledby="remove-watchlist-heading" aria-describedby="remove-watchlist-confirmation">
             <div class="account-dialog-card">

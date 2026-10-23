@@ -185,8 +185,26 @@
         const keywordView=document.querySelector('#account-keywords-view'),keywordEditList=document.querySelector('#account-keywords-edit-list'),keywordInput=document.querySelector('#account-keyword-input'),saveKeyword=document.querySelector('#save-account-keyword'),keywordLimit=document.querySelector('#account-keyword-limit');
         const watchlistEmail=document.querySelector('#watchlist-email-notifications'),watchlistMessage=document.querySelector('#watchlist-setting-message'),watchlistRequests=document.querySelector('#watchlist-requests');
         let accountData = null; let accountPicker = null; let chaptersLoaded = false; let accountEditActive = false;let accountKeywords=[];
+        const editDialog = document.querySelector('#my-account-edit-dialog');
+        const editContent = document.querySelector('#my-account-edit-content');
+        const editClose = document.querySelector('#close-account-edit');
+        const editElements = [editor, ...dialog.querySelectorAll('.watchlist-email-editor, .watchlist-push-editor'), editActions, message].filter(Boolean);
+        const editPositions = editElements.map(element => {
+            const placeholder = document.createComment('account editor position');
+            element.before(placeholder);
+            return {element, placeholder};
+        });
         const setEditMode = active => {
             accountEditActive = active;
+            if (editDialog) {
+                if (active) {
+                    editContent.append(...editElements);
+                    if (!editDialog.open) editDialog.showModal();
+                } else {
+                    if (editDialog.open) editDialog.close();
+                    editPositions.forEach(({element, placeholder}) => placeholder.after(element));
+                }
+            }
             if (editor) editor.hidden = !active;
             if (editActions) editActions.hidden = !active;
             if (details) details.hidden = active;
@@ -194,6 +212,11 @@
             if (!active) { if (skipOption) skipOption.hidden = true; if (skipCheckbox) skipCheckbox.checked = false; }
         };
         const leaveEditMode = () => setEditMode(false);
+        editClose?.addEventListener('click', () => { if (!saveChapter?.disabled) cancelEdit?.click(); });
+        editDialog?.addEventListener('cancel', event => {
+            event.preventDefault();
+            if (!saveChapter?.disabled) cancelEdit?.click();
+        });
         const closeAccount = () => { if (accountEditActive) return; dialog.close(); trigger.focus(); };
         const closeDelete = () => { deleteDialog?.close(); deleteButton?.focus(); };
         const renderAccount = account => {
@@ -214,7 +237,18 @@
             if (account.verificationStatus !== 'manual_verified') headerBadge?.remove();
             if(copyChapterLink){copyChapterLink.hidden=!account.homeChapterShortLinkUrl;copyChapterLink.dataset.url=account.homeChapterShortLinkUrl||'';}
         };
-        copyChapterLink?.addEventListener('click',async()=>{const url=copyChapterLink.dataset.url;if(!url)return;try{await navigator.clipboard.writeText(url);message.textContent='Chapterlink kopiert.';message.className='message success';}catch{message.textContent='Der Chapterlink konnte nicht kopiert werden.';message.className='message error';}});
+        copyChapterLink?.addEventListener('click', async () => {
+            const url = copyChapterLink.dataset.url;
+            const feedback = document.querySelector('#copy-home-chapter-message');
+            if (!url) return;
+            feedback.textContent = '';
+            try {
+                await navigator.clipboard.writeText(url);
+                feedback.textContent = 'Link kopiert.';
+            } catch {
+                feedback.textContent = 'Der Chapterlink konnte nicht kopiert werden.';
+            }
+        });
         const renderKeywords=()=>{const empty=()=>{const text=document.createElement('span');text.className='page-meta';text.textContent='Keine Schlagwörter hinterlegt.';return text;},chip=(item,editable)=>{const span=document.createElement('span');span.className='keyword-chip';span.append(document.createTextNode(item.keyword));if(editable){const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title=`Schlagwort ${item.keyword} löschen`;remove.setAttribute('aria-label',remove.title);remove.dataset.keywordId=String(item.id);span.append(remove);}return span;};keywordView?.replaceChildren(...(accountKeywords.length?accountKeywords.map(item=>chip(item,false)):[empty()]));keywordEditList?.replaceChildren(...(accountKeywords.length?accountKeywords.map(item=>chip(item,true)):[empty()]));const maximum=accountKeywords.length>=10;if(keywordInput)keywordInput.disabled=maximum;if(saveKeyword)saveKeyword.disabled=maximum;if(keywordLimit)keywordLimit.hidden=!maximum;};
         const updateKeywords=keywords=>{accountKeywords=Array.isArray(keywords)?keywords:[];renderKeywords();};
         let watchlistData = null;
@@ -307,7 +341,7 @@
         };
         watchlistEmail?.addEventListener('change',async()=>{const intended=watchlistEmail.checked;watchlistEmail.disabled=true;watchlistMessage.textContent='';watchlistMessage.className='message';try{const response=await fetch('/api/auth/watchlist.php',{method:'PATCH',headers:jsonHeaders,body:JSON.stringify({emailNotifications:intended})}),payload=await response.json();if(!response.ok)throw new Error(payload.error||'Die Einstellung konnte nicht gespeichert werden.');renderWatchlist(payload);watchlistMessage.textContent='Änderung gespeichert.';watchlistMessage.className='message success';}catch(error){watchlistEmail.checked=!intended;watchlistMessage.textContent=error.message;watchlistMessage.className='message error';}finally{watchlistEmail.disabled=false;}});
         trigger.addEventListener('click', async () => {
-            message.textContent = ''; message.className = 'message'; leaveEditMode(); dialog.showModal();
+            message.textContent = ''; message.className = 'message'; document.querySelector('#copy-home-chapter-message').textContent = ''; leaveEditMode(); dialog.showModal();
             try {
                 await loadAccount();
                 closeButton.focus();
